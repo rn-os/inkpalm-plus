@@ -12,6 +12,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("edge_right", true)
         set(v) = sp.edit().putBoolean("edge_right", v).apply()
 
+    /** Width of the touch strip along the edge, in dp. */
+    var stripWidthDp: Int
+        get() = sp.getInt("strip_width", 16)
+        set(v) = sp.edit().putInt("strip_width", v.coerceIn(STRIP_MIN, STRIP_MAX)).apply()
+
     /** Show a thin black pill where the strip is. */
     var showStrip: Boolean
         get() = sp.getBoolean("show_strip", true)
@@ -31,6 +36,11 @@ class Prefs(context: Context) {
     var panelWanted: Boolean
         get() = sp.getBoolean("panel_wanted", false)
         set(v) = sp.edit().putBoolean("panel_wanted", v).apply()
+
+    companion object {
+        const val STRIP_MIN = 6
+        const val STRIP_MAX = 40
+    }
 
     /** The user's own font scale, before [Live.nudgeConfiguration] moved it by a hair. */
     var fontBase: Float

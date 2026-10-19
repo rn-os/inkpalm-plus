@@ -30,7 +30,7 @@ class QuickPanelService : AccessibilityService() {
             when (i.action) {
                 ACTION_OPEN -> openPanel()
                 ACTION_CLOSE -> closePanel()
-                ACTION_STRIP -> showStrip()
+                ACTION_STRIP -> showStrip(preview = i.getBooleanExtra(EXTRA_PREVIEW, false))
                 ACTION_TEST -> test(i)
             }
         }
@@ -111,13 +111,18 @@ class QuickPanelService : AccessibilityService() {
 
     // ---- Strip --------------------------------------------------------------------------------
 
-    fun showStrip() {
+    private val endPreview = Runnable { showStrip() }
+
+    /** [preview]: drawn solid black for a few seconds, while Settings changes its size or side. */
+    fun showStrip(preview: Boolean = false) {
         removeStrip()
+        Shell.main.removeCallbacks(endPreview)
         val prefs = Prefs(this)
-        val v = EdgeHandleView(this, prefs.edgeRight, prefs.showStrip) { openPanel() }
+        val v = EdgeHandleView(this, prefs.edgeRight, prefs.showStrip, solid = preview) { openPanel() }
+        if (preview) Shell.main.postDelayed(endPreview, 3_000)
         val h = resources.displayMetrics.heightPixels
         val lp = WindowManager.LayoutParams(
-            dp(16), (h * 0.35f).toInt(),
+            dp(prefs.stripWidthDp), (h * 0.35f).toInt(),
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
@@ -144,6 +149,8 @@ class QuickPanelService : AccessibilityService() {
         val ok = when (cmd) {
             "state" -> true
             "open" -> { if (panel == null) openPanel(); panel != null }
+            "strip" -> { Prefs(this).stripWidthDp = value.toInt(); showStrip(preview = true); true }
+            "side" -> { Prefs(this).edgeRight = value == "right"; showStrip(preview = true); true }
             "rotate" -> { val f = foreground; if (f != null) setRotation(f, Rotation.Mode.of(value)); f != null }
             else -> panel?.test(cmd, value) ?: false
         }
@@ -172,6 +179,7 @@ class QuickPanelService : AccessibilityService() {
         const val ACTION_CLOSE = "com.inkpalmplus.CLOSE_PANEL"
         const val ACTION_STRIP = "com.inkpalmplus.REFRESH_STRIP"
         const val ACTION_TEST = "com.inkpalmplus.TEST"
+        const val EXTRA_PREVIEW = "preview"
         private const val RECEIVER_EXPORTED_COMPAT = 0x2
 
         @Volatile var instance: QuickPanelService? = null

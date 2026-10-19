@@ -156,7 +156,7 @@ class MainActivity : Activity() {
 
     private fun renderPanel() {
         panelBox.removeAllViews()
-        panelBox.addView(text("Swipe up or down along the screen edge in any app to change its size, refresh and contrast while you look at it.", 14f, color = Ink.MUTED).apply {
+        panelBox.addView(text("Swipe up or down along the screen edge in any app to change its size, refresh, contrast and rotation while you look at it.", 14f, color = Ink.MUTED).apply {
             setPadding(dp(16), dp(8), dp(16), dp(4))
         })
         val on = QuickPanelService.enabled(this)
@@ -184,11 +184,20 @@ class MainActivity : Activity() {
                 if (!repair) Shell.background({ Survival.grantRepair(this) }) { ok -> if (!ok) toast("Needs Shizuku"); renderPanel() }
             })
         }
-        panelBox.addView(toggleRow("Right edge", if (prefs.edgeRight) "Strip on the right edge" else "Strip on the left edge", prefs.edgeRight) {
-            prefs.edgeRight = !prefs.edgeRight
-            sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName))
-            renderPanel()
+        fun previewStrip() = sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName).putExtra(QuickPanelService.EXTRA_PREVIEW, true))
+        panelBox.addView(hbox().apply {
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            addView(vbox().apply {
+                addView(text("Strip side", 17f, medium = true))
+                addView(text("Swipe up or down along this edge", 13f, color = Ink.MUTED))
+            }, lp(0, WRAP, 1f))
+            addView(chip("Left", !prefs.edgeRight) { prefs.edgeRight = false; previewStrip(); renderPanel() }, lp(WRAP, WRAP).apply { marginEnd = dp(6) })
+            addView(chip("Right", prefs.edgeRight) { prefs.edgeRight = true; previewStrip(); renderPanel() })
         })
+        val w = prefs.stripWidthDp
+        panelBox.addView(stepperRow("Strip width", "$w dp",
+            onMinus = { prefs.stripWidthDp = w - 2; previewStrip(); renderPanel() },
+            onPlus = { prefs.stripWidthDp = w + 2; previewStrip(); renderPanel() }))
         panelBox.addView(toggleRow("Show strip", "A thin black line where you swipe", prefs.showStrip) {
             prefs.showStrip = !prefs.showStrip
             sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName))

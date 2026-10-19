@@ -106,3 +106,24 @@ check_value_list_and_arrows() {
   expect_row "◀ twice more reaches System" is_refresh_setting 0
   manual "the panel fits in both orientations with nothing cut off (docs/mockups/02-arrows.png)"
 }
+
+# The strip's window frame "[l,t][r,b]" from dumpsys (the only InkPalm+ window ~35% of the screen tall).
+strip_frame() { adb_ shell dumpsys window windows | grep -A30 "Window{.*com.inkpalmplus}" | grep -oE "mFrame=\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]" | sed -E 's/mFrame=//' | awk -F'[][,]' '{ if ($6 - $3 > 300 && $6 - $3 < 700) { print; exit } }'; }
+
+check_strip_width_and_side() {
+  local prefs w0 r0
+  prefs=$(adb_ shell run-as $PKG cat shared_prefs/inkpalmplus.xml 2>/dev/null)
+  w0=$(echo "$prefs" | grep -o 'strip_width" value="[0-9]*' | grep -o '[0-9]*$'); w0=${w0:-16}
+  r0=$(echo "$prefs" | grep -o 'edge_right" value="[a-z]*' | grep -o '[a-z]*$'); r0=${r0:-true}
+  local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
+  hook strip 24 || { note_fail "strip hook: $HOOK_OUT"; return; }; sleep 1.5
+  local f; f=$(strip_frame)
+  local l r; l=$(echo "$f" | awk -F'[][,]' '{print $2}'); r=$(echo "$f" | awk -F'[][,]' '{print $5}')
+  [ $((r - l)) -ge 40 ] && [ $((r - l)) -le 42 ] && note_ok "24 dp strip is $((r - l)) px wide" || note_fail "24 dp strip is '$f'"
+  [ "$r" = 720 ] && note_ok "on the right edge" || note_fail "strip not on the right edge: $f"
+  hook side left >/dev/null; sleep 1.5
+  f=$(strip_frame); l=$(echo "$f" | awk -F'[][,]' '{print $2}')
+  [ "$l" = 0 ] && note_ok "Left puts it on the left edge" || note_fail "strip not on the left edge: $f"
+  hook strip "$w0" >/dev/null; hook side "$([ "$r0" = true ] && echo right || echo left)" >/dev/null
+  manual "a swipe in from the strip still goes Back (system gesture); up/down opens the panel"
+}

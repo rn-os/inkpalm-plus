@@ -99,6 +99,12 @@ InkPalm+ remembers a rotation per app and applies it on each foreground change (
 - Careful from zsh: `"$L:com…"` is read as a `:c` modifier. Quote the colon separately when editing
   `enabled_accessibility_services` by hand; it once merged Key Mapper's and InkPalm+'s entries.
 
+## Edge strip and gesture navigation
+
+Gesture navigation is on (`navigation_mode=2`). The system's back gesture still works when the swipe starts on the
+quick panel's strip (an accessibility overlay): verified with an inward swipe over the strip on a nested Settings
+screen. The strip therefore only reacts to swipes up or down along it.
+
 ## Other system hooks
 
 - `EinkManager` (`android.os`, service `eink`, `IEinkManager.setProperty(key, value)` = binder 5): `setMode` → `sys.eink.mode`,

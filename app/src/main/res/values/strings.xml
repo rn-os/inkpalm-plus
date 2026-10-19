@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">InkPalm+</string>
+    <string name="service_label">InkPalm+ quick panel</string>
+    <string name="a11y_description">Swipe along the screen edge to change the open app\'s DPI, refresh and contrast while you look at it. InkPalm+ only notes which app is in front; it reads nothing on screen.</string>
+</resources>

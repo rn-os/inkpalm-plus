@@ -1,0 +1,148 @@
+package com.inkpalmplus
+
+import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.PixelFormat
+import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
+
+/**
+ * Keeps the edge strip on screen and opens [QuickPanel] over the app in front.
+ * Also tracks which app that is (window-state events), so the panel opens on it.
+ */
+class QuickPanelService : AccessibilityService() {
+    private lateinit var wm: WindowManager
+    private var strip: View? = null
+    private var panel: QuickPanel? = null
+    /** The last real app in front (not InkPalm+, SystemUI or a keyboard). */
+    var foreground: String? = null
+        private set
+
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            when (i.action) {
+                ACTION_OPEN -> openPanel()
+                ACTION_CLOSE -> closePanel()
+                ACTION_STRIP -> showStrip()
+                ACTION_TEST -> test(i)
+            }
+        }
+    }
+
+    override fun onServiceConnected() {
+        instance = this
+        wm = getSystemService(WindowManager::class.java)
+        val filter = IntentFilter().apply {
+            addAction(ACTION_OPEN); addAction(ACTION_CLOSE); addAction(ACTION_STRIP)
+            if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) addAction(ACTION_TEST)
+        }
+        registerReceiver(receiver, filter, RECEIVER_EXPORTED_COMPAT)
+        showStrip()
+        Log.i(TAG, "quick panel service connected")
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(receiver) }
+        removeStrip()
+        closePanel()
+        instance = null
+        super.onDestroy()
+    }
+
+    override fun onInterrupt() {}
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val pkg = event.packageName?.toString() ?: return
+        if (pkg == packageName || pkg == "com.android.systemui" || pkg == "android" || pkg.contains("inputmethod") || isKeyboard(pkg)) return
+        if (pkg != foreground) {
+            foreground = pkg
+            Log.i(TAG, "foreground $pkg")
+            // Another app came to the front under the panel: it belongs to the old one.
+            if (panel != null && panel?.pkg != pkg) closePanel()
+        }
+    }
+
+    private val keyboards by lazy {
+        runCatching { getSystemService(android.view.inputmethod.InputMethodManager::class.java).inputMethodList.map { it.packageName }.toSet() }.getOrDefault(emptySet())
+    }
+    private fun isKeyboard(pkg: String) = pkg in keyboards
+
+    // ---- Strip --------------------------------------------------------------------------------
+
+    fun showStrip() {
+        removeStrip()
+        val prefs = Prefs(this)
+        val v = EdgeHandleView(this, prefs.edgeRight, prefs.showStrip) { openPanel() }
+        val h = resources.displayMetrics.heightPixels
+        val lp = WindowManager.LayoutParams(
+            dp(16), (h * 0.35f).toInt(),
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or if (prefs.edgeRight) Gravity.END else Gravity.START
+            y = (h * 0.3f).toInt()
+        }
+        runCatching { wm.addView(v, lp) }.onSuccess { strip = v }.onFailure { Log.w(TAG, "strip: $it") }
+    }
+
+    private fun removeStrip() {
+        strip?.let { runCatching { wm.removeView(it) } }
+        strip = null
+    }
+
+    /**
+     * Test hooks for tools/device-test.sh (debuggable builds only):
+     * `am broadcast -a com.inkpalmplus.TEST -p com.inkpalmplus --es cmd dpi --es value 240`
+     * Answers in logcat: "InkPalmPlus: test <cmd> <value> ok|fail <state>".
+     */
+    private fun test(i: Intent) {
+        val cmd = i.getStringExtra("cmd").orEmpty()
+        val value = i.getStringExtra("value").orEmpty()
+        val ok = when (cmd) {
+            "state" -> true
+            "open" -> { if (panel == null) openPanel(); panel != null }
+            else -> panel?.test(cmd, value) ?: false
+        }
+        Log.i(TAG, "test $cmd $value ${if (ok) "ok" else "fail"} foreground=$foreground panel=${panel?.pkg}")
+    }
+
+    // ---- Panel --------------------------------------------------------------------------------
+
+    fun openPanel() {
+        if (panel != null) return closePanel()
+        val pkg = foreground ?: return
+        panel = QuickPanel(this, pkg) { closePanel() }.also { it.show(wm) }
+    }
+
+    fun closePanel() {
+        val p = panel ?: return
+        panel = null
+        p.dismiss(wm)
+        // The panel leaves a ghost on e-ink.
+        Shell.io.execute { Thread.sleep(150); Live.fullRefresh() }
+    }
+
+    companion object {
+        const val TAG = "InkPalmPlus"
+        const val ACTION_OPEN = "com.inkpalmplus.OPEN_PANEL"
+        const val ACTION_CLOSE = "com.inkpalmplus.CLOSE_PANEL"
+        const val ACTION_STRIP = "com.inkpalmplus.REFRESH_STRIP"
+        const val ACTION_TEST = "com.inkpalmplus.TEST"
+        private const val RECEIVER_EXPORTED_COMPAT = 0x2
+
+        @Volatile var instance: QuickPanelService? = null
+            private set
+
+        fun enabled(context: Context): Boolean =
+            android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+                ?.contains("${context.packageName}/") == true
+    }
+}

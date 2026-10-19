@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 108dp adaptive foreground: a phone-shaped page with three slider rows. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M38,24h32v60h-32zM42,28v52h24v-52z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M46,38h16v2h-16zM46,52h16v2h-16zM46,66h16v2h-16zM48,35h5v8h-5zM56,49h5v8h-5zM50,63h5v8h-5z" />
+</vector>

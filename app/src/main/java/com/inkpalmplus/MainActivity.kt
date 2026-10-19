@@ -22,6 +22,7 @@ class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private lateinit var accessBox: LinearLayout
     private lateinit var deviceBox: LinearLayout
+    private lateinit var touchBox: LinearLayout
     private lateinit var appsBox: LinearLayout
     private lateinit var panelBox: LinearLayout
     private var filter = ""
@@ -49,6 +50,8 @@ class MainActivity : Activity() {
         panelBox = vbox().also { root.addView(it) }
         root.addView(sectionTitle("Whole device"))
         deviceBox = vbox().also { root.addView(it) }
+        root.addView(sectionTitle("Touch button"))
+        touchBox = vbox().also { root.addView(it) }
         root.addView(sectionTitle("Apps"))
         root.addView(EditText(this).apply {
             hint = "Search apps"
@@ -97,6 +100,7 @@ class MainActivity : Activity() {
             renderAccess(via)
             renderPanel()
             renderDevice()
+            renderTouch()
             renderApps()
         }
     }
@@ -207,6 +211,47 @@ class MainActivity : Activity() {
     }
 
     // ---- Whole device -------------------------------------------------------------------------
+
+    // ---- Touch button (docs/mockups/10-touch-button.png) ------------------------------------------
+
+    private fun renderTouch() {
+        touchBox.removeAllViews()
+        touchBox.addView(text("The button below the screen. These are the actions built into the device; changes apply on the next touch.", 14f, color = Ink.MUTED).apply {
+            setPadding(dp(16), dp(8), dp(16), dp(4))
+        })
+        if (!TouchButton.canChange(this)) {
+            touchBox.addView(text(if (Shell.allowed()) "Allow InkPalm+ to change it under Quick panel → Turns itself back on."
+                else "Needs the same permission as Quick panel → Turns itself back on. Start Shizuku, or run: ${Survival.grantAdbCommand(this)}", 14f).apply {
+                setPadding(dp(16), dp(4), dp(16), dp(8))
+            })
+            return
+        }
+        val on = TouchButton.on(this)
+        touchBox.addView(toggleRow("Touch button", if (on) "On" else "Off: touching it does nothing", on) {
+            TouchButton.setOn(this, !on); renderTouch()
+        })
+        if (!on) return
+        fun options(title: String, sub: String, labels: List<String>, current: Int, perRow: Int, pick: (Int) -> Unit) {
+            touchBox.addView(vbox().apply {
+                setPadding(dp(16), dp(8), dp(16), dp(2))
+                addView(text(title, 17f, medium = true))
+                addView(text(sub, 13f, color = Ink.MUTED))
+            })
+            labels.indices.chunked(perRow).forEach { row ->
+                touchBox.addView(hbox().apply {
+                    setPadding(dp(12), dp(4), dp(12), dp(4))
+                    for (i in row) addView(chip(labels[i], i == current) { pick(i); renderTouch() }.apply { maxLines = 2 },
+                        lp(0, WRAP, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
+                    repeat(perRow - row.size) { addView(View(this@MainActivity), lp(0, 1, 1f)) }
+                })
+            }
+        }
+        options("Tap", "A short touch", TouchButton.TAP_ACTIONS, TouchButton.tap(this), 4) { TouchButton.setTap(this, it) }
+        options("Hold", "Touch for about a second", TouchButton.HOLD_ACTIONS, TouchButton.hold(this), 3) { TouchButton.setHold(this, it) }
+        touchBox.addView(text("For anything else (open an app, switch the panel), pick Page up or Volume up and map that key in Key Mapper.", 13f, color = Ink.MUTED).apply {
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+        })
+    }
 
     private fun renderDevice() {
         deviceBox.removeAllViews()

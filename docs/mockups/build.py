@@ -383,8 +383,34 @@ font_board = page("System font", f"""
 <li>No Shizuku needed.</li></ul></div>
 </div>""")
 
+# ---- Board 10: front touch button ---------------------------------------------------------------
+
+def chiprow(name, sub, opts, on):
+    btns = "".join(f'<div class="btn{" on" if o == on else ""}">{o}</div>' for o in opts)
+    return f'<div class="srow" style="flex-wrap:wrap"><div class="n" style="flex-basis:100%"><b>{name}</b><span>{sub}</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">{btns}</div></div>'
+
+
+touch_board = page("Touch button", f"""
+<div class="row">
+<div class="card"><div class="ttl">HOME · TOUCH BUTTON (the button below the screen)</div>
+<div class="srow"><div class="n"><b>Touch button</b><span>Off: touching it does nothing</span></div><div class="btn">Off</div><div class="btn on">On</div></div>
+{chiprow("Tap", "A short touch", ["Back", "Home", "Page down", "Volume down"], "Home")}
+{chiprow("Hold", "Touch for about a second", ["Full refresh", "Screenshot", "Page up", "Volume up", "Front light on/off", "Home"], "Full refresh")}
+<div class="srow"><div class="n"><span>Only these actions are built into the device. For anything else (open an app, switch the panel), pick Page up or
+Volume up here and map that key in Key Mapper.</span></div></div>
+</div>
+<div class="notes"><h2>10 · Touch button</h2>
+<ul><li>Moaan's own options for the button, which only its (now disabled) launcher could set. Same choices, same meaning.</li>
+<li>Shown with your current setup: tap = Home, hold = Full refresh.</li>
+<li>Changes apply on the next touch; nothing restarts.</li>
+<li>Lives under Whole device on the home screen, not in the quick panel.</li>
+<li>Uses the permission InkPalm+ already has for turning its panel back on; without it, the section explains how to grant it.</li>
+<li>Home goes to your current home app (inkOS), not Moaan's launcher.</li></ul></div>
+</div>""")
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
-                   ("08-presets", presets_board), ("09-font", font_board)]:
+                   ("08-presets", presets_board), ("09-font", font_board),
+                   ("10-touch-button", touch_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

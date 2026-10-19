@@ -77,6 +77,10 @@ top_package() {
     | sed -E 's/.* ([A-Za-z0-9_.]+)\/[^ ]*.*/\1/'
 }
 
+# The home screen, started directly: the Home key may be remapped by the touch button settings
+# (Home acts as Back when Tap is set to Back), so the harness never presses it.
+go_home() { adb_ shell am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1; }
+
 # Taps and typing only ever go to InkPalm+.
 guard() { local top; top=$(top_package); [ "$top" = "$PKG" ] || abort "'$top' is in front during '$CHECK', not InkPalm+"; }
 

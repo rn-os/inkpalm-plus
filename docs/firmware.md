@@ -142,6 +142,21 @@ and its wallpaper/font activities aren't exported. No permission an app can be g
 **Another open property setter:** `IActivityManager.setSystemProp` (binder **218**) is `SystemProperties.set` with no
 permission check: `adb shell service call activity 218 s16 <key> s16 <value>`.
 
+## Front touch button (logo key) — static analysis 2026-10-19
+
+- It's KEY_HOMEPAGE (scancode 172) on the `fts_ts` touch controller (`/dev/input/event1`), mapped to KEYCODE_HOME by
+  `Generic.kl`. Handled in `PhoneWindowManager.interceptKeyBeforeQueueing` (services.jar), not the launcher: it reads
+  these `Settings.Global` keys on every press (no cache, so changes apply on the next press):
+  - `moan_logo_key_onoff` (default 1): 0 swallows the key.
+  - `moan_logo_key_first` (default 0): 0 shows SystemUI's `HomeKeyRemindDialog` intro instead of acting; set to 1 after.
+  - `moan_logo_key_value`, tap (< 800 ms): 0 Back, 1 Home, 2 Page down (KEYCODE 93), 3 Volume down; ≥4 behaves as Home.
+  - `moan_logo_long_key_value`, long press (800 ms, `PhoneWindowManager$18`): 0 full refresh (broadcast
+    `android.eink.force.refresh`), 1 screenshot, 2 Page up (92), 3 Volume up, 4 front light on/off (broadcast
+    `android.moan.led.onoff.msg`), 5 Home.
+- No double tap, no "open app". Skipped while `com.moan.notes/NoteActivity` or the boot/factory apps are on top.
+- Stock UI: launcher `settings.LogoTouchSettingsActivity` (not exported). Writing needs WRITE_SECURE_SETTINGS.
+- Device now: tap = 1 (Home), long press = 0 (full refresh).
+
 ## Other system hooks
 
 - `EinkManager` (`android.os`, service `eink`, `IEinkManager.setProperty(key, value)` = binder 5): `setMode` → `sys.eink.mode`,

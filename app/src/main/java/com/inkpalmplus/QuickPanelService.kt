@@ -92,6 +92,16 @@ class QuickPanelService : AccessibilityService() {
         val pkg = event.packageName?.toString() ?: return
         if (pkg == packageName || pkg == "com.android.systemui" || pkg == "android" || pkg.contains("inputmethod") || isKeyboard(pkg)) return
         if (pkg != foreground) {
+            // An app leaving the screen can report one more window change just after the next app's
+            // (seen ~125 ms later, e.g. as it rebuilds for a rotation). Taking that as a switch back would
+            // turn the screen the wrong way and clean it twice, so it's ignored.
+            val now = android.os.SystemClock.uptimeMillis()
+            if (pkg == left && now - leftAt < BOUNCE_MS) {
+                Log.i(TAG, "ignored late window change from $pkg")
+                return
+            }
+            left = foreground
+            leftAt = now
             foreground = pkg
             Log.i(TAG, "foreground $pkg")
             rotation.apply(Prefs(this).rotation(pkg))
@@ -100,6 +110,10 @@ class QuickPanelService : AccessibilityService() {
             if (panel != null && panel?.pkg != pkg) closePanel()
         }
     }
+
+    /** The app that was in front before [foreground], and when it left. */
+    private var left: String? = null
+    private var leftAt = 0L
 
     private val keyboards by lazy {
         runCatching { getSystemService(android.view.inputmethod.InputMethodManager::class.java).inputMethodList.map { it.packageName }.toSet() }.getOrDefault(emptySet())
@@ -181,6 +195,11 @@ class QuickPanelService : AccessibilityService() {
                 val target = if (value == "original") Fonts.original(this) else value
                 Fonts.list(this).firstOrNull { it.path == target }?.let { f -> Shell.io.execute { Log.i(TAG, "font ${f.path}: ${Fonts.apply(this, f)}") }; true } ?: false
             }
+            // "tap:0", "hold:4", "on:1": the touch button's settings (Moaan's Settings.Global keys).
+            "touch" -> {
+                val (k, v) = value.split(":")
+                when (k) { "tap" -> TouchButton.setTap(this, v.toInt()); "hold" -> TouchButton.setHold(this, v.toInt()); else -> TouchButton.setOn(this, v == "1") }
+            }
             "strip" -> { Prefs(this).stripWidthDp = value.toInt(); showStrip(preview = true); true }
             "side" -> { Prefs(this).edgeRight = value == "right"; showStrip(preview = true); true }
             "rotate" -> { val f = foreground; if (f != null) setRotation(f, Rotation.Mode.of(value)); f != null }
@@ -212,6 +231,8 @@ class QuickPanelService : AccessibilityService() {
         const val ACTION_STRIP = "com.inkpalmplus.REFRESH_STRIP"
         const val ACTION_TEST = "com.inkpalmplus.TEST"
         const val EXTRA_PREVIEW = "preview"
+        /** Window changes from the app that just left, within this long, are its last gasp, not a switch back. */
+        const val BOUNCE_MS = 500L
         private const val RECEIVER_EXPORTED_COMPAT = 0x2
 
         @Volatile var instance: QuickPanelService? = null

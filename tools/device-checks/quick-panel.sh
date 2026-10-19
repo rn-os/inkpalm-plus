@@ -84,7 +84,7 @@ check_rotation_kept_per_app() {
   hook rotate LANDSCAPE || { note_fail "rotate hook: $HOOK_OUT"; return; }
   sleep 2
   [ "$(rotation)" = 1 ] && note_ok "screen turned to landscape" || note_fail "rotation is $(rotation), wanted 1"
-  adb_ shell input keyevent HOME; sleep 2.5
+  go_home; sleep 2.5
   [ "$(rotation)" = 0 ] && note_ok "home screen back in portrait" || note_fail "home rotation $(rotation), wanted 0"
   adb_ shell monkey -p "$TARGET" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 3
   [ "$(rotation)" = 1 ] && note_ok "target turns landscape again when it reopens" || note_fail "target rotation $(rotation), wanted 1"
@@ -133,8 +133,12 @@ check_strip_width_and_side() {
 check_refresh_helpers() {
   local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
   adb_ shell am broadcast -a com.inkpalmplus.CLOSE_PANEL -p $PKG >/dev/null; sleep 2
-  adb_ shell input keyevent HOME; sleep 2
-  [ "$(top_package)" = "$TARGET" ] && adb_ shell input keyevent HOME && sleep 2
+  # The service must see the home screen in front before the target reopens, or opening it isn't a switch.
+  for i in 1 2 3; do
+    go_home; sleep 2
+    hook state; case "$HOOK_OUT" in *"foreground=$TARGET "*) ;; *) break ;; esac
+  done
+  echo "before reopening: $HOOK_OUT; top $(top_package)" > "$OUT/$CHECK-before-open.txt"
   adb_ logcat -c
   adb_ shell monkey -p "$TARGET" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
   # The target may cold-start (earlier checks force-stop it): wait up to 10 s.
@@ -152,7 +156,7 @@ check_refresh_helpers() {
   echo "$log" | grep -q "scroll boost on (com.android.settings)" && note_ok "Speed (A2) switched on while scrolling" || note_fail "no scroll boost while scrolling Settings"
   echo "$log" | grep -q "boost off" && note_ok "boost ended after scrolling stopped" || note_fail "boost never ended"
   [ "$(prop persist.sys.mogu.refresh_type)" = "$r0" ] && note_ok "back to the app's mode ($r0)" || note_fail "refresh mode $(prop persist.sys.mogu.refresh_type) after scrolling, was $r0"
-  adb_ shell input keyevent HOME
+  go_home
   manual "scrolling looks fast and the screen is clean after it stops; one flash when an app opens"
 }
 
@@ -160,7 +164,7 @@ check_refresh_helpers() {
 check_typing_boost() {
   local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
   adb_ shell am broadcast -a com.inkpalmplus.CLOSE_PANEL -p $PKG >/dev/null
-  adb_ shell input keyevent HOME; sleep 2
+  go_home; sleep 2
   adb_ shell am start -n com.android.settings.intelligence/.search.SearchActivity >/dev/null; sleep 3
   local r0; r0=$(prop persist.sys.mogu.refresh_type)
   adb_ logcat -c
@@ -169,7 +173,7 @@ check_typing_boost() {
   echo "$log" | grep -q "typing boost on" && note_ok "Speed (A2) switched on while typing" || note_fail "no typing boost"
   echo "$log" | grep -q "boost off" && note_ok "boost ended after typing stopped" || note_fail "typing boost never ended"
   [ "$(prop persist.sys.mogu.refresh_type)" = "$r0" ] && note_ok "back to the app's mode ($r0)" || note_fail "refresh mode $(prop persist.sys.mogu.refresh_type) after typing, was $r0"
-  adb_ shell input keyevent BACK; adb_ shell input keyevent HOME
+  adb_ shell input keyevent BACK; go_home
 }
 
 # Clean after idle (off by default): switched on and shortened to 3 s through the hooks. The screen
@@ -190,7 +194,7 @@ check_idle_clean() {
   sleep 5; adb_ logcat -c; sleep 6
   adb_ logcat -d -s InkPalmPlus:I | grep -q "idle clean" && note_fail "keeps cleaning with nothing new on screen" || note_ok "no repeat cleans once the screen is still"
   hook helper idle_clean:default >/dev/null; hook helper scroll_boost:default >/dev/null; hook idle_ms 60000 >/dev/null
-  adb_ shell input keyevent HOME
+  go_home
 }
 
 # Presets: picking one sets the target's refresh values and helpers; System clears them again.
@@ -219,4 +223,18 @@ check_font() {
   hook font original >/dev/null; sleep 2
   [ "$(prop persist.sys.mogufont.path)" = "$f0" ] && note_ok "back to the device's own font ($f0)" || note_fail "font $(prop persist.sys.mogufont.path), was $f0"
   manual "apps redraw in the new font without reopening"
+}
+
+# Touch button: Moaan's Settings.Global keys, changed and put back (they apply on the next touch).
+check_touch_button() {
+  local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
+  local t0 h0; t0=$(adb_ shell settings get global moan_logo_key_value | tr -d '\r'); h0=$(adb_ shell settings get global moan_logo_long_key_value | tr -d '\r')
+  hook touch tap:2 >/dev/null; hook touch hold:4 >/dev/null
+  [ "$(adb_ shell settings get global moan_logo_key_value | tr -d '\r')" = 2 ] && note_ok "Tap set to Page down" || note_fail "tap value not 2"
+  [ "$(adb_ shell settings get global moan_logo_long_key_value | tr -d '\r')" = 4 ] && note_ok "Hold set to Front light" || note_fail "hold value not 4"
+  [ "$(adb_ shell settings get global moan_logo_key_first | tr -d '\r')" = 1 ] && note_ok "intro dialog stays off" || note_fail "moan_logo_key_first isn't 1"
+  [ "$t0" != null ] && hook touch "tap:$t0" >/dev/null || adb_ shell settings delete global moan_logo_key_value >/dev/null
+  [ "$h0" != null ] && hook touch "hold:$h0" >/dev/null || adb_ shell settings delete global moan_logo_long_key_value >/dev/null
+  [ "$(adb_ shell settings get global moan_logo_key_value | tr -d '\r')" = "$t0" ] && note_ok "Tap put back ($t0)" || note_fail "tap not restored"
+  manual "touching the button does the chosen action"
 }

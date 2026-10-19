@@ -5,7 +5,7 @@
 set -eu
 cd "$(dirname "$0")"
 python3 -I build.py >/dev/null
-for f in 0*.html; do
+for f in [0-9][0-9]-*.html; do
   qlmanage -t -s 2400 -o . "$f" >/dev/null 2>&1
   mv -f "$f.png" "${f%.html}.png"
   echo "${f%.html}.png"

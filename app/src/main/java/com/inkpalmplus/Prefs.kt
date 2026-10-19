@@ -42,9 +42,10 @@ class Prefs(context: Context) {
      * else the whole-device switch (on by default).
      */
     fun helperOn(key: String, pkg: String): Boolean =
-        if (sp.contains("${key}_$pkg")) sp.getBoolean("${key}_$pkg", true) else helperDefault(key)
+        if (sp.contains("${key}_$pkg")) sp.getBoolean("${key}_$pkg", false) else helperDefault(key)
 
-    fun helperDefault(key: String): Boolean = sp.getBoolean(key, true)
+    /** All helpers start on except Clean after idle, which can flash during a long page. */
+    fun helperDefault(key: String): Boolean = sp.getBoolean(key, key != IDLE_CLEAN)
     fun setHelperDefault(key: String, on: Boolean) = sp.edit().putBoolean(key, on).apply()
 
     /** [on] null: follow the whole-device switch. */
@@ -58,6 +59,16 @@ class Prefs(context: Context) {
         const val STRIP_MAX = 40
         const val SCROLL_BOOST = "scroll_boost"
         const val CLEAN_ON_OPEN = "clean_on_open"
+        const val TYPING_BOOST = "typing_boost"
+        const val IDLE_CLEAN = "idle_clean"
+
+        /** The helpers, as the home screen and an app's page list them. */
+        val HELPERS = listOf(
+            Triple(SCROLL_BOOST, "Fast while scrolling", "Speed refresh while a list or page moves, then back to normal and a clean refresh"),
+            Triple(TYPING_BOOST, "Fast while typing", "Speed refresh while you type, then back to normal and a clean refresh"),
+            Triple(CLEAN_ON_OPEN, "Clean screen on open", "One full refresh when an app comes to the front, clearing the last app's ghost"),
+            Triple(IDLE_CLEAN, "Clean after idle", "One full refresh after the screen has been still for a minute"),
+        )
     }
 
     /** The user's own font scale, before [Live.nudgeConfiguration] moved it by a hair. */

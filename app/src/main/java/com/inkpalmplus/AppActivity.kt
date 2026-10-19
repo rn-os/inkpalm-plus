@@ -111,7 +111,7 @@ class AppActivity : Activity() {
         body.addView(sectionTitle("Refresh helpers"))
         body.addView(note("Normally these follow the switches on InkPalm+'s home screen. Change them here only if this app misbehaves. Applies right away."))
         val prefs = Prefs(this)
-        for ((key, title) in listOf(Prefs.SCROLL_BOOST to "Fast while scrolling", Prefs.CLEAN_ON_OPEN to "Clean screen on open")) {
+        for ((key, title, _) in Prefs.HELPERS) {
             val own = prefs.helperOverride(key, pkg)
             val def = if (prefs.helperDefault(key)) "on" else "off"
             body.addView(text(title, 16f, medium = true).apply { setPadding(dp(16), dp(8), dp(16), 0) })

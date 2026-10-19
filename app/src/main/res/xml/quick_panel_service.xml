@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Window-state events: which app is in front, so the quick panel opens on it.
-     Scroll events: "Fast while scrolling" (RefreshHelpers). No window content is read. -->
+     Scrolled / text-changed / content-changed: the refresh helpers (RefreshHelpers) need to know *that*
+     the screen moved, someone typed, or something drew. No window content or typed text is read. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeViewScrolled"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeViewScrolled|typeViewTextChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="false"
     android:description="@string/a11y_description"

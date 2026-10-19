@@ -75,10 +75,18 @@ class QuickPanelService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
-            val pkg = event.packageName?.toString() ?: return
-            if (pkg == foreground) helpers.onScroll(pkg, panel != null)
-            return
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_SCROLLED, AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED, AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                val pkg = event.packageName?.toString() ?: return
+                if (pkg != foreground) return
+                when (event.eventType) {
+                    AccessibilityEvent.TYPE_VIEW_SCROLLED -> helpers.onScroll(pkg, panel != null)
+                    // Only that text changed; event.text (what was typed) is never read.
+                    AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> helpers.onTyping(pkg, panel != null)
+                    else -> helpers.onContentChanged()
+                }
+                return
+            }
         }
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
@@ -159,6 +167,9 @@ class QuickPanelService : AccessibilityService() {
         val ok = when (cmd) {
             "state" -> true
             "open" -> { if (panel == null) openPanel(); panel != null }
+            // "scroll_boost:off", "idle_clean:on", "typing_boost:default": the whole-device switch for a helper.
+            "helper" -> { val (k, v) = value.split(":"); Prefs(this).apply { if (v == "default") sp.edit().remove(k).apply() else setHelperDefault(k, v == "on") }; true }
+            "idle_ms" -> { helpers.idleMs = value.toLong(); true }
             "strip" -> { Prefs(this).stripWidthDp = value.toInt(); showStrip(preview = true); true }
             "side" -> { Prefs(this).edgeRight = value == "right"; showStrip(preview = true); true }
             "rotate" -> { val f = foreground; if (f != null) setRotation(f, Rotation.Mode.of(value)); f != null }

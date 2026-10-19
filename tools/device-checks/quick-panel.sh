@@ -132,12 +132,15 @@ check_strip_width_and_side() {
 # enough to scroll): the one place the harness touches another app, with a swipe mid-screen.
 check_refresh_helpers() {
   local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
-  adb_ shell am broadcast -a com.inkpalmplus.CLOSE_PANEL -p $PKG >/dev/null; sleep 1
+  adb_ shell am broadcast -a com.inkpalmplus.CLOSE_PANEL -p $PKG >/dev/null; sleep 2
   adb_ shell input keyevent HOME; sleep 2
-  local f0 f1; f0=$(prop sys.eink.one_full_mode_timeline)
-  adb_ shell monkey -p "$TARGET" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 2
-  f1=$(prop sys.eink.one_full_mode_timeline)
-  [ "$f0" != "$f1" ] && note_ok "clean screen on open: full refresh when the app opened" || note_fail "no full refresh on open (counter stayed $f0)"
+  [ "$(top_package)" = "$TARGET" ] && adb_ shell input keyevent HOME && sleep 2
+  adb_ logcat -c
+  adb_ shell monkey -p "$TARGET" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+  # The target may cold-start (earlier checks force-stop it): wait up to 10 s.
+  for i in $(seq 1 20); do adb_ logcat -d -s InkPalmPlus:I | grep -q "clean on open ($TARGET)" && break; sleep 0.5; done
+  adb_ logcat -d -v time -s InkPalmPlus:I > "$OUT/$CHECK-open.txt"
+  grep -q "clean on open ($TARGET)" "$OUT/$CHECK-open.txt" && note_ok "clean screen on open: full refresh when the app opened" || note_fail "no clean on open (log: $CHECK-open.txt)"
   adb_ shell am start -a android.settings.SETTINGS >/dev/null; sleep 3
   local r0; r0=$(prop persist.sys.mogu.refresh_type)
   adb_ logcat -c
@@ -147,8 +150,45 @@ check_refresh_helpers() {
   sleep 1.5
   local log; log=$(adb_ logcat -d -s InkPalmPlus:I)
   echo "$log" | grep -q "scroll boost on (com.android.settings)" && note_ok "Speed (A2) switched on while scrolling" || note_fail "no scroll boost while scrolling Settings"
-  echo "$log" | grep -q "scroll boost off" && note_ok "boost ended after scrolling stopped" || note_fail "boost never ended"
+  echo "$log" | grep -q "boost off" && note_ok "boost ended after scrolling stopped" || note_fail "boost never ended"
   [ "$(prop persist.sys.mogu.refresh_type)" = "$r0" ] && note_ok "back to the app's mode ($r0)" || note_fail "refresh mode $(prop persist.sys.mogu.refresh_type) after scrolling, was $r0"
   adb_ shell input keyevent HOME
   manual "scrolling looks fast and the screen is clean after it stops; one flash when an app opens"
+}
+
+# Fast while typing: types into Android's Settings search (the harness's only typing outside InkPalm+).
+check_typing_boost() {
+  local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
+  adb_ shell am broadcast -a com.inkpalmplus.CLOSE_PANEL -p $PKG >/dev/null
+  adb_ shell input keyevent HOME; sleep 2
+  adb_ shell am start -n com.android.settings.intelligence/.search.SearchActivity >/dev/null; sleep 3
+  local r0; r0=$(prop persist.sys.mogu.refresh_type)
+  adb_ logcat -c
+  adb_ shell input text "display"; sleep 2.5
+  local log; log=$(adb_ logcat -d -s InkPalmPlus:I)
+  echo "$log" | grep -q "typing boost on" && note_ok "Speed (A2) switched on while typing" || note_fail "no typing boost"
+  echo "$log" | grep -q "boost off" && note_ok "boost ended after typing stopped" || note_fail "typing boost never ended"
+  [ "$(prop persist.sys.mogu.refresh_type)" = "$r0" ] && note_ok "back to the app's mode ($r0)" || note_fail "refresh mode $(prop persist.sys.mogu.refresh_type) after typing, was $r0"
+  adb_ shell input keyevent BACK; adb_ shell input keyevent HOME
+}
+
+# Clean after idle (off by default): switched on and shortened to 3 s through the hooks. The screen
+# has to change after the last clean for it to fire, so it scrolls Settings with the scroll boost
+# switched off (a boost ends in its own clean). Everything is put back afterwards.
+check_idle_clean() {
+  local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
+  hook helper idle_clean:on >/dev/null; hook idle_ms 3000 >/dev/null; hook helper scroll_boost:off >/dev/null
+  adb_ shell am start -a android.settings.SETTINGS >/dev/null; sleep 3
+  adb_ logcat -c
+  # One swipe up; if the list was already at the bottom, one back down (a list at its end doesn't move).
+  adb_ shell input swipe 360 1150 360 300 800; sleep 1
+  adb_ logcat -d -s InkPalmPlus:I | grep -q "screen changed" || adb_ shell input swipe 360 300 360 1150 800
+  for i in $(seq 1 12); do adb_ logcat -d -s InkPalmPlus:I | grep -q "idle clean (com.android.settings)" && break; sleep 1; done
+  adb_ logcat -d -v time -s InkPalmPlus:I > "$OUT/$CHECK-service.txt"
+  grep -q "idle clean (com.android.settings)" "$OUT/$CHECK-service.txt" && note_ok "one full refresh once the screen was still" || note_fail "no idle clean"
+  # A list still settling may earn one more clean; after that, nothing may repeat.
+  sleep 5; adb_ logcat -c; sleep 6
+  adb_ logcat -d -s InkPalmPlus:I | grep -q "idle clean" && note_fail "keeps cleaning with nothing new on screen" || note_ok "no repeat cleans once the screen is still"
+  hook helper idle_clean:default >/dev/null; hook helper scroll_boost:default >/dev/null; hook idle_ms 60000 >/dev/null
+  adb_ shell input keyevent HOME
 }

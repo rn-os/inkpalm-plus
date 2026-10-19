@@ -112,6 +112,28 @@ Gesture navigation is on (`navigation_mode=2`). The system's back gesture still 
 quick panel's strip (an accessibility overlay): verified with an inward swipe over the strip on a nested Settings
 screen. The strip therefore only reacts to swipes up or down along it.
 
+## Sleep image and system font (static analysis 2026-10-19; experiments below)
+
+**Sleep image** (`persist.sys.mogu.wallpaper`, e.g. `data/mogu/136572479.png`, relative to `/`):
+- Drawn by the vendor HWC (`/vendor/lib64/hw/hwcomposer.rk30board.so`): `hwc_post_epd_logo` reads the property on
+  every standby-logo post (no cache), `drawLogoPic` decodes it with Skia (PNG), rotated per `persist.sys.mogu.rotation`;
+  `persist.sys.mogu.wallpaper_gamma` is applied to that frame (SystemUI mirrors the contrast slider into it).
+  Fallbacks: `/data/misc/standby*.png`, `/vendor/media/standby*.png`. Separate shutdown image: `persist.sys.mogu.shutdown_wallpaper`.
+- Stock UI: launcher `settings.wallpaper.WallpaperMainActivity` → framework `MoanWallPaper.setCustomWallPaper`: copies the
+  image to `data/mogu/<SDBMHash(src)>.png` (world rwx), deletes the previous custom one (unless "almanac"), sets the
+  property via `ActivityManager.setSystemProp`. Images 700–1500 × 1000–1800 are used as is (the device's are 720×1440).
+- `/data/mogu` is `drwxrwxrwx system system u:object_r:system_data_file`; shell can read (`adb exec-out cat`, not `adb pull`).
+- No reload broadcast exists; `Settings.Global.moan_wallpaper_update` only gates the LED during almanac updates.
+
+**System font** (`persist.sys.mogufont.path`, e.g. `data/mogu/1295245487.ttf`; also `persist.sys.mogufont.used`):
+- Framework `android.graphics.MoguTypeface`: `updateLovelyFont` re-reads the property and rebuilds `Typeface.DEFAULT`/
+  `DEFAULT_BOLD`. `Configuration.updateFrom` calls it whenever **fontScale changes**, so it's live in each process on the
+  next font-scale change (our DPI nudge does exactly that). Stock: `android.os.MoanFont.excuteChangeMoguFont` copies the
+  TTF to `data/mogu/<hash>.ttf`, sets the property, then nudges fontScale by 1e-5.
+
+**Another open property setter:** `IActivityManager.setSystemProp` (binder **218**) is `SystemProperties.set` with no
+permission check: `adb shell service call activity 218 s16 <key> s16 <value>`.
+
 ## Other system hooks
 
 - `EinkManager` (`android.os`, service `eink`, `IEinkManager.setProperty(key, value)` = binder 5): `setMode` → `sys.eink.mode`,

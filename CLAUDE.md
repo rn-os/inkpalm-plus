@@ -34,5 +34,9 @@ Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister p
 - Installing and testing debug builds on the connected InkPalm is fine. Don't change other apps' rows in Moaan's
   table except through the harness (which restores them) or when the user asks.
 
+## Mockups
+- UI changes get mockups first: `docs/mockups/build.py` (boards as HTML, `panel.css`) and `docs/mockups/render.sh`
+  (renders PNGs with macOS Quick Look; no Playwright needed). Quick Look draws about 1200×1200 CSS px, so boards are two rows.
+
 ## Working agreements
 - Subagents run on Sonnet (`model: "sonnet"`).

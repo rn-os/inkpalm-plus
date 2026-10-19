@@ -82,7 +82,8 @@ Moaan itself has no live DPI: its own DPI slider force-stops the app. What InkPa
 No accelerometer, so the display never turns on its own (Moaan keeps `moan.rotation.lock.setting`,
 `persist.sys.mogu.rotation`). A 1×1 `TYPE_ACCESSIBILITY_OVERLAY` window with `screenOrientation` set turns the display
 and overrides the app in front; removing it hands control back (verified: `dumpsys window displays` `mRotation` 0 ↔ 1).
-InkPalm+ remembers a rotation per app and applies it on each foreground change (`Rotation.kt`).
+InkPalm+ remembers a rotation per app and applies it on each foreground change (`Rotation.kt`). After the service
+(re)connects, nothing is known about the app in front until the next window change.
 
 ## Other system hooks
 

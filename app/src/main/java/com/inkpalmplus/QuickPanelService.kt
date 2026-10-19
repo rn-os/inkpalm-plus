@@ -46,11 +46,9 @@ class QuickPanelService : AccessibilityService() {
         }
         registerReceiver(receiver, filter, RECEIVER_EXPORTED_COMPAT)
         showStrip()
-        // After a restart or reinstall: the app already in front gets its rotation without waiting for a switch.
-        runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
-            ?.takeIf { it != packageName && it != "com.android.systemui" }
-            ?.let { foreground = it; rotation.apply(Prefs(this).rotation(it)) }
-        Log.i(TAG, "quick panel service connected (foreground $foreground)")
+        // The app in front isn't known until the next window change: the service doesn't read window
+        // content (so rootInActiveWindow is null), only window-state events.
+        Log.i(TAG, "quick panel service connected")
     }
 
     override fun onDestroy() {

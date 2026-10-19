@@ -92,3 +92,17 @@ check_rotation_kept_per_app() {
   [ "$(rotation)" = 0 ] && note_ok "Auto gives the screen back (portrait)" || note_fail "rotation $(rotation) after Auto, wanted 0"
   manual "the panel is a side sheet in landscape and the app stays readable beside it"
 }
+
+check_value_list_and_arrows() {
+  open_panel_over_target || return
+  hook list REFRESH || { note_fail "list hook: $HOOK_OUT"; return; }
+  hook pick 3 || { note_fail "pick hook: $HOOK_OUT"; return; }   # System, Normal, Auto, Fast…
+  sleep 1.5
+  expect_row "picking Fast from the list saves it (DU, 14)" refresh_mode 14
+  hook arrow REFRESH:- || { note_fail "arrow hook: $HOOK_OUT"; return; }
+  sleep 1.5
+  expect_row "◀ steps back to Auto (0)" refresh_mode 0
+  hook arrow REFRESH:- >/dev/null; hook arrow REFRESH:- >/dev/null; sleep 1.5
+  expect_row "◀ twice more reaches System" is_refresh_setting 0
+  manual "the panel fits in both orientations with nothing cut off (docs/mockups/02-arrows.png)"
+}

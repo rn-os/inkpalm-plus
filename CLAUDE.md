@@ -14,7 +14,10 @@ Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister p
 - `MainActivity`: access status, whole-device tweaks (animations, text size), app list.
 - `AppActivity`: one app's settings page.
 - `QuickPanelService` (accessibility service: edge strip, foreground app, debug test hooks), `QuickPanel` (the overlay),
-  `EdgeHandleView` (from SuperBoox), `Live` (applies settings to the open app: eink service, font-scale nudge), `Prefs`.
+  `EdgeHandleView` (from SuperBoox), `Live` (applies settings to the open app: eink service, font-scale nudge),
+  `Rotation` (manual rotation through an overlay window, remembered per app), `Prefs`.
+- The quick panel is a bottom sheet in portrait and a half-width side sheet (strip side) in landscape; the service
+  rebuilds the strip and panel when the screen turns.
 - `Shell`: Shizuku shell commands and a background helper. `Ui`: e-ink view helpers copied from SuperBoox.
 - Views are built in code, black on white, no animations or ripples (see `Ui.kt` header).
 

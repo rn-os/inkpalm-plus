@@ -42,18 +42,35 @@ class QuickPanel(
             setBackgroundColor(Ink.PAPER)
             setPadding(0, 0, 0, ctx.dp(8))
         }
-        root.addView(ctx.vbox().apply {
-            addView(ctx.divider(3))
-            addView(body)
-        })
+        // Portrait: a sheet along the bottom. Landscape (720 px tall): a sheet down the strip's side,
+        // half the width, so the app stays fully visible beside it.
+        val landscape = ctx.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val right = Prefs(ctx).edgeRight
+        val scroll = android.widget.ScrollView(ctx).apply { isVerticalScrollBarEnabled = false; addView(body) }
+        if (landscape) {
+            root.addView(ctx.hbox().apply {
+                gravity = Gravity.TOP
+                val rule = View(ctx).apply { setBackgroundColor(Ink.INK) }
+                if (right) addView(rule, lp(ctx.dp(3), MATCH))
+                addView(scroll, lp(0, MATCH, 1f))
+                if (!right) addView(rule, lp(ctx.dp(3), MATCH))
+                setBackgroundColor(Ink.PAPER)
+            })
+        } else {
+            root.addView(ctx.vbox().apply {
+                addView(ctx.divider(3))
+                addView(scroll)
+            })
+        }
         root.setOnTouchListener { _, e -> if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) onClose(); false }
         val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT,
+            if (landscape) (ctx.resources.displayMetrics.widthPixels * 0.5f).toInt() else WindowManager.LayoutParams.MATCH_PARENT,
+            if (landscape) WindowManager.LayoutParams.MATCH_PARENT else WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.OPAQUE,
-        ).apply { gravity = Gravity.BOTTOM }
+        ).apply { gravity = if (!landscape) Gravity.BOTTOM else if (right) Gravity.END else Gravity.START }
         wm.addView(root, lp)
         render()
         Shell.background({ EinkDb.read(ctx, pkg) }) { loadedProfile ->
@@ -143,39 +160,48 @@ class QuickPanel(
         })
         if (!loaded) return
 
+        val left = body
+        val right = body
+
         // DPI
         val dpi = p.dpi
-        body.addView(row("Size") {
+        left.addView(row("Size") {
             addView(ctx.inkButton("−", 18f) { changeDpi((if (dpi > 0) dpi else EinkDb.NATIVE_DPI) - 10) }, lp(ctx.dp(52), WRAP))
             addView(ctx.text(if (dpi > 0) "$dpi" else "System", 17f, bold = true).apply { gravity = Gravity.CENTER }, lp(0, WRAP, 1f))
             addView(ctx.inkButton("+", 18f) { changeDpi((if (dpi > 0) dpi else EinkDb.NATIVE_DPI) + 10) }, lp(ctx.dp(52), WRAP))
             addView(ctx.chip("Sys", dpi < 0) { changeDpi(-1) }, lp(WRAP, WRAP).apply { marginStart = ctx.dp(6) })
         })
 
-        // Refresh
-        body.addView(sub("Refresh"))
-        body.addView(chips(EinkDb.Refresh.entries, { it.title }, p.refresh) { change(p.copy(refresh = it)) })
-        body.addView(sub("Full refresh"))
-        body.addView(chips(listOf(-1, 5, 10, 20, 30, 50), { if (it < 0) "System" else "Every $it" }, p.fullEvery) { change(p.copy(fullEvery = it)) })
-
         // Contrast
         val steps = EinkDb.CONTRAST_STEPS
         val base = steps.indexOfFirst { kotlin.math.abs(it - EinkDb.DEFAULT_CONTRAST) < 0.01f }
         val idx = p.contrast?.let { g -> steps.indexOfFirst { kotlin.math.abs(it - g) < 0.01f } }?.takeIf { it >= 0 } ?: base
-        body.addView(row("Contrast") {
+        left.addView(row("Contrast") {
             addView(ctx.inkButton("Lighter", 14f) { change(p.copy(contrast = steps[(idx - 1).coerceAtLeast(0)])) }, lp(0, WRAP, 1f))
             addView(ctx.text(p.contrast?.let { EinkDb.contrastLabel(it).removePrefix("Contrast ") } ?: "System", 15f, bold = true).apply { gravity = Gravity.CENTER }, lp(0, WRAP, 1f))
             addView(ctx.inkButton("Darker", 14f) { change(p.copy(contrast = steps[(idx + 1).coerceAtMost(steps.size - 1)])) }, lp(0, WRAP, 1f))
             addView(ctx.chip("Sys", p.contrast == null) { change(p.copy(contrast = null)) }, lp(WRAP, WRAP).apply { marginStart = ctx.dp(6) })
         })
 
-        body.addView(ctx.hbox().apply {
+        // Rotation: no accelerometer, so this is the only way to turn the screen. Remembered per app.
+        left.addView(sub("Rotate (kept for this app)"))
+        val rot = service.currentRotation().takeIf { service.foreground == pkg } ?: Prefs(ctx).rotation(pkg)
+        left.addView(chips(Rotation.Mode.entries, { it.title }, rot) { service.setRotation(pkg, it); render() })
+
+        // Refresh
+        right.addView(sub("Refresh"))
+        right.addView(chips(EinkDb.Refresh.entries, { it.title }, p.refresh) { change(p.copy(refresh = it)) })
+        right.addView(sub("Full refresh"))
+        right.addView(chips(listOf(-1, 5, 10, 20, 30, 50), { if (it < 0) "System" else "Every $it" }, p.fullEvery) { change(p.copy(fullEvery = it)) })
+
+        right.addView(ctx.hbox().apply {
             setPadding(ctx.dp(16), ctx.dp(8), ctx.dp(16), 0)
             addView(ctx.inkButton("Full refresh now", 14f) { Shell.io.execute { Live.fullRefresh() } }, lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
             addView(ctx.inkButton("Reset app", 14f) {
                 val wasDpi = p.dpi
                 change(EinkDb.Profile(pkg, exists = p.exists))
                 if (wasDpi > 0) changeDpi(-1)
+                service.setRotation(pkg, Rotation.Mode.AUTO)
             }, lp(0, WRAP, 1f))
         })
     }

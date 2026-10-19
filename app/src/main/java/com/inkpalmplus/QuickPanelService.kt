@@ -20,6 +20,7 @@ class QuickPanelService : AccessibilityService() {
     private lateinit var wm: WindowManager
     private var strip: View? = null
     private var panel: QuickPanel? = null
+    private lateinit var rotation: Rotation
     /** The last real app in front (not InkPalm+, SystemUI or a keyboard). */
     var foreground: String? = null
         private set
@@ -38,19 +39,25 @@ class QuickPanelService : AccessibilityService() {
     override fun onServiceConnected() {
         instance = this
         wm = getSystemService(WindowManager::class.java)
+        rotation = Rotation(this, wm)
         val filter = IntentFilter().apply {
             addAction(ACTION_OPEN); addAction(ACTION_CLOSE); addAction(ACTION_STRIP)
             if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) addAction(ACTION_TEST)
         }
         registerReceiver(receiver, filter, RECEIVER_EXPORTED_COMPAT)
         showStrip()
-        Log.i(TAG, "quick panel service connected")
+        // After a restart or reinstall: the app already in front gets its rotation without waiting for a switch.
+        runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
+            ?.takeIf { it != packageName && it != "com.android.systemui" }
+            ?.let { foreground = it; rotation.apply(Prefs(this).rotation(it)) }
+        Log.i(TAG, "quick panel service connected (foreground $foreground)")
     }
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(receiver) }
         removeStrip()
         closePanel()
+        if (::rotation.isInitialized) rotation.release()
         instance = null
         super.onDestroy()
     }
@@ -64,6 +71,7 @@ class QuickPanelService : AccessibilityService() {
         if (pkg != foreground) {
             foreground = pkg
             Log.i(TAG, "foreground $pkg")
+            rotation.apply(Prefs(this).rotation(pkg))
             // Another app came to the front under the panel: it belongs to the old one.
             if (panel != null && panel?.pkg != pkg) closePanel()
         }
@@ -73,6 +81,27 @@ class QuickPanelService : AccessibilityService() {
         runCatching { getSystemService(android.view.inputmethod.InputMethodManager::class.java).inputMethodList.map { it.packageName }.toSet() }.getOrDefault(emptySet())
     }
     private fun isKeyboard(pkg: String) = pkg in keyboards
+
+    /** The screen turned: the strip and panel are laid out for the old shape. */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!::wm.isInitialized) return
+        showStrip()
+        panel?.let { old ->
+            old.dismiss(wm)
+            panel = QuickPanel(this, old.pkg) { closePanel() }.also { it.show(wm) }
+        }
+    }
+
+    // ---- Rotation -----------------------------------------------------------------------------
+
+    fun currentRotation(): Rotation.Mode = rotation.mode
+
+    /** Turns the screen for [pkg] now and remembers it for next time it comes to the front. */
+    fun setRotation(pkg: String, mode: Rotation.Mode) {
+        Prefs(this).setRotation(pkg, mode)
+        if (pkg == foreground) rotation.apply(mode)
+    }
 
     // ---- Strip --------------------------------------------------------------------------------
 
@@ -109,9 +138,10 @@ class QuickPanelService : AccessibilityService() {
         val ok = when (cmd) {
             "state" -> true
             "open" -> { if (panel == null) openPanel(); panel != null }
+            "rotate" -> { val f = foreground; if (f != null) setRotation(f, Rotation.Mode.of(value)); f != null }
             else -> panel?.test(cmd, value) ?: false
         }
-        Log.i(TAG, "test $cmd $value ${if (ok) "ok" else "fail"} foreground=$foreground panel=${panel?.pkg}")
+        Log.i(TAG, "test $cmd $value ${if (ok) "ok" else "fail"} foreground=$foreground panel=${panel?.pkg} rotation=${rotation.mode.name}")
     }
 
     // ---- Panel --------------------------------------------------------------------------------

@@ -76,3 +76,19 @@ check_dpi_live_without_reopening() {
   [ -n "$pid" ] && [ "$pid" = "$pid2" ] && note_ok "same process (not reopened)" || note_fail "process changed ($pid -> $pid2)"
   hook dpi -1 >/dev/null; sleep 4
 }
+
+rotation() { adb_ shell dumpsys window displays | grep -m1 -oE "mRotation=[0-9]" | cut -d= -f2; }
+
+check_rotation_kept_per_app() {
+  open_panel_over_target || return
+  hook rotate LANDSCAPE || { note_fail "rotate hook: $HOOK_OUT"; return; }
+  sleep 2
+  [ "$(rotation)" = 1 ] && note_ok "screen turned to landscape" || note_fail "rotation is $(rotation), wanted 1"
+  adb_ shell input keyevent HOME; sleep 2.5
+  [ "$(rotation)" = 0 ] && note_ok "home screen back in portrait" || note_fail "home rotation $(rotation), wanted 0"
+  adb_ shell monkey -p "$TARGET" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 3
+  [ "$(rotation)" = 1 ] && note_ok "target turns landscape again when it reopens" || note_fail "target rotation $(rotation), wanted 1"
+  hook rotate AUTO >/dev/null; sleep 2
+  [ "$(rotation)" = 0 ] && note_ok "Auto gives the screen back (portrait)" || note_fail "rotation $(rotation) after Auto, wanted 0"
+  manual "the panel is a side sheet in landscape and the app stays readable beside it"
+}

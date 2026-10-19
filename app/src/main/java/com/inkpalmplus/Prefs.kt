@@ -17,6 +17,13 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("show_strip", true)
         set(v) = sp.edit().putBoolean("show_strip", v).apply()
 
+    /** The rotation chosen for [pkg] in the quick panel (applied whenever it comes to the front). */
+    fun rotation(pkg: String): Rotation.Mode = Rotation.Mode.of(sp.getString("rotation_$pkg", null))
+
+    fun setRotation(pkg: String, mode: Rotation.Mode) {
+        sp.edit().apply { if (mode == Rotation.Mode.AUTO) remove("rotation_$pkg") else putString("rotation_$pkg", mode.name) }.apply()
+    }
+
     /** The user's own font scale, before [Live.nudgeConfiguration] moved it by a hair. */
     var fontBase: Float
         get() = sp.getFloat("font_base", -1f)

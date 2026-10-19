@@ -192,3 +192,31 @@ check_idle_clean() {
   hook helper idle_clean:default >/dev/null; hook helper scroll_boost:default >/dev/null; hook idle_ms 60000 >/dev/null
   adb_ shell input keyevent HOME
 }
+
+# Presets: picking one sets the target's refresh values and helpers; System clears them again.
+check_presets() {
+  open_panel_over_target || return
+  hook list PRESET || { note_fail "list hook: $HOOK_OUT"; return; }
+  hook pick 1 || { note_fail "pick hook: $HOOK_OUT"; return; }   # System, Reading, Browsing…
+  sleep 1.5
+  expect_row "Reading sets Normal refresh (7)" refresh_mode 7
+  expect_row "Reading sets full refresh every 10" refresh_frequency 10
+  adb_ shell run-as $PKG cat shared_prefs/inkpalmplus.xml | grep -q "clean_on_open_$TARGET\" value=\"true" \
+    && note_ok "Reading turns clean on open on for the app" || note_fail "no clean-on-open override after Reading"
+  hook list PRESET >/dev/null; hook pick 0 >/dev/null; sleep 1.5
+  expect_row "System clears the refresh settings" is_refresh_setting 0
+  adb_ shell run-as $PKG cat shared_prefs/inkpalmplus.xml | grep -q "_$TARGET\" value=" \
+    && note_fail "helper overrides left after System" || note_ok "System clears the app's helper overrides"
+}
+
+# Font: switches live to Roboto Medium and back to the device's own.
+check_font() {
+  local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
+  local f0; f0=$(prop persist.sys.mogufont.path)
+  hook font system/fonts/Roboto-Medium.ttf || { note_fail "font hook: $HOOK_OUT"; return; }
+  sleep 2
+  [ "$(prop persist.sys.mogufont.path)" = system/fonts/Roboto-Medium.ttf ] && note_ok "font set to Roboto Medium" || note_fail "font is $(prop persist.sys.mogufont.path)"
+  hook font original >/dev/null; sleep 2
+  [ "$(prop persist.sys.mogufont.path)" = "$f0" ] && note_ok "back to the device's own font ($f0)" || note_fail "font $(prop persist.sys.mogufont.path), was $f0"
+  manual "apps redraw in the new font without reopening"
+}

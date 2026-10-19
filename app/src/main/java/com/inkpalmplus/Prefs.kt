@@ -71,6 +71,11 @@ class Prefs(context: Context) {
         )
     }
 
+    /** The system font the device had before InkPalm+ first changed it (see [Fonts]). */
+    var originalFont: String?
+        get() = sp.getString("original_font", null)
+        set(v) = sp.edit().putString("original_font", v).apply()
+
     /** The user's own font scale, before [Live.nudgeConfiguration] moved it by a hair. */
     var fontBase: Float
         get() = sp.getFloat("font_base", -1f)

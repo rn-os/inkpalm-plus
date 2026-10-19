@@ -25,6 +25,7 @@ class MainActivity : Activity() {
     private lateinit var appsBox: LinearLayout
     private lateinit var panelBox: LinearLayout
     private var filter = ""
+    private var fontsOpen = false
     private var apps: List<AppEntry> = emptyList()
     private var profiles: Map<String, EinkDb.Profile> = emptyMap()
 
@@ -222,6 +223,39 @@ class MainActivity : Activity() {
         for ((key, title, detail) in Prefs.HELPERS) {
             val on = prefs.helperDefault(key)
             deviceBox.addView(toggleRow(title, detail, on) { prefs.setHelperDefault(key, !on); renderDevice() })
+        }
+        // Font: Android's own fonts, applied live (Fonts). Heavier ones hold up better at 16 grays.
+        val fonts = Fonts.list(this)
+        val now = Fonts.current()
+        val nowTitle = fonts.firstOrNull { it.path == now }?.title ?: "Moaan font"
+        deviceBox.addView(hbox().apply {
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            pressable()
+            addView(vbox().apply {
+                addView(text("Font", 17f, medium = true))
+                addView(text("Every app's text. Heavier fonts hold up better on e-ink.", 13f, color = Ink.MUTED))
+            }, lp(0, WRAP, 1f))
+            addView(text(nowTitle + if (fontsOpen) "  ▴" else "  ▾", 15f, bold = true))
+            setOnClickListener { fontsOpen = !fontsOpen; renderDevice() }
+        })
+        if (fontsOpen) for (f in fonts) {
+            val on = f.path == now
+            deviceBox.addView(hbox().apply {
+                setPadding(dp(24), dp(6), dp(16), dp(6))
+                pressable()
+                addView(text(if (on) "●" else "○", 16f, bold = true), lp(dp(28), WRAP))
+                addView(text(f.title, 13f, bold = on, medium = !on), lp(dp(120), WRAP))
+                addView(text("The quick brown fox jumps", 17f).apply {
+                    Fonts.typeface(f)?.let { typeface = it }
+                    maxLines = 1
+                }, lp(0, WRAP, 1f))
+                setOnClickListener {
+                    Shell.background({ Fonts.apply(this@MainActivity, f) }) { ok ->
+                        if (!ok) toast("Couldn't change the font")
+                        renderDevice()
+                    }
+                }
+            })
         }
         val scale = Settings.System.getFloat(contentResolver, Settings.System.FONT_SCALE, 1f)
         deviceBox.addView(stepperRow("Text size", "%.2f×".format(scale),

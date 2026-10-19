@@ -17,7 +17,8 @@ Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister p
   `EdgeHandleView` (from SuperBoox), `Live` (applies settings to the open app: eink service, font-scale nudge),
   `Rotation` (manual rotation through an overlay window, remembered per app), `RefreshHelpers` (Speed while
   scrolling, clean screen on open; whole-device switches with per-app overrides), `Survival` (Clear Memory whitelist,
-  turning the service back on at boot / app open), `Prefs`.
+  turning the service back on at boot / app open), `Presets` (Reading/Browsing/Comics/Video/System; one panel line),
+  `Fonts` (system font, live), `Prefs`.
 - The quick panel is a bottom sheet in portrait and a half-width side sheet (strip side) in landscape; the service
   rebuilds the strip and panel when the screen turns.
 - `Shell`: Shizuku shell commands and a background helper. `Ui`: e-ink view helpers copied from SuperBoox.
@@ -43,7 +44,8 @@ Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister p
 ## Product direction
 - Keep e-ink settings few and plain: the user worries that too many confuse people. New behaviour should default
   to something good, live on the home screen as one switch, and allow per-app overrides only on the app's own page.
-  The quick panel stays at five lines (plus ⚙ to the home screen).
+  The quick panel has four lines: Preset, Size, Contrast, Rotate (plus ⚙ to the home screen). New apps start on
+  the System preset; no suggestions by app type.
 
 ## Working agreements
 - Subagents run on Sonnet (`model: "sonnet"`).

@@ -125,10 +125,18 @@ screen. The strip therefore only reacts to swipes up or down along it.
 - `/data/mogu` is `drwxrwxrwx system system u:object_r:system_data_file`; shell can read (`adb exec-out cat`, not `adb pull`).
 - No reload broadcast exists; `Settings.Global.moan_wallpaper_update` only gates the LED during almanac updates.
 
+**Custom sleep images are not possible without system privileges** (verified 2026-10-19): neither shell nor apps
+can write `/data/mogu` (SELinux), and HWC can't read app-private, `/data/local/tmp` or `/sdcard` files (it falls
+back to `/vendor/media/standby_charge.png`). Existing `/data/mogu` images switch live via the property. The launcher
+(`android.uid.system`) is the only writer; its exported `WallpaperUpdateService` (`com.moan.save_new_wallpaper`,
+`com.moan.update_refresh_wallpaper`) and `ScreenChangeReciver` read no extras (they only re-render the bundled almanac),
+and its wallpaper/font activities aren't exported. No permission an app can be granted gets past this. Dropped.
+
 **System font** (`persist.sys.mogufont.path`, e.g. `data/mogu/1295245487.ttf`; also `persist.sys.mogufont.used`):
 - Framework `android.graphics.MoguTypeface`: `updateLovelyFont` re-reads the property and rebuilds `Typeface.DEFAULT`/
   `DEFAULT_BOLD`. `Configuration.updateFrom` calls it whenever **fontScale changes**, so it's live in each process on the
-  next font-scale change (our DPI nudge does exactly that). Stock: `android.os.MoanFont.excuteChangeMoguFont` copies the
+  next font-scale change (our DPI nudge does exactly that). Verified live from InkPalm+ (`Fonts.kt`): Android's
+  `/system/fonts/*.ttf` work as values, and apps can read the property to remember the original. Stock: `android.os.MoanFont.excuteChangeMoguFont` copies the
   TTF to `data/mogu/<hash>.ttf`, sets the property, then nudges fontScale by 1e-5.
 
 **Another open property setter:** `IActivityManager.setSystemProp` (binder **218**) is `SystemProperties.set` with no

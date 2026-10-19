@@ -157,7 +157,8 @@ class QuickPanel(
     // sideways, and the whole panel fits without scrolling in both orientations
     // (mockups: docs/mockups/02-arrows.png).
 
-    enum class Kind(val title: String) { SIZE("Size"), CONTRAST("Contrast"), REFRESH("Refresh"), FULL("Full refresh"), ROTATE("Rotate") }
+    /** The panel shows PRESET, SIZE, CONTRAST, ROTATE; REFRESH and FULL remain for the app's page and the test hooks. */
+    enum class Kind(val title: String) { PRESET("Preset"), SIZE("Size"), CONTRAST("Contrast"), REFRESH("Refresh"), FULL("Full refresh"), ROTATE("Rotate") }
 
     private class Choice(val title: String, val detail: String?, val selected: Boolean, val pick: () -> Unit)
 
@@ -169,7 +170,22 @@ class QuickPanel(
     private fun rotationNow(): Rotation.Mode =
         service.currentRotation().takeIf { service.foreground == pkg } ?: Prefs(ctx).rotation(pkg)
 
+    private fun applyPreset(preset: Preset) {
+        preset.applyHelpers(Prefs(ctx), pkg)
+        change(preset.applyTo(p))
+    }
+
+    private fun openMore() {
+        ctx.startActivity(Intent(ctx, AppActivity::class.java).putExtra(AppActivity.EXTRA_PKG, pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        onClose()
+    }
+
     private fun choices(kind: Kind): List<Choice> = when (kind) {
+        Kind.PRESET -> {
+            val now = Preset.of(ctx, p)
+            Preset.entries.map { pr -> Choice(pr.title, pr.detail, now == pr) { applyPreset(pr) } } +
+                (if (now == null) listOf(Choice("Custom", "Set on this app's page (More)", true) { openMore() }) else emptyList())
+        }
         Kind.SIZE -> dpiChoices.map { d ->
             Choice(if (d < 0) "System" else "$d dpi", if (d == EinkDb.NATIVE_DPI) "the screen's own" else null,
                 if (d < 0) p.dpi < 0 else p.dpi == d) { changeDpi(d) }
@@ -189,7 +205,7 @@ class QuickPanel(
         }
     }
 
-    /** Landscape is 720 px tall: shorter buttons and spacing so all five lines and the footer fit. */
+    /** Landscape is 720 px tall: shorter buttons and spacing so all the lines and the footer fit. */
     private val compact get() = ctx.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     private fun android.widget.TextView.sized(): android.widget.TextView = apply {
         if (compact) { minHeight = ctx.dp(36); minimumHeight = ctx.dp(36); setPadding(ctx.dp(6), ctx.dp(2), ctx.dp(6), ctx.dp(2)) }
@@ -214,13 +230,23 @@ class QuickPanel(
                 ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                 onClose()
             }.sized().apply { contentDescription = "InkPalm+ settings" }, lp(ctx.dp(44), WRAP).apply { marginEnd = ctx.dp(6) })
-            addView(ctx.inkButton("More", 13f) {
-                ctx.startActivity(Intent(ctx, AppActivity::class.java).putExtra(AppActivity.EXTRA_PKG, pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                onClose()
-            }.sized(), lp(WRAP, WRAP).apply { marginEnd = ctx.dp(6) })
+            addView(ctx.inkButton("More", 13f) { openMore() }.sized(), lp(WRAP, WRAP).apply { marginEnd = ctx.dp(6) })
             addView(ctx.inkButton("✕", 15f) { onClose() }.sized(), lp(ctx.dp(44), WRAP))
         })
         if (!loaded) return
+
+        // Preset: one choice for refresh and the refresh helpers (docs/mockups/08-presets.png).
+        run {
+            val now = Preset.of(ctx, p)
+            val presets = Preset.entries
+            val i = now?.let { presets.indexOf(it) } ?: -1
+            val note = if (now == null) "set on this app's page" else if (now == Preset.SYSTEM) "Moaan's own settings" else
+                listOf(p.refresh.title, if (p.fullEvery > 0) "full refresh every ${p.fullEvery}" else null).filterNotNull().joinToString(" · ")
+            body.addView(line(Kind.PRESET, now?.title ?: "Custom", note,
+                prev = "◀" to { presets.getOrNull(i - 1)?.let { applyPreset(it) } },
+                next = "▶" to { presets.getOrNull(i + 1)?.let { applyPreset(it) } },
+                sys = null))
+        }
 
         // Size: −/+ step by 10 dpi.
         val dpi = p.dpi
@@ -238,12 +264,11 @@ class QuickPanel(
             next = "▶" to { change(p.copy(contrast = steps[(idx + 1).coerceAtMost(steps.size - 1)])) },
             sys = (p.contrast == null) to { change(p.copy(contrast = null)) }))
 
-        // Refresh, full refresh, rotation: ◀ ▶ step through the same list the value opens.
-        for (k in listOf(Kind.REFRESH, Kind.FULL, Kind.ROTATE)) {
+        // Rotation: ◀ ▶ step through the same list the value opens.
+        for (k in listOf(Kind.ROTATE)) {
             val all = choices(k)
             val i = all.indexOfFirst { it.selected }.coerceAtLeast(0)
             val note = when (k) {
-                Kind.REFRESH -> p.refresh.detail.takeIf { p.refresh != EinkDb.Refresh.SYSTEM } ?: "Quick Settings mode"
                 Kind.ROTATE -> "kept for this app"
                 else -> all[i].detail
             }
@@ -262,6 +287,7 @@ class QuickPanel(
                 change(EinkDb.Profile(pkg, exists = p.exists))
                 if (wasDpi > 0) changeDpi(-1)
                 service.setRotation(pkg, Rotation.Mode.AUTO)
+                Preset.SYSTEM.applyHelpers(Prefs(ctx), pkg)
             }.sized(), lp(0, WRAP, 1f))
         })
     }

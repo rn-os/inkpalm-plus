@@ -170,6 +170,17 @@ class QuickPanelService : AccessibilityService() {
             // "scroll_boost:off", "idle_clean:on", "typing_boost:default": the whole-device switch for a helper.
             "helper" -> { val (k, v) = value.split(":"); Prefs(this).apply { if (v == "default") sp.edit().remove(k).apply() else setHelperDefault(k, v == "on") }; true }
             "idle_ms" -> { helpers.idleMs = value.toLong(); true }
+            // Puts the app's data folder back to owner-only and removes test files (sleep-image experiments).
+            "fixdata" -> runCatching {
+                java.io.File(filesDir, "sleep.png").delete()
+                android.system.Os.chmod(dataDir.absolutePath, "700".toInt(8))
+                true
+            }.getOrDefault(false)
+            // A system font by path ("system/fonts/Roboto-Medium.ttf"); "original" for the device's own.
+            "font" -> {
+                val target = if (value == "original") Fonts.original(this) else value
+                Fonts.list(this).firstOrNull { it.path == target }?.let { f -> Shell.io.execute { Log.i(TAG, "font ${f.path}: ${Fonts.apply(this, f)}") }; true } ?: false
+            }
             "strip" -> { Prefs(this).stripWidthDp = value.toInt(); showStrip(preview = true); true }
             "side" -> { Prefs(this).edgeRight = value == "right"; showStrip(preview = true); true }
             "rotate" -> { val f = foreground; if (f != null) setRotation(f, Rotation.Mode.of(value)); f != null }

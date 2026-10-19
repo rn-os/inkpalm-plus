@@ -316,7 +316,75 @@ more_board = page("More modes, grays, strip, light", f"""
 <li><b>Light per app</b>: Moaan's warm/cold LEDs; changing them needs Shizuku, so it says so.</li></ul></div>
 </div>""")
 
+# ---- Board 08: presets instead of refresh knobs --------------------------------------------------
+
+PRESET_ROWS = (
+    arrow_row("Preset", "Reading", "Normal · full refresh every 10")
+    + arrow_row("Size", "300 dpi", sys=False)
+    + arrow_row("Contrast", "Darker +2", sys=False)
+    + arrow_row("Rotate", "Portrait", "kept for this app")
+)
+
+
+def presets_list():
+    opts = [("System", "Moaan's own settings, nothing changed", False),
+            ("Reading", "Normal refresh, full refresh every 10 pages, clean on open", True),
+            ("Browsing", "Normal at rest, Speed while scrolling, full refresh every 20", False),
+            ("Comics &amp; photos", "Full grays, full refresh every 5 to keep images clean", False),
+            ("Video", "Speed with dithered grays, no automatic cleaning", False),
+            ("Custom", "Set on this app's page (More)", False)]
+    rows = "".join(f'<div class="opt"><div class="dot{" on" if on else ""}"></div><div><b>{t}</b><i>{d}</i></div></div>' for t, d, on in opts)
+    hd = '<div class="hd"><div class="btn sq">◀</div><div class="t"><b>Preset</b><span>KOReader · tap one to pick it</span></div></div>'
+    return f'<div class="sheet bottom list">{hd}{rows}<div style="height:6px"></div></div>'
+
+
+presets_board = board("Presets", """<div class="notes"><h2>08 · Presets</h2>
+<p>One <b>Preset</b> line replaces the panel's Refresh and Full refresh lines, so the panel gets <i>shorter</i> (4 lines).</p>
+<h3>What a preset sets</h3><ul>
+<li>Refresh mode and full-refresh interval (Moaan's table).</li>
+<li>Fast while scrolling / typing and clean on open for that app.</li>
+<li>It does <b>not</b> touch Size, Contrast or Rotate: those stay their own lines.</li></ul>
+<h3>Custom</h3><ul>
+<li>Any app whose values don't match a preset shows <b>Custom</b>; the detailed controls live on its page (More), as today.</li></ul>
+<h3>Choice to make</h3><ul>
+<li>New apps start on <b>System</b> (nothing changes until you pick), or InkPalm+ suggests one by app type
+(readers → Reading, browsers → Browsing).</li></ul></div>""",
+    [frame("Portrait · panel", "Four lines; Preset first.", device("p", f'<div class="sheet bottom">{header()}{PRESET_ROWS}{FOOT}</div>')),
+     frame("Portrait · tapped “Reading”", "One line each, with what it does.", device("p", presets_list()))],
+    frame("Landscape", "Side sheet; fits with room to spare.", device("l", f'<div class="sheet side" style="width:42%">{header()}{PRESET_ROWS}<div style="flex:1"></div>{FOOT}</div>')))
+
+
+# ---- Board 09: system font -----------------------------------------------------------------------
+
+def fontrow(name, css, on=False):
+    return f'<div class="fontrow"><div class="dot{" on" if on else ""}"></div><div class="nm">{name}</div><div class="pv" style="{css}">The quick brown fox jumps</div></div>'
+
+
+font_board = page("System font", f"""
+<div class="row">
+{frame("Today: your Moaan font", "Real screenshot (Activity Launcher).", '<div class="shotcrop"><img src="font-moaan.png"></div>')}
+{frame("After: Roboto Black, switched live", "Real screenshot, no restart. Every app and the status bar change.", '<div class="shotcrop"><img src="font-roboto-black.png"></div>')}
+</div>
+<div class="row">
+<div class="card"><div class="ttl">HOME · WHOLE DEVICE → FONT</div>
+{fontrow("Moaan font (now)", "font-family: Helvetica Neue; font-weight: 300;", True)}
+{fontrow("Roboto", "font-family: Helvetica Neue; font-weight: 400;")}
+{fontrow("Roboto Medium", "font-family: Helvetica Neue; font-weight: 500;")}
+{fontrow("Roboto Bold", "font-family: Helvetica Neue; font-weight: 700;")}
+{fontrow("Roboto Black", "font-family: Helvetica Neue; font-weight: 900;")}
+{fontrow("Noto Serif", "font-family: Georgia;")}
+{fontrow("Noto Serif Bold", "font-family: Georgia; font-weight: 700;")}
+</div>
+<div class="notes"><h2>09 · Font</h2>
+<ul><li>One <b>Font</b> row under Whole device opens this list; each line is drawn in its font (here approximated with Mac fonts).</li>
+<li>Uses Android's built-in fonts, so nothing to download or copy; your current Moaan font stays first so you can go back.</li>
+<li>Applies live (verified): apps redraw in the new font in place.</li>
+<li>Heavier weights (Medium, Bold) are the e-ink win: thin strokes break up at 16 grays.</li>
+<li>No Shizuku needed.</li></ul></div>
+</div>""")
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
-                   ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board)]:
+                   ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
+                   ("08-presets", presets_board), ("09-font", font_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

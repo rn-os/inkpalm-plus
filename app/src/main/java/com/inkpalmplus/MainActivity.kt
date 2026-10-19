@@ -217,6 +217,16 @@ class MainActivity : Activity() {
                 renderDevice()
             }
         })
+        // Refresh helpers (RefreshHelpers): on by default; an app's own page can override them.
+        val prefs = Prefs(this)
+        val boost = prefs.helperDefault(Prefs.SCROLL_BOOST)
+        deviceBox.addView(toggleRow("Fast while scrolling", "Speed refresh while a list or page moves, then back to normal and a clean refresh", boost) {
+            prefs.setHelperDefault(Prefs.SCROLL_BOOST, !boost); renderDevice()
+        })
+        val clean = prefs.helperDefault(Prefs.CLEAN_ON_OPEN)
+        deviceBox.addView(toggleRow("Clean screen on open", "One full refresh when an app comes to the front, clearing the last app's ghost", clean) {
+            prefs.setHelperDefault(Prefs.CLEAN_ON_OPEN, !clean); renderDevice()
+        })
         val scale = Settings.System.getFloat(contentResolver, Settings.System.FONT_SCALE, 1f)
         deviceBox.addView(stepperRow("Text size", "%.2f×".format(scale),
             onMinus = { setFontScale((scale - 0.05f).coerceAtLeast(0.7f)) },

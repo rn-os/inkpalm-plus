@@ -107,6 +107,19 @@ class AppActivity : Activity() {
             edit = edit.copy(contrast = null); render()
         })
 
+        // Refresh helpers: follow the whole-device switches unless set here. Applied right away (no Save needed).
+        body.addView(sectionTitle("Refresh helpers"))
+        body.addView(note("Normally these follow the switches on InkPalm+'s home screen. Change them here only if this app misbehaves. Applies right away."))
+        val prefs = Prefs(this)
+        for ((key, title) in listOf(Prefs.SCROLL_BOOST to "Fast while scrolling", Prefs.CLEAN_ON_OPEN to "Clean screen on open")) {
+            val own = prefs.helperOverride(key, pkg)
+            val def = if (prefs.helperDefault(key)) "on" else "off"
+            body.addView(text(title, 16f, medium = true).apply { setPadding(dp(16), dp(8), dp(16), 0) })
+            body.addView(chips(listOf<Boolean?>(null, true, false), { if (it == null) "Default ($def)" else if (it) "On" else "Off" }, own) {
+                prefs.setHelper(key, pkg, it); render()
+            })
+        }
+
         // Moaan extras: what they do is inferred from the firmware; see docs/firmware.md.
         body.addView(sectionTitle("Moaan extras"))
         body.addView(note("Moaan's own per-app options. Effects depend on the app."))

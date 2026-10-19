@@ -37,9 +37,27 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("panel_wanted", false)
         set(v) = sp.edit().putBoolean("panel_wanted", v).apply()
 
+    /**
+     * A refresh helper ([RefreshHelpers]) for [pkg]: the app's own choice if it has one,
+     * else the whole-device switch (on by default).
+     */
+    fun helperOn(key: String, pkg: String): Boolean =
+        if (sp.contains("${key}_$pkg")) sp.getBoolean("${key}_$pkg", true) else helperDefault(key)
+
+    fun helperDefault(key: String): Boolean = sp.getBoolean(key, true)
+    fun setHelperDefault(key: String, on: Boolean) = sp.edit().putBoolean(key, on).apply()
+
+    /** [on] null: follow the whole-device switch. */
+    fun setHelper(key: String, pkg: String, on: Boolean?) =
+        sp.edit().apply { if (on == null) remove("${key}_$pkg") else putBoolean("${key}_$pkg", on) }.apply()
+
+    fun helperOverride(key: String, pkg: String): Boolean? = if (sp.contains("${key}_$pkg")) sp.getBoolean("${key}_$pkg", true) else null
+
     companion object {
         const val STRIP_MIN = 6
         const val STRIP_MAX = 40
+        const val SCROLL_BOOST = "scroll_boost"
+        const val CLEAN_ON_OPEN = "clean_on_open"
     }
 
     /** The user's own font scale, before [Live.nudgeConfiguration] moved it by a hair. */

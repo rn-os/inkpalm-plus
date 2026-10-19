@@ -77,6 +77,13 @@ Moaan itself has no live DPI: its own DPI slider force-stops the app. What InkPa
   `fontScale` changes themselves won't redraw. Needs WRITE_SETTINGS ("Modify system settings") or Shizuku.
   The stock `font_scale` was already `1.0000801`.
 
+## Fast while scrolling (RefreshHelpers)
+
+`TYPE_VIEW_SCROLLED` events (no window content needed) switch `persist.sys.mogu.refresh_type` to 12 (A2) through the
+eink service; 0.5 s after the last one, `Live.applyDisplay` restores the app's own values and one full refresh runs.
+Lists at their end send no scroll events. A short boost is easy to miss by polling `getprop` over adb (~0.3 s per
+call); the service logs "scroll boost on/off".
+
 ## Rotation
 
 No accelerometer, so the display never turns on its own (Moaan keeps `moan.rotation.lock.setting`,

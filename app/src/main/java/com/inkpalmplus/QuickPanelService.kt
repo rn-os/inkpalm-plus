@@ -21,6 +21,8 @@ class QuickPanelService : AccessibilityService() {
     private var strip: View? = null
     private var panel: QuickPanel? = null
     private lateinit var rotation: Rotation
+    lateinit var helpers: RefreshHelpers
+        private set
     /** The last real app in front (not InkPalm+, SystemUI or a keyboard). */
     var foreground: String? = null
         private set
@@ -41,6 +43,7 @@ class QuickPanelService : AccessibilityService() {
         Prefs(this).panelWanted = true
         wm = getSystemService(WindowManager::class.java)
         rotation = Rotation(this, wm)
+        helpers = RefreshHelpers(this)
         val filter = IntentFilter().apply {
             addAction(ACTION_OPEN); addAction(ACTION_CLOSE); addAction(ACTION_STRIP)
             if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) addAction(ACTION_TEST)
@@ -57,6 +60,7 @@ class QuickPanelService : AccessibilityService() {
         removeStrip()
         closePanel()
         if (::rotation.isInitialized) rotation.release()
+        if (::helpers.isInitialized) helpers.release()
         instance = null
         super.onDestroy()
     }
@@ -71,6 +75,11 @@ class QuickPanelService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+            val pkg = event.packageName?.toString() ?: return
+            if (pkg == foreground) helpers.onScroll(pkg, panel != null)
+            return
+        }
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         if (pkg == packageName || pkg == "com.android.systemui" || pkg == "android" || pkg.contains("inputmethod") || isKeyboard(pkg)) return
@@ -78,6 +87,7 @@ class QuickPanelService : AccessibilityService() {
             foreground = pkg
             Log.i(TAG, "foreground $pkg")
             rotation.apply(Prefs(this).rotation(pkg))
+            helpers.onForeground(pkg)
             // Another app came to the front under the panel: it belongs to the old one.
             if (panel != null && panel?.pkg != pkg) closePanel()
         }

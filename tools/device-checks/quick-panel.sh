@@ -127,3 +127,28 @@ check_strip_width_and_side() {
   hook strip "$w0" >/dev/null; hook side "$([ "$r0" = true ] && echo right || echo left)" >/dev/null
   manual "a swipe in from the strip still goes Back (system gesture); up/down opens the panel"
 }
+
+# Refresh helpers (on by default). The scroll part swipes Android's Settings list (always long
+# enough to scroll): the one place the harness touches another app, with a swipe mid-screen.
+check_refresh_helpers() {
+  local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
+  adb_ shell am broadcast -a com.inkpalmplus.CLOSE_PANEL -p $PKG >/dev/null; sleep 1
+  adb_ shell input keyevent HOME; sleep 2
+  local f0 f1; f0=$(prop sys.eink.one_full_mode_timeline)
+  adb_ shell monkey -p "$TARGET" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 2
+  f1=$(prop sys.eink.one_full_mode_timeline)
+  [ "$f0" != "$f1" ] && note_ok "clean screen on open: full refresh when the app opened" || note_fail "no full refresh on open (counter stayed $f0)"
+  adb_ shell am start -a android.settings.SETTINGS >/dev/null; sleep 3
+  local r0; r0=$(prop persist.sys.mogu.refresh_type)
+  adb_ logcat -c
+  # Both ways, so the list moves whichever end it's at. Sampling the property over adb is too slow
+  # to catch a short boost, so the service's own log says when it switched.
+  adb_ shell input swipe 360 1150 360 300 800; adb_ shell input swipe 360 300 360 1150 800
+  sleep 1.5
+  local log; log=$(adb_ logcat -d -s InkPalmPlus:I)
+  echo "$log" | grep -q "scroll boost on (com.android.settings)" && note_ok "Speed (A2) switched on while scrolling" || note_fail "no scroll boost while scrolling Settings"
+  echo "$log" | grep -q "scroll boost off" && note_ok "boost ended after scrolling stopped" || note_fail "boost never ended"
+  [ "$(prop persist.sys.mogu.refresh_type)" = "$r0" ] && note_ok "back to the app's mode ($r0)" || note_fail "refresh mode $(prop persist.sys.mogu.refresh_type) after scrolling, was $r0"
+  adb_ shell input keyevent HOME
+  manual "scrolling looks fast and the screen is clean after it stops; one flash when an app opens"
+}

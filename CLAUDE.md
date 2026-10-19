@@ -15,7 +15,8 @@ Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister p
 - `AppActivity`: one app's settings page.
 - `QuickPanelService` (accessibility service: edge strip, foreground app, debug test hooks), `QuickPanel` (the overlay),
   `EdgeHandleView` (from SuperBoox), `Live` (applies settings to the open app: eink service, font-scale nudge),
-  `Rotation` (manual rotation through an overlay window, remembered per app), `Survival` (Clear Memory whitelist,
+  `Rotation` (manual rotation through an overlay window, remembered per app), `RefreshHelpers` (Speed while
+  scrolling, clean screen on open; whole-device switches with per-app overrides), `Survival` (Clear Memory whitelist,
   turning the service back on at boot / app open), `Prefs`.
 - The quick panel is a bottom sheet in portrait and a half-width side sheet (strip side) in landscape; the service
   rebuilds the strip and panel when the screen turns.
@@ -38,6 +39,11 @@ Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister p
 ## Mockups
 - UI changes get mockups first: `docs/mockups/build.py` (boards as HTML, `panel.css`) and `docs/mockups/render.sh`
   (renders PNGs with macOS Quick Look; no Playwright needed). Quick Look draws about 1200×1200 CSS px, so boards are two rows.
+
+## Product direction
+- Keep e-ink settings few and plain: the user worries that too many confuse people. New behaviour should default
+  to something good, live on the home screen as one switch, and allow per-app overrides only on the app's own page.
+  The quick panel stays at five lines (plus ⚙ to the home screen).
 
 ## Working agreements
 - Subagents run on Sonnet (`model: "sonnet"`).

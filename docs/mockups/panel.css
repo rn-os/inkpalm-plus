@@ -59,3 +59,42 @@ body { margin: 0; background: #e6e6e6; font-family: -apple-system, "Helvetica Ne
 .mark { position: absolute; border: 2.5px dashed #000; border-radius: 4px; }
 .tag { position: absolute; background: #000; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 3px; white-space: nowrap; }
 .pct { position: absolute; left: 4px; font-size: 10px; font-weight: 700; background: #fff; border: 1.5px solid #000; padding: 1px 4px; border-radius: 3px; }
+
+/* ---- Feature boards (04–07) ---- */
+.seg { display: flex; border: 2px solid #000; border-radius: 6px; overflow: hidden; margin-right: 4px; }
+.seg div { font-size: 10.5px; font-weight: 700; padding: 6px 8px; }
+.seg div + div { border-left: 2px solid #000; }
+.seg div.on { background: #000; color: #fff; }
+.test { display: inline-block; font-size: 8.5px; font-weight: 700; border: 1.5px solid #000; border-radius: 3px; padding: 0 3px; margin-left: 4px; vertical-align: 1px; }
+.dev.m { width: 168px; height: 336px; }
+.dev.m .book { font-size: 7.5px; padding: 6px 10px; line-height: 1.5; }
+.dev.m .book h4 { font-size: 9px; margin: 3px 0 5px; }
+.dev.m .status { font-size: 7px; height: 12px; }
+.ghost { position: absolute; inset: 12px 0 0 0; opacity: .22; transform: translate(3px, -9px); pointer-events: none; }
+.dither { filter: contrast(2.2) grayscale(1); image-rendering: pixelated; }
+.dither .book { text-shadow: 1px 0 0 #000; letter-spacing: .2px; }
+.flash { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, #000 0 3px, #fff 3px 6px); opacity: .9; }
+.badge { position: absolute; left: 6px; bottom: 6px; background: #000; color: #fff; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; }
+.arrow { align-self: center; font-size: 24px; font-weight: 700; }
+.card { background: #fff; border: 2px solid #000; border-radius: 8px; width: 620px; flex: none; }
+.card .ttl { font-size: 15px; font-weight: 700; padding: 10px 14px 4px; letter-spacing: .04em; border-bottom: 2px solid #000; }
+.srow { display: flex; align-items: center; gap: 10px; padding: 7px 14px; border-bottom: 1px solid #000; font-size: 13px; }
+.srow:last-child { border-bottom: 0; }
+.srow .n { flex: 1; } .srow .n b { display: block; font-size: 13.5px; font-weight: 600; } .srow .n span { display: block; font-size: 10.5px; color: #333; }
+.slider { width: 170px; height: 4px; background: #000; position: relative; border-radius: 2px; }
+.slider i { position: absolute; top: -7px; width: 14px; height: 14px; border: 2px solid #000; background: #fff; border-radius: 50%; box-sizing: border-box; }
+.sv { width: 34px; text-align: right; font-weight: 700; }
+/* A gray-heavy app (feed / store style) */
+.gapp { padding: 6px 10px; font-size: 10px; }
+.gapp .bar { height: 26px; border-radius: 4px; margin-bottom: 6px; display: flex; align-items: center; padding: 0 8px; font-weight: 700; }
+.gapp .it { display: flex; gap: 8px; align-items: center; padding: 6px; border-radius: 6px; margin-bottom: 6px; }
+.gapp .ic { width: 30px; height: 30px; border-radius: 7px; flex: none; }
+.gapp .tx b { display: block; font-size: 10.5px; } .gapp .tx span { font-size: 9px; }
+.g0 .bar { background: #b9b9b9; color: #555; } .g0 .it { background: #d4d4d4; } .g0 .ic { background: #9a9a9a; } .g0 .tx b { color: #444; } .g0 .tx span { color: #777; } .g0 { background: #e2e2e2; height: 100%; }
+.g1 .bar { background: #fff; border: 1.5px solid #000; } .g1 .it { background: #fff; border: 1.5px solid #000; } .g1 .ic { background: #000; } .g1 .tx span { color: #222; }
+.dark { background: #1d1d1d; color: #e6e6e6; height: 100%; } .dark .book { color: #e6e6e6; }
+
+.segrow { padding: 0 10px 3px 12px; } .segrow .seg { margin: 0; } .segrow .seg div { flex: 1; text-align: center; padding: 4px 0; }
+.gear { font-size: 15px; }
+.arrow { font-size: 18px; }
+.srow .n span.test { display: inline-block; font-size: 8.5px; color: #000; }

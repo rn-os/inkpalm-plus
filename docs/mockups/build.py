@@ -38,8 +38,9 @@ def frame(cap, sub, dev):
 
 
 def header(name="KOReader"):
+    # ⚙ opens InkPalm+'s home screen; More opens this app's own page.
     return f"""<div class="hd"><div class="t"><b>{name}</b><span>Changes apply right away</span></div>
-<div class="btn">More</div><div class="btn sq">✕</div></div>"""
+<div class="btn sq gear">⚙</div><div class="btn">More</div><div class="btn sq">✕</div></div>"""
 
 
 # ---- Option A: one line per setting -------------------------------------------------------------
@@ -160,6 +161,162 @@ Each tab shows all its options as buttons, wrapping onto a second line.</p>
      frame("Portrait · Refresh", "", device("p", tabs_bottom(tab_refresh(), "58%")))],
     frame("Landscape · Rotate", "", device("l", tabs_side(tab_rotate()))))
 
-for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs)]:
+# ---- Feature boards (04–07): ideas for using more of the panel ---------------------------------
+
+def seg(on):
+    return '<div class="seg">' + "".join(f'<div class="{"on" if t == on else ""}">{t}</div>' for t in ("Display", "Refresh")) + "</div>"
+
+
+def header2(on, name="KOReader"):
+    return header(name) + f'<div class="segrow">{seg(on)}</div>'
+
+
+T = '<span class="test">TEST</span>'
+
+PAGE_DISPLAY = (
+    arrow_row("Size", "300 dpi", sys=False)
+    + arrow_row("Contrast", "Darker +2", sys=False)
+    + arrow_row("Rotate", "Portrait", "kept for this app")
+    + arrow_row("Invert", "Off", "for dark-themed apps")
+    + arrow_row("Light", "Warm 4 · 7", "per app · needs Shizuku")
+)
+PAGE_REFRESH = (
+    arrow_row("Refresh", "Normal", "full grays, least ghosting")
+    + arrow_row("Scrolling", "Speed (A2)", "back to Normal 0.5 s after")
+    + arrow_row("Full refresh", "Every 10")
+    + arrow_row("On open", "Full refresh", "clears the last app's ghost")
+    + arrow_row("Grays", f"16{T}", "256 for photos and comics")
+)
+
+
+def panel2(on, rows, side=False):
+    if side:
+        return f'<div class="sheet side" style="width:42%">{header2(on)}{rows}<div style="flex:1"></div>{FOOT}</div>'
+    return f'<div class="sheet bottom">{header2(on)}{rows}{FOOT}</div>'
+
+
+panel_pages = board("Panel with more settings", """<div class="notes"><h2>04 · Panel: two pages</h2>
+<p>Ten settings don't fit on one screen, so the panel gets two pages, switched under its header:
+<b>Display</b> and <b>Refresh</b>. Each page keeps the one-line layout, so nothing scrolls.</p>
+<p><b>⚙</b> in the header opens InkPalm+'s home screen (strip, whole-device settings, all apps);
+<b>More</b> opens this app's own page.</p>
+<h3>New lines</h3><ul>
+<li><b>Invert</b> (05/06), <b>Light</b> (07) on Display.</li>
+<li><b>Scrolling</b>, <b>On open</b> (05), <b>Grays</b> (07) on Refresh.</li></ul>
+<h3>Choice to make</h3><ul>
+<li>The panel opens on the page you used last, or always on Display.</li>
+<li>Or instead of pages: pick which 5 lines the panel shows (like SuperBoox's Quick Controls).</li></ul></div>""",
+    [frame("Portrait · Display", "", device("p", panel2("Display", PAGE_DISPLAY))),
+     frame("Portrait · Refresh", "", device("p", panel2("Refresh", PAGE_REFRESH)))],
+    frame("Landscape · Refresh", "Same pages in the side sheet.", device("l", panel2("Refresh", PAGE_REFRESH, side=True))))
+
+
+def mini(cls, extra="", badge=""):
+    b = f'<div class="badge">{badge}</div>' if badge else ""
+    return f'<div class="dev m {cls}">{STATUS}<div class="book">{BOOK}</div>{extra}{b}</div>'
+
+
+GHOST = f'<div class="ghost"><div class="book">{BOOK}</div></div>'
+
+scroll_board = page("Fast while scrolling, clean on open", f"""
+<div class="row">
+{frame("1 · Reading", "Normal waveform: full grays, crisp.", mini("", badge="NORMAL"))}
+<div class="arrow">→</div>
+{frame("2 · Scrolling", "Switches to Speed (A2) the moment a scroll starts: quick, blocky, ghosts.", mini("dither", GHOST, "SPEED (A2)"))}
+<div class="arrow">→</div>
+{frame("3 · Stopped", "0.5 s after the last scroll: one full refresh, back to Normal.", mini("", '<div class="flash" style="opacity:.25"></div>', "FULL REFRESH"))}
+<div class="arrow">→</div>
+{frame("4 · Clean again", "Same as 1. No ghost left behind.", mini("", badge="NORMAL"))}
+</div>
+<div class="row">
+<div class="card"><div class="ttl">KOREADER · REFRESH (per-app page, “More”)</div>
+<div class="srow"><div class="n"><b>Refresh</b><span>Waveform while the page is still</span></div><div class="btn on">Normal</div></div>
+<div class="srow"><div class="n"><b>While scrolling</b><span>Faster waveform only while a list or page moves</span></div><div class="btn">Off</div><div class="btn on">Speed (A2)</div><div class="btn">Fast (DU)</div></div>
+<div class="srow"><div class="n"><b>Back to normal after</b><span>Time without scrolling, then one full refresh</span></div><div class="btn">0.3 s</div><div class="btn on">0.5 s</div><div class="btn">1 s</div></div>
+<div class="srow"><div class="n"><b>Clean screen on open</b><span>One full refresh when this app comes to the front</span></div><div class="btn">Off</div><div class="btn on">On</div></div>
+<div class="srow"><div class="n"><b>Default for new apps</b><span>Home → Whole device</span></div><div class="btn on">Clean on open</div></div>
+</div>
+<div class="notes"><h2>05 · Fast while scrolling, clean on open</h2>
+<ul><li>Uses scroll events the panel service already receives (no screen content read), and the live waveform switch the panel uses today.</li>
+<li>Scrolling apps (browser, feeds, Anki) get Speed only while moving; text is crisp at rest.</li>
+<li>Clean on open: one flash when an app comes to the front clears the previous app's ghost.</li>
+<li>Both are per app, with a default for new apps.</li>
+<li>Risk: apps that keep scrolling slightly (animations, tickers) would stay in Speed; the 0.5 s timer and per-app Off handle that.</li></ul></div>
+</div>""")
+
+
+def gapp(cls, name="Store"):
+    items = "".join(f'<div class="it"><div class="ic"></div><div class="tx"><b>{t}</b><span>{d}</span></div></div>'
+                    for t, d in [("Field Notes", "Notebook · 4.6 ★"), ("Tide Tables", "Weather · Free"),
+                                 ("Pocket Atlas", "Maps · 12 MB"), ("Night Sky", "Education · 4.8 ★"),
+                                 ("Recipe Box", "Food · Free"), ("Word Garden", "Puzzle · 4.4 ★")])
+    return f'<div class="gapp {cls}"><div class="bar">{name}</div><div class="bar" style="font-weight:400">Search apps…</div>{items}</div>'
+
+
+def appdev(inner, badge=""):
+    b = f'<div class="badge">{badge}</div>' if badge else ""
+    return f'<div class="dev m">{STATUS}{inner}{b}</div>'
+
+
+bleach_board = page("Bleach and invert", f"""
+<div class="row">
+{frame("Gray-heavy app", "Gray cards and icons turn to mush at 16 grays.", appdev(gapp("g0"), "AS IS"))}
+<div class="arrow">→</div>
+{frame("With bleach", "Backgrounds whitened, icons and borders pushed to black.", appdev(gapp("g1"), "BLEACH"))}
+<div style="width:20px"></div>
+{frame("Dark-themed app", "Light text on near-black: slow, ghosty on e-ink.", '<div class="dev m">' + STATUS + '<div class="dark"><div class="book">' + BOOK + '</div></div><div class="badge">AS IS</div></div>')}
+<div class="arrow">→</div>
+{frame("Inverted", "Black on white, only while this app is open.", mini("", badge="INVERT"))}
+</div>
+<div class="row">
+<div class="card"><div class="ttl">STORE · MOAAN EXTRAS (per-app page, “More”)</div>
+<div class="srow"><div class="n"><b>Bleach</b><span>Moaan's whitening, on or off</span></div><div class="btn">Off</div><div class="btn on">On</div></div>
+<div class="srow"><div class="n"><b>Background</b><span>How far light grays are pushed to white</span></div><div class="slider"><i style="left:70%"></i></div><div class="sv">7</div></div>
+<div class="srow"><div class="n"><b>Icons</b><span>How far icons are pushed to black</span></div><div class="slider"><i style="left:50%"></i></div><div class="sv">5</div></div>
+<div class="srow"><div class="n"><b>Covers and pictures</b><span>Contrast of images</span></div><div class="slider"><i style="left:30%"></i></div><div class="sv">3</div></div>
+<div class="srow"><div class="n"><b>Contrast boost</b><span>Moaan's contrast gain, on top of Contrast</span></div><div class="slider"><i style="left:40%"></i></div><div class="sv">4</div></div>
+<div class="srow"><div class="n"><b>Bold text</b><span>Android's high-contrast text</span></div><div class="btn on">On</div></div>
+<div class="srow"><div class="n"><b>Invert colors</b><span>For dark-themed apps</span></div><div class="btn on">Off</div><div class="btn">On</div></div>
+</div>
+<div class="notes"><h2>06 · Bleach and invert</h2>
+<ul><li>Moaan's table already stores background, icon and cover levels and a contrast boost per app; today we only show Bleach on/off.</li>
+<li>The slider ranges aren't known yet: a short test on the device first maps them (the mockup's 0–10 is a placeholder).</li>
+<li>Invert uses Android's color inversion, switched on only while that app is in front (InkPalm+ already has the permission).</li>
+<li>Bleach and Invert also go in the panel's Display page (04) as one-tap lines.</li></ul></div>
+</div>""")
+
+
+def reflist():
+    opts = [("System", "Follows Quick Settings", False, ""), ("Normal", "Full grays, least ghosting", True, ""),
+            ("Text (Regal)", "Least ghosting for reading", False, T), ("Text sharp (GL16)", "Crisper text, light grays dropped", False, T),
+            ("Auto", "The panel picks per update", False, ""), ("Fast", "Black &amp; white, quick turns", False, ""),
+            ("Fast + 4 grays", "Quick, keeps some gray", False, ""), ("Speed", "Scrolling and video, ghosts more", False, ""),
+            ("Speed + dither", "Speed with dithered grays", False, "")]
+    rows = "".join(f'<div class="opt"><div class="dot{" on" if on else ""}"></div><div><b>{t}</b>{tt}<i>{d}</i></div></div>' for t, d, on, tt in opts)
+    hd = '<div class="hd"><div class="btn sq">◀</div><div class="t"><b>Refresh</b><span>KOReader · tap one to pick it</span></div></div>'
+    return f'<div class="sheet bottom list">{hd}{rows}<div style="height:6px"></div></div>'
+
+
+more_board = page("More modes, grays, strip, light", f"""
+<div class="row">
+{frame("Refresh list with more modes", "Modes the controller has that Moaan's dialog doesn't offer. TEST: works only if the firmware honors it per app.", device("p", reflist()))}
+{frame("Panel · Display with Light", "Front light per app: warmer and dimmer for night reading, applied when the app opens.", device("p", panel2("Display", PAGE_DISPLAY)))}
+</div>
+<div class="row">
+<div class="card"><div class="ttl">HOME · QUICK PANEL AND WHOLE DEVICE</div>
+<div class="srow"><div class="n"><b>Double-tap the strip</b><span>Without opening the panel</span></div><div class="btn">Nothing</div><div class="btn on">Full refresh</div></div>
+<div class="srow"><div class="n"><b>Grays {T}</b><span>16 is Moaan's default; 256 may help photos and comics</span></div><div class="btn on">16</div><div class="btn">256</div><div class="btn">Per app</div></div>
+<div class="srow"><div class="n"><b>Front light per app</b><span>Needs Shizuku running to change the light</span></div><div class="btn">Off</div><div class="btn on">On</div></div>
+<div class="srow"><div class="n"><b>Clean screen on open</b><span>Default for apps without their own setting (05)</span></div><div class="btn on">On</div></div>
+</div>
+<div class="notes"><h2>07 · More modes, grays, strip, light</h2>
+<ul><li><b>More modes</b>: Text (Regal) and Text sharp (GL16) added to the Refresh list, marked TEST until they're verified on the device.</li>
+<li><b>Grays</b>: Moaan's hidden 256-gray switch, global or per app; marked TEST.</li>
+<li><b>Double-tap the strip</b>: full refresh without opening the panel.</li>
+<li><b>Light per app</b>: Moaan's warm/cold LEDs; changing them needs Shizuku, so it says so.</li></ul></div>
+</div>""")
+
+for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
+                   ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

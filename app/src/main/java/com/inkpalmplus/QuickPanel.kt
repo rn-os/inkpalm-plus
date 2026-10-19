@@ -95,6 +95,7 @@ class QuickPanel(
         status = ""
         render()
         val snapshot = p
+        service.helpers.onProfileChanged(snapshot)
         Shell.background({
             val via = EinkDb.write(ctx, snapshot)
             if (via != null) Live.applyDisplay(ctx, snapshot)
@@ -208,6 +209,11 @@ class QuickPanel(
                 addView(ctx.text(if (status.isNotEmpty()) status else if (loaded) "Changes apply right away" else "Loading…", 11f, color = Ink.MUTED))
             }, lp(0, WRAP, 1f))
             if (compact) setPadding(ctx.dp(14), ctx.dp(4), ctx.dp(8), 0)
+            // ⚙: InkPalm+'s home screen (strip, whole-device settings, all apps).
+            addView(ctx.inkButton("⚙", 21f) {
+                ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+                onClose()
+            }.sized().apply { contentDescription = "InkPalm+ settings" }, lp(ctx.dp(44), WRAP).apply { marginEnd = ctx.dp(6) })
             addView(ctx.inkButton("More", 13f) {
                 ctx.startActivity(Intent(ctx, AppActivity::class.java).putExtra(AppActivity.EXTRA_PKG, pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 onClose()

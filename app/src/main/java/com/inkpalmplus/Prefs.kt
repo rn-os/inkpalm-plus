@@ -24,6 +24,14 @@ class Prefs(context: Context) {
         sp.edit().apply { if (mode == Rotation.Mode.AUTO) remove("rotation_$pkg") else putString("rotation_$pkg", mode.name) }.apply()
     }
 
+    /**
+     * The quick panel service is meant to be on: set when it connects, cleared only when the user
+     * switches it off (Android unbinds it then; a force-stop or crash doesn't). [Survival.repair] uses it.
+     */
+    var panelWanted: Boolean
+        get() = sp.getBoolean("panel_wanted", false)
+        set(v) = sp.edit().putBoolean("panel_wanted", v).apply()
+
     /** The user's own font scale, before [Live.nudgeConfiguration] moved it by a hair. */
     var fontBase: Float
         get() = sp.getFloat("font_base", -1f)

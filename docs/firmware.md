@@ -85,6 +85,20 @@ and overrides the app in front; removing it hands control back (verified: `dumps
 InkPalm+ remembers a rotation per app and applies it on each foreground change (`Rotation.kt`). After the service
 (re)connects, nothing is known about the app in front until the next window change.
 
+## Keeping the panel on (verified 2026-10-19)
+
+- **Reboot:** Android binds the accessibility service again by itself ~2 s after boot, and Moaan doesn't kill it
+  afterwards (unlike BOOX).
+- **Force-stop** (`am force-stop`, Moaan's **Clear Memory** tile): Android switches the service off as crashed.
+  Clear Memory (SystemUI `EinkFunction.clearMemory`, broadcast `com.mogu.clear_mem`) force-stops every running
+  package except `com.android*`, `com.google*`, `android` and the JSON list in `Settings.System.APPS_WHITE_LIST_KEY`.
+  Apps can't write that key; shell can (`settings put system APPS_WHITE_LIST_KEY '<json>'`).
+- Even after a force-stop, BOOT_COMPLETED still reached InkPalm+ at the next boot (`stopped=false` again).
+- `Survival`: whitelist entry (Shizuku/adb), and with WRITE_SECURE_SETTINGS (granted once) it switches the service
+  back on at boot and whenever the app opens, unless the user switched it off (`onUnbind` clears `panelWanted`).
+- Careful from zsh: `"$L:com…"` is read as a `:c` modifier. Quote the colon separately when editing
+  `enabled_accessibility_services` by hand; it once merged Key Mapper's and InkPalm+'s entries.
+
 ## Other system hooks
 
 - `EinkManager` (`android.os`, service `eink`, `IEinkManager.setProperty(key, value)` = binder 5): `setMode` → `sys.eink.mode`,

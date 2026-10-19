@@ -38,6 +38,7 @@ class QuickPanelService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        Prefs(this).panelWanted = true
         wm = getSystemService(WindowManager::class.java)
         rotation = Rotation(this, wm)
         val filter = IntentFilter().apply {
@@ -61,6 +62,13 @@ class QuickPanelService : AccessibilityService() {
     }
 
     override fun onInterrupt() {}
+
+    /** Only when the user switches the service off (a force-stop or crash never gets here). */
+    override fun onUnbind(intent: Intent?): Boolean {
+        Prefs(this).panelWanted = false
+        Log.i(TAG, "quick panel switched off by the user")
+        return super.onUnbind(intent)
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return

@@ -82,7 +82,8 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        reload()
+        // The panel may have been switched off by a force-stop (Moaan's Clear Memory): put it back.
+        Shell.background({ Survival.repair(this, "app opened") }) { reload() }
     }
 
     private fun reload() {
@@ -167,6 +168,22 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:$packageName")))
         })
         val prefs = Prefs(this)
+        if (on || Prefs(this).panelWanted) {
+            val listed = Survival.inWhitelist(this)
+            panelBox.addView(toggleRow("Survives Clear Memory",
+                if (listed) "InkPalm+ is on Moaan's Clear Memory whitelist"
+                else if (Shell.allowed()) "Tap to add InkPalm+ to Moaan's whitelist; Clear Memory would switch the panel off"
+                else "Clear Memory would switch the panel off. Start Shizuku, or run: ${Survival.whitelistAdbCommand(this)}", listed) {
+                if (!listed) Shell.background({ Survival.addToWhitelist(this) }) { ok -> if (!ok) toast("Needs Shizuku"); renderPanel() }
+            })
+            val repair = Survival.canRepair(this)
+            panelBox.addView(toggleRow("Turns itself back on",
+                if (repair) "If the panel is ever switched off by mistake, InkPalm+ turns it back on"
+                else if (Shell.allowed()) "Tap to let InkPalm+ turn the panel back on if it's ever switched off"
+                else "Start Shizuku, or run: ${Survival.grantAdbCommand(this)}", repair) {
+                if (!repair) Shell.background({ Survival.grantRepair(this) }) { ok -> if (!ok) toast("Needs Shizuku"); renderPanel() }
+            })
+        }
         panelBox.addView(toggleRow("Right edge", if (prefs.edgeRight) "Strip on the right edge" else "Strip on the left edge", prefs.edgeRight) {
             prefs.edgeRight = !prefs.edgeRight
             sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName))

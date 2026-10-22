@@ -115,7 +115,7 @@ check_strip_width_and_side() {
 # enough to scroll): the one place the harness touches another app, with a swipe mid-screen.
 check_refresh_helpers() {
   local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
-  adb_ shell am broadcast -a com.inkpalmplus.CLOSE_PANEL -p $PKG >/dev/null; sleep 2
+  hook panel_close >/dev/null; sleep 2
   # The service must see the home screen in front before the target reopens, or opening it isn't a switch.
   for i in 1 2 3; do
     go_home; sleep 2
@@ -150,7 +150,7 @@ check_typing_boost() {
   # The whole-device switch may have been turned off by hand: switch it on for the check, then put it back.
   local tb0; tb0=$(adb_ shell run-as $PKG cat shared_prefs/inkpalmplus.xml | grep -o 'typing_boost" value="[a-z]*' | grep -o '[a-z]*$')
   hook helper typing_boost:on >/dev/null
-  adb_ shell am broadcast -a com.inkpalmplus.CLOSE_PANEL -p $PKG >/dev/null
+  hook panel_close >/dev/null
   go_home; sleep 2
   adb_ shell am start -n com.android.settings.intelligence/.search.SearchActivity >/dev/null; sleep 3
   local r0; r0=$(prop persist.sys.mogu.refresh_type)

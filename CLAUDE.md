@@ -1,10 +1,11 @@
 # InkPalm+
 
-Per-app e-ink tuning (DPI, refresh waveform, full-refresh interval, contrast, Moaan's bleach options) for the
-Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister project of SuperBoox
-(`~/Github Repos/superboox`), which it borrows its UI helpers and test harness from.
+A side panel of recent apps for the Moaan InkPalm Plus (swipe along the edge strip), plus secondary per-app e-ink
+tuning (DPI, refresh, contrast, presets, font) through the firmware's own hidden per-app table. Sister project of
+SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test harness and CI from.
 
 ## Read first
+- `docs/HANDOFF.md`: the user's direction, working agreements, current state and open items. Keep it current.
 - `docs/firmware.md`: everything known about the firmware. **Check it before decompiling anything**; add to it
   whenever something new is learned, so it's never worked out twice.
 - `docs/device/`: raw `getprop` (serial numbers redacted), services and `dumpsys display` from the device. The installed-app list is deliberately not kept (personal).

@@ -57,11 +57,16 @@ class QuickPanelService : AccessibilityService() {
         rotation = Rotation(this, wm)
         recents = RecentApps(this)
         helpers = RefreshHelpers(this)
+        // Only apps holding InkPalm+'s signature permission (InkPalm+ itself) can send these.
         val filter = IntentFilter().apply {
             addAction(ACTION_OPEN); addAction(ACTION_CLOSE); addAction(ACTION_STRIP); addAction(ACTION_CLEAR_RECENTS)
-            if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) addAction(ACTION_TEST)
         }
-        registerReceiver(receiver, filter, RECEIVER_EXPORTED_COMPAT)
+        registerReceiver(receiver, filter, PERMISSION, null)
+        // The test hooks (tools/device-test.sh, sent from adb) exist only in debuggable builds.
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            registerReceiver(receiver, IntentFilter(ACTION_TEST))
+            testHooks = true
+        }
         // Uninstalled apps leave the recent list (so the panel never has to check while drawing).
         registerReceiver(packageGone, IntentFilter(Intent.ACTION_PACKAGE_FULLY_REMOVED).apply { addDataScheme("package") })
         recents.warm()
@@ -206,7 +211,10 @@ class QuickPanelService : AccessibilityService() {
      * `am broadcast -a com.inkpalmplus.TEST -p com.inkpalmplus --es cmd dpi --es value 240`
      * Answers in logcat: "InkPalmPlus: test <cmd> <value> ok|fail <state>".
      */
+    private var testHooks = false
+
     private fun test(i: Intent) {
+        if (!testHooks) return
         val cmd = i.getStringExtra("cmd").orEmpty()
         val value = i.getStringExtra("value").orEmpty()
         val ok = when (cmd) {
@@ -214,6 +222,7 @@ class QuickPanelService : AccessibilityService() {
             "open" -> { if (panel == null) openPanel(); panel != null }
             "side" -> { if (side == null) toggleSide(); side != null }
             "side_close" -> { closeSide(); true }
+            "panel_close" -> { closePanel(); true }
             "side_tap" -> side?.tap(value.toInt()) ?: false
             "side_close_app" -> side?.testClose(value.toInt()) ?: false
             "side_clear_all" -> side?.testClearAll() ?: false
@@ -315,7 +324,7 @@ class QuickPanelService : AccessibilityService() {
         const val EXTRA_PREVIEW = "preview"
         /** Window changes from the app that just left, within this long, are its last gasp, not a switch back. */
         const val BOUNCE_MS = 500L
-        private const val RECEIVER_EXPORTED_COMPAT = 0x2
+        const val PERMISSION = "com.inkpalmplus.permission.PANEL"
 
         @Volatile var instance: QuickPanelService? = null
             private set

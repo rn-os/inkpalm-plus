@@ -2,6 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- InkPalm+'s own broadcasts (open/close the panel, redraw the strip, clear recent apps) are only accepted
+         from apps signed with InkPalm+'s key, i.e. InkPalm+ itself. -->
+    <permission
+        android:name="com.inkpalmplus.permission.PANEL"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="com.inkpalmplus.permission.PANEL" />
+
     <!-- Font size (Settings.System.font_scale). Granted by the user in Android settings. -->
     <uses-permission
         android:name="android.permission.WRITE_SETTINGS"
@@ -42,10 +49,10 @@
             </intent-filter>
         </activity>
 
-        <!-- Home's sub-screens; exported so the device checks can open the E-ink screen directly. -->
+        <!-- Home's sub-screens. Exported only in debug builds, so the device checks can open the E-ink screen. -->
         <activity
             android:name=".SectionActivity"
-            android:exported="true" />
+            android:exported="${sectionExported}" />
 
         <activity
             android:name=".AppActivity"

@@ -589,10 +589,45 @@ reader_board = board("Reader app", """<div class="notes"><h2>14 · Your reader a
      frame("KOReader · no access yet", "Tap opens the All files access screen.", device("p", side_reader("78%", KO_ASK)))],
     frame("Home screen · later", "The question becomes a row under Side panel.", SETTING))
 
+
+# ---- Board 15: newest app at the bottom (a setting: Top or Bottom) ----------------------------------
+
+BOTTOM_APPS = [("KOReader", "K", "Open now", "now"), ("Feeder", "F", "2 min ago", "prev")] + RECENT[2:8]
+
+def side_bottom(width, items, pager, card=True):
+    """Newest at the bottom: rows drawn oldest → newest, and pushed down so the newest sits by the pager."""
+    return (f'<div class="dim2" style="right:{width}"></div><div class="side2 modern" style="width:{width}">'
+            f'<div class="ra-hd"><b>Recent apps</b><div class="btn">Clear all</div><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+            f'{KO_CARD if card else ""}<div style="flex:1"></div><div class="secl">RECENT APPS · NEWEST AT THE BOTTOM</div>'
+            f'{ra_rows_modern(list(reversed(items)))}<div class="pager2">{pager}</div>'
+            f'<div class="ra-foot" style="margin-top:0"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>')
+
+ORDER_SETTING = (f'<div class="card" style="width:360px"><div class="ttl">INKPALM+ · HOME</div>'
+                 f'{hrow("Reader app", "Its last book sits at the top of the side panel", btns("NeoReader", "KOReader", "None", on="KOReader"))}'
+                 f'{hrow("Newest app", "Where the app you’re in sits in the list", btns("Top", "Bottom", on="Bottom"))}'
+                 f'{hrow("Strip side", "Where you swipe", btns("Left", "Right", on="Right"))}</div>')
+
+order_board = board("Newest at the bottom", """<div class="notes"><h2>15 · Newest at the bottom</h2>
+<ul><li>A <b>Newest app</b> setting on the home screen: <b>Top</b> (today) or <b>Bottom</b>.</li>
+<li><b>Bottom:</b> the list reads upward. The app you're in sits just above the pager, the previous app (←) right above it, under your thumb.</li>
+<li>Fewer apps than a page: the rows sit at the bottom, the space is at the top.</li>
+<li>Page 1 is still the newest apps; ▶ goes to older ones.</li>
+<li>The Last read card stays at the top in both.</li></ul>
+<h3>Choices to make</h3><ul>
+<li>Default for new installs: Top (as now) or Bottom.</li>
+<li>With Bottom, should the Last read card move to the bottom too (above the pager)?</li></ul></div>""",
+    [frame("Bottom · full page", "Newest by the pager; read upward for older apps.", device("p", side_bottom("78%", BOTTOM_APPS, "◀ &nbsp; 1 / 2 &nbsp; ▶"))),
+     frame("Bottom · a short list", "Four apps: they sit at the bottom.", device("p", side_bottom("78%", BOTTOM_APPS[:4], "1 / 1", card=False))),
+     frame("Home screen", "One row, under Reader app.", ORDER_SETTING)],
+    frame("Landscape · Bottom", "Two columns, newest in the bottom row.",
+          device("l", f'<div class="dim2" style="right:50%"></div><div class="side2 modern" style="width:50%"><div class="ra-hd"><b>Recent apps</b><div class="btn">Clear all</div><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+                      f'{KO_CARD}<div style="flex:1"></div><div class="ra-grid">{ra_rows_modern(list(reversed(BOTTOM_APPS[:4])), compact=True)}</div><div class="pager2">◀ &nbsp; 1 / 2 &nbsp; ▶</div>'
+                      f'<div class="ra-foot" style="margin-top:0"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>')))
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
                    ("08-presets", presets_board), ("09-font", font_board),
                    ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board),
-                   ("13-last-read", lastread_board), ("14-reader-app", reader_board)]:
+                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

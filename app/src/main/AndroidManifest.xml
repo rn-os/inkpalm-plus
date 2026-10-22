@@ -26,6 +26,9 @@
 
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <!-- NeoReader: its book list (an exported provider) and opening books in it, for the side panel. -->
+        <package android:name="com.onyx.kreader" />
+        <provider android:authorities="com.onyx.content.database.ContentProvider" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -53,6 +56,15 @@
         <activity
             android:name=".SectionActivity"
             android:exported="${sectionExported}" />
+
+        <!-- "Browse files…": Android's file picker, then the picked file opens in NeoReader. No window of its own. -->
+        <activity
+            android:name=".BrowseActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="false"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <activity
             android:name=".AppActivity"

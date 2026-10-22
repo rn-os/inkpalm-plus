@@ -227,6 +227,10 @@ class QuickPanelService : AccessibilityService() {
             "side_close_app" -> side?.testClose(value.toInt()) ?: false
             "side_clear_all" -> side?.testClearAll() ?: false
             "side_page" -> side?.testPage(value == "next") ?: false
+            "side_card" -> side?.testCard(hold = value == "hold") ?: false
+            "side_book" -> side?.testBook(value.toInt()) ?: false
+            "side_browse" -> side?.testBrowse() ?: false
+            "books_state" -> { Log.i(TAG, "books: ${side?.describeBooks() ?: "closed"}"); true }
             "side_state" -> { Log.i(TAG, "side: ${side?.describe() ?: "closed"}"); true }
             "remember" -> { recents.record(value); true }
             "recents_clear" -> { recents.clear(); true }

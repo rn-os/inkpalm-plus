@@ -32,7 +32,16 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     private var menuLayer: View? = null
 
     private val landscape get() = ctx.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    private val perPage get() = if (landscape) 8 else 9
+    /** NeoReader's last-read book, read once when the panel is built (null: none, or NeoReader isn't installed). */
+    private var lastRead: NeoReader.Book? = null
+    /** Showing "Your books" (holding the Last read card) instead of recent apps. */
+    private var showingBooks = false
+    private var books: List<NeoReader.Book> = emptyList()
+    private var bookPage = 0
+
+    // The Last read card takes one row's room (portrait) or two rows (landscape's two columns).
+    private val perPage get() = if (lastRead != null) (if (landscape) 4 else 8) else (if (landscape) 8 else 9)
+    private val booksPerPage get() = if (landscape) 6 else 8
 
     /** When [prepare] built the rows, and for which app in front: a prepared panel is only used while both still hold. */
     var builtAt = 0L
@@ -72,6 +81,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.TOP or if (onRight) Gravity.END else Gravity.START }
+        lastRead = if (NeoReader.installed(ctx)) NeoReader.lastRead(ctx) else null
         render()
         // Measure and lay out at the window's size now, so showing it doesn't have to.
         val h = ctx.resources.displayMetrics.heightPixels
@@ -174,6 +184,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     private fun visible(): List<RecentApps.Entry> = all().drop(page * perPage).take(perPage)
 
     private fun render() {
+        if (showingBooks) return renderBooks()
         entries = service.recents.list()
         previousPkg = entries.firstOrNull { it.pkg != service.foreground }?.pkg
         content.removeAllViews()
@@ -192,6 +203,8 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
             }.apply { contentDescription = "InkPalm+ settings" }, lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(6) })
             addView(ctx.inkButton("✕", 16f) { onClose() }, lp(ctx.dp(48), WRAP))
         })
+
+        lastRead?.let { content.addView(lastReadCard(it)) }
 
         val apps = visible()
         val list = SwipePager(ctx, onNext = { if (page < pages() - 1) { page++; render() } }, onPrev = { if (page > 0) { page--; render() } })
@@ -240,6 +253,124 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
 
         menuFor?.let { showMenu(it) }
     }
+
+    // ---- NeoReader (docs/mockups/13-last-read.png) --------------------------------------------
+
+    /** Tap: NeoReader opens the book at its page. Hold: "Your books". */
+    private fun lastReadCard(b: NeoReader.Book): View = ctx.hbox().apply {
+        background = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(3, 12, Ink.PRESSED))
+            addState(intArrayOf(), ctx.outline(3, 12))
+        }
+        setPadding(ctx.dp(12), ctx.dp(if (landscape) 4 else 8), ctx.dp(12), ctx.dp(if (landscape) 4 else 8))
+        contentDescription = "Last read in NeoReader: ${b.title}. Tap to keep reading, hold for your books"
+        addView(ctx.icon(ctx.getDrawable(R.drawable.ic_book), if (landscape) 28 else 34))
+        addView(ctx.vbox().apply {
+            addView(ctx.text("LAST READ · NEOREADER", 10.5f, bold = true).apply { letterSpacing = 0.06f })
+            addView(ctx.text(b.title, 16f, bold = true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+            addView(ctx.text("${RecentApps.ago(b.at)} · tap to keep reading · hold for your books", 11.5f, color = Ink.MUTED).apply { maxLines = if (landscape) 1 else 2 })
+        }, lp(0, WRAP, 1f).apply { marginStart = ctx.dp(12) })
+        isClickable = true
+        setOnClickListener { openBook(b.path) }
+        setOnLongClickListener { showBooks(); true }
+    }.also { it.layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { setMargins(ctx.dp(12), 0, ctx.dp(12), ctx.dp(8)) } }
+
+    private fun openBook(path: String) {
+        NeoReader.open(ctx, path)
+        onClose()
+    }
+
+    private fun showBooks() {
+        showingBooks = true
+        bookPage = 0
+        books = emptyList()
+        render()
+        Shell.background({ NeoReader.books(ctx) }) { list -> books = list; if (showingBooks) render() }
+    }
+
+    private fun bookPages() = ((books.size + booksPerPage - 1) / booksPerPage).coerceAtLeast(1)
+
+    /** "Your books": what NeoReader has opened, newest first, in pages; tap one to open it. */
+    private fun renderBooks() {
+        content.removeAllViews()
+        menuLayer?.let { root.removeView(it) }
+        menuLayer = null
+        bookPage = bookPage.coerceIn(0, bookPages() - 1)
+        content.addView(ctx.hbox().apply {
+            setPadding(ctx.dp(10), ctx.dp(10), ctx.dp(10), ctx.dp(4))
+            addView(ctx.inkButton("◀", 15f) { showingBooks = false; render() }.apply { contentDescription = "Back to recent apps" }, lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(10) })
+            addView(ctx.text("Your books", 19f, bold = true), lp(0, WRAP, 1f))
+            addView(ctx.inkButton("✕", 16f) { onClose() }, lp(ctx.dp(48), WRAP))
+        })
+        content.addView(ctx.text("NEOREADER · NEWEST FIRST · TAP TO OPEN", 10.5f, bold = true).apply {
+            letterSpacing = 0.06f; setPadding(ctx.dp(14), 0, ctx.dp(14), ctx.dp(6))
+        })
+        val shown = books.drop(bookPage * booksPerPage).take(booksPerPage)
+        val list = SwipePager(ctx, onNext = { if (bookPage < bookPages() - 1) { bookPage++; render() } }, onPrev = { if (bookPage > 0) { bookPage--; render() } })
+            .apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
+        if (shown.isEmpty()) {
+            list.addView(ctx.text(if (books.isEmpty()) "Loading…" else "", 15f, color = Ink.MUTED).apply { setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), 0) })
+        } else if (landscape) {
+            shown.chunked(2).forEach { pair ->
+                list.addView(ctx.hbox().apply {
+                    for (b in pair) addView(bookRow(b, compact = true), lp(0, MATCH, 1f))
+                    if (pair.size == 1) addView(View(ctx), lp(0, MATCH, 1f))
+                }, lp(MATCH, 0, 1f))
+            }
+            repeat(booksPerPage / 2 - (shown.size + 1) / 2) { list.addView(View(ctx), lp(MATCH, 0, 1f)) }
+        } else {
+            for (b in shown) list.addView(bookRow(b, compact = false), lp(MATCH, 0, 1f))
+            repeat(booksPerPage - shown.size) { list.addView(View(ctx), lp(MATCH, 0, 1f)) }
+        }
+        content.addView(list, lp(MATCH, 0, 1f))
+        if (bookPages() > 1) content.addView(ctx.hbox().apply {
+            gravity = Gravity.CENTER
+            setPadding(0, ctx.dp(4), 0, ctx.dp(4))
+            addView(ctx.inkButton("◀", 15f) { if (bookPage > 0) { bookPage--; render() } }.apply { isEnabled = bookPage > 0 }, lp(ctx.dp(56), WRAP))
+            addView(ctx.text("${bookPage + 1} / ${bookPages()}", 15f, bold = true).apply { gravity = Gravity.CENTER }, lp(ctx.dp(72), WRAP))
+            addView(ctx.inkButton("▶", 15f) { if (bookPage < bookPages() - 1) { bookPage++; render() } }.apply { isEnabled = bookPage < bookPages() - 1 }, lp(ctx.dp(56), WRAP))
+        })
+        // Browse files…: Android's file picker, for books NeoReader hasn't opened yet.
+        content.addView(ctx.hbox().apply {
+            setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(8))
+            addView(ctx.inkButton("Browse files…", 14f) { browse() }, lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
+            addView(ctx.inkButton("Recent apps", 14f) { showingBooks = false; render() }, lp(0, WRAP, 1f))
+        })
+    }
+
+    private fun bookRow(b: NeoReader.Book, compact: Boolean): View = ctx.hbox().apply {
+        background = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(2, 12, Ink.PRESSED))
+            addState(intArrayOf(), ctx.outline(2, 12))
+        }
+        setPadding(ctx.dp(10), ctx.dp(4), ctx.dp(10), ctx.dp(4))
+        contentDescription = b.title
+        addView(ctx.icon(ctx.getDrawable(R.drawable.ic_book), if (compact) 26 else 32))
+        addView(ctx.vbox().apply {
+            addView(ctx.text(b.title, if (compact) 14f else 16f, bold = true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+            addView(ctx.text(listOf(b.format, RecentApps.ago(b.at)).filter { it.isNotEmpty() }.joinToString(" · "), 12f, color = Ink.MUTED).apply { maxLines = 1 })
+        }, lp(0, WRAP, 1f).apply { marginStart = ctx.dp(12) })
+        isClickable = true
+        setOnClickListener { openBook(b.path) }
+    }.also {
+        it.layoutParams = LinearLayout.LayoutParams(MATCH, MATCH)
+        (it.layoutParams as LinearLayout.LayoutParams).setMargins(ctx.dp(4), ctx.dp(4), ctx.dp(4), ctx.dp(4))
+    }
+
+    private fun browse() {
+        ctx.startActivity(Intent(ctx, BrowseActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        onClose()
+    }
+
+    /** Test hooks. */
+    fun testCard(hold: Boolean): Boolean {
+        val b = lastRead ?: return false
+        if (hold) showBooks() else openBook(b.path)
+        return true
+    }
+    fun testBook(index: Int): Boolean = books.drop(bookPage * booksPerPage).getOrNull(index)?.let { openBook(it.path); true } ?: false
+    fun testBrowse(): Boolean { browse(); return true }
+    fun describeBooks(): String = "lastRead=${lastRead?.title} books=${books.size} showing=$showingBooks page=${bookPage + 1}/${bookPages()}"
 
     private fun row(e: RecentApps.Entry, compact: Boolean): View = ctx.hbox().apply {
         val label = RecentApps.Info.label(ctx, e.pkg)

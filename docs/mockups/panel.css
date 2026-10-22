@@ -125,3 +125,28 @@ body { margin: 0; background: #e6e6e6; font-family: -apple-system, "Helvetica Ne
 .menu { position: absolute; background: #fff; border: 2px solid #000; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
 .menu div { padding: 7px 14px; font-size: 12px; font-weight: 600; } .menu div + div { border-top: 1px solid #000; }
 .ra-grid { display: grid; grid-template-columns: 1fr 1fr; } .ra-grid .ra-row { border-right: 1px solid #000; }
+
+/* ---- Board 13: last-read document in the side panel ---- */
+.lastread { display: flex; align-items: center; gap: 12px; margin: 2px 8px 6px; padding: 9px 12px; border: 3px solid #000; border-radius: 12px; }
+.lastread .bk { width: 32px; height: 42px; border: 2.5px solid #000; border-radius: 3px 6px 6px 3px; flex: none; position: relative; background: #fff; }
+.lastread .bk::after { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; border-left: 2px solid #000; }
+.lastread .tx { flex: 1; min-width: 0; } .lastread .tx i { font-style: normal; display: block; font-size: 9px; font-weight: 700; letter-spacing: .06em; }
+.lastread .tx b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lastread .tx span { display: block; font-size: 9.5px; color: #333; }
+.secl { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; margin: 2px 12px 3px; }
+.modern .ra-row { border: 2px solid #000; border-radius: 10px; margin: 3px 8px; padding: 6px 8px; }
+.modern .ra-row.now, .modern .ra-row.prev { border-width: 3px; background: #fff; }
+.modern .ra-row .ai { position: relative; }
+.modern .bdg { position: absolute; left: -6px; top: -6px; width: 15px; height: 15px; border-radius: 50%; background: #fff; border: 1.7px solid #000;
+               color: #000; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+.modern .xx { width: 22px; height: 22px; border: 2px solid #000; border-radius: 6px; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; margin-left: 6px; }
+.modern .ra-grid { gap: 0; } .modern .ra-grid .ra-row { border-right: 2px solid #000; margin: 3px 4px; }
+.modern .rtag { border-radius: 5px; }
+.modern .ra-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.modern .ra-grid .ra-row { min-width: 0; padding: 3px 6px; margin: 2px 4px; }
+.modern .ra-grid .ra-row .ai { width: 24px; height: 24px; font-size: 11px; }
+.modern .ra-grid .tx b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.modern .ra-grid .xx { width: 20px; height: 20px; }
+.l .modern .lastread { padding: 5px 10px; margin: 2px 8px 3px; } .l .modern .lastread .bk { width: 24px; height: 32px; }
+.modern .bk2 { width: 22px; height: 30px; border: 2.2px solid #000; border-radius: 2px 5px 5px 2px; flex: none; position: relative; }
+.modern .bk2::after { content: ""; position: absolute; left: 3px; top: 0; bottom: 0; border-left: 1.8px solid #000; }

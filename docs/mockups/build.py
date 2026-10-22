@@ -481,9 +481,67 @@ home_board = page("Home screen", f"""
 <li>The e-ink panel you had stays available from the side panel's <b>E-ink · this app</b> button, as its own overlay (unchanged).</li></ul></div>
 </div>""")
 
+# ---- Board 13: NeoReader's last-read document in the side panel ------------------------------------
+
+LASTREAD = ('<div class="lastread"><div class="bk"></div><div class="tx"><i>LAST READ · NEOREADER</i><b>The Lean Startup</b>'
+            '<span>2 h ago · tap to keep reading · hold for your books</span></div></div>')
+
+BOOKS = [("The Lean Startup", "Eric Ries · EPUB", "2 h ago"), ("Recursive Language Models", "PDF", "Yesterday"),
+         ("The Lighthouse Year", "EPUB", "3 days ago"), ("Walden", "EPUB", "Last week"), ("Field Notes 2026", "PDF", "Last week"),
+         ("Deep Work", "Cal Newport · MOBI", "2 weeks ago"), ("A Pattern Language", "PDF", "3 weeks ago"), ("Kafka on the Shore", "EPUB", "Last month")]
+
+def books_page(width):
+    rows = "".join(f'<div class="ra-row"><div class="bk2"></div><div class="tx"><b>{t}</b><span>{d} · {w}</span></div></div>' for t, d, w in BOOKS)
+    return (f'<div class="dim2" style="right:{width}"></div><div class="side2 modern" style="width:{width}">'
+            f'<div class="ra-hd"><div class="btn sq">◀</div><b style="margin-left:6px">Your books</b><div class="btn sq">✕</div></div>'
+            f'<div class="secl">NEOREADER · NEWEST FIRST · TAP TO OPEN</div>{rows}<div class="pager2">◀ &nbsp; 1 / 3 &nbsp; ▶</div>'
+            f'<div class="ra-foot"><div class="btn">Back to recent apps</div></div></div>')
+
+def ra_rows_modern(items, compact=False):
+    """Rows as the app draws them now: rounded cards, ← badge on the previous app, ✕ on each app."""
+    out = ""
+    for name, letter, when, kind in items:
+        badge = '<div class="bdg">←</div>' if kind == "prev" else ""
+        if compact:
+            tag = ""
+            if kind == "prev": when = "Previous · " + when
+        else:
+            tag = '<div class="rtag">Open now</div>' if kind == "now" else '<div class="rtag">Previous</div>' if kind == "prev" else ""
+        x = "" if kind == "now" else '<div class="xx">✕</div>'
+        out += f'<div class="ra-row {kind}"><div class="ai">{letter}{badge}</div><div class="tx"><b>{name}</b><span>{when}</span></div>{tag}{x}</div>'
+    return out
+
+
+def side_lr(width, items, pager, extra=""):
+    return (f'<div class="dim2" style="right:{width}"></div><div class="side2 modern" style="width:{width}">'
+            f'<div class="ra-hd"><b>Recent apps</b><div class="btn">Clear all</div><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+            f'{LASTREAD}<div class="secl">RECENT APPS</div>'
+            f'{ra_rows_modern(items)}<div class="pager2">{pager}</div>'
+            f'<div class="ra-foot"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>{extra}')
+
+LR_APPS = [a for a in RECENT if a[0] != "KOReader"][:7]
+LR_APPS = [("Feeder", "F", "Open now", "now"), ("AnkiDroid", "A", "8 min ago", "prev")] + [a for a in RECENT[3:9]]
+
+lastread_board = board("Side panel: last read", """<div class="notes"><h2>13 · Last read in NeoReader</h2>
+<ul><li>A <b>Last read</b> card at the top of the side panel: the book you had open last in NeoReader.</li>
+<li><b>Tap:</b> NeoReader opens on that book, at your page.</li>
+<li><b>Hold:</b> <b>Your books</b>, newest first, in pages; tap one to open it. (NeoReader's own library can't be opened from outside.)</li>
+<li>From NeoReader's own book list, as SuperBoox does on BOOX. Shown only once NeoReader has opened a book.</li></ul>
+<h3>Choices to make</h3><ul>
+<li>Keep NeoReader in the recent-apps list too, or leave it out since the card covers it.</li>
+<li>Card on top (shown), or at the bottom above the footer.</li>
+<li>Hold: your books in the panel (shown), or just open NeoReader on the last book and use its Doc button.</li></ul></div>""",
+    [frame("Portrait", "The card sits above your recent apps.", device("p", side_lr("78%", LR_APPS[:8], "◀ &nbsp; 1 / 2 &nbsp; ▶"))),
+     frame("Portrait · held the card", "Your NeoReader books, newest first. Tap one to open it.", device("p", books_page("78%")))],
+    frame("Landscape", "Same card, full width of the panel.",
+          device("l", f'<div class="dim2" style="right:50%"></div><div class="side2 modern" style="width:50%"><div class="ra-hd"><b>Recent apps</b><div class="btn">Clear all</div><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+                      f'{LASTREAD}<div class="ra-grid">{ra_rows_modern(LR_APPS[:4], compact=True)}</div><div class="pager2">◀ &nbsp; 1 / 2 &nbsp; ▶</div>'
+                      f'<div class="ra-foot"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>')))
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
                    ("08-presets", presets_board), ("09-font", font_board),
-                   ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board)]:
+                   ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board),
+                   ("13-last-read", lastread_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

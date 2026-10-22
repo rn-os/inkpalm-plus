@@ -150,3 +150,14 @@ body { margin: 0; background: #e6e6e6; font-family: -apple-system, "Helvetica Ne
 .l .modern .lastread { padding: 5px 10px; margin: 2px 8px 3px; } .l .modern .lastread .bk { width: 24px; height: 32px; }
 .modern .bk2 { width: 22px; height: 30px; border: 2.2px solid #000; border-radius: 2px 5px 5px 2px; flex: none; position: relative; }
 .modern .bk2::after { content: ""; position: absolute; left: 3px; top: 0; bottom: 0; border-left: 1.8px solid #000; }
+
+/* Board 14: reader app */
+.homep .hp-t { font-size: 22px; font-weight: 700; padding: 10px 16px 6px; }
+.ask { margin: 4px 12px 10px; border: 3px solid #000; border-radius: 14px; padding: 12px; }
+.ask > b { display: block; font-size: 17px; } .ask > span { display: block; font-size: 11px; color: #333; margin: 3px 0 10px; }
+.rpick { display: flex; align-items: center; gap: 10px; border: 2px solid #000; border-radius: 12px; padding: 8px 10px; margin-bottom: 7px; }
+.rpick .n { flex: 1; } .rpick .n b { display: block; font-size: 14px; } .rpick .n span { display: block; font-size: 10px; color: #333; }
+.rpick .bk3 { width: 20px; height: 26px; border: 2px solid #000; border-radius: 2px 4px 4px 2px; }
+.rpick .dot { width: 16px; height: 16px; border: 2px solid #000; border-radius: 50%; }
+.ask .btn.wide { display: block; text-align: center; margin-top: 4px; }
+.faded { opacity: .45; border-top: 2px solid #000; }

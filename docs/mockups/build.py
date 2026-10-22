@@ -538,10 +538,61 @@ lastread_board = board("Side panel: last read", """<div class="notes"><h2>13 · 
                       f'{LASTREAD}<div class="ra-grid">{ra_rows_modern(LR_APPS[:4], compact=True)}</div><div class="pager2">◀ &nbsp; 1 / 2 &nbsp; ▶</div>'
                       f'<div class="ra-foot"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>')))
 
+
+# ---- Board 14: choosing your reader app (NeoReader, KOReader or none) --------------------------------
+
+def lastread_card(app, title, sub):
+    return (f'<div class="lastread"><div class="bk"></div><div class="tx"><i>LAST READ · {app}</i><b>{title}</b>'
+            f'<span>{sub}</span></div></div>')
+
+def side_reader(width, card):
+    return (f'<div class="dim2" style="right:{width}"></div><div class="side2 modern" style="width:{width}">'
+            f'<div class="ra-hd"><b>Recent apps</b><div class="btn">Clear all</div><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+            f'{card}<div class="secl">RECENT APPS</div>'
+            f'{ra_rows_modern(LR_APPS[:8])}<div class="pager2">◀ &nbsp; 1 / 2 &nbsp; ▶</div>'
+            f'<div class="ra-foot"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>')
+
+def btns(*labels, on=None):
+    return "".join(f'<div class="btn{" on" if l == on else ""}">{l}</div>' for l in labels)
+
+def pick(name, sub, on=False):
+    return f'<div class="rpick{" on" if on else ""}"><div class="bk3"></div><div class="n"><b>{name}</b><span>{sub}</span></div><div class="dot"></div></div>'
+
+FIRST = (f'<div class="dev p homep">{STATUS}<div class="hp-t">InkPalm+</div>'
+         f'<div class="ask"><b>Which reader do you use?</b><span>The side panel keeps the last book you read in it one tap away. You can change this later.</span>'
+         f'{pick("NeoReader", "Installed · works as is")}{pick("KOReader", "Installed · asks once for All files access")}'
+         f'{pick("No reader", "No book card in the panel")}<div class="btn wide">Continue</div></div>'
+         f'<div class="faded">{hrow("Side panel", "On · swipe up or down along the right edge", btns("On", on="On"))}'
+         f'{hrow("Strip side", "Where you swipe", btns("Left", "Right", on="Right"))}'
+         f'{hrow("Panel width", "How much of the screen the panel covers", btns("66%", "78%", on="78%"))}</div></div>')
+
+KO_CARD = lastread_card("KOREADER", "Recursive Language Models", "1 h ago · tap to keep reading · hold for your books")
+KO_ASK = ('<div class="lastread"><div class="bk"></div><div class="tx"><i>KOREADER · ONE MORE STEP</i><b>Allow All files access</b>'
+          '<span>So InkPalm+ can read KOReader\'s history. Tap to open the setting.</span></div></div>')
+
+SETTING = (f'<div class="card" style="width:430px"><div class="ttl">INKPALM+ · HOME</div>'
+           f'{hrow("Side panel", "On · swipe up or down along the right edge", btns("On", on="On"))}'
+           f'{hrow("Reader app", "Its last book sits at the top of the side panel", btns("NeoReader", "KOReader", "None", on="KOReader"))}'
+           f'{hrow("Strip side", "Where you swipe", btns("Left", "Right", on="Right"))}'
+           f'{hrow("Panel width", "How much of the screen the panel covers", btns("66%", "78%", "90%", on="78%"))}</div>')
+
+reader_board = board("Reader app", """<div class="notes"><h2>14 · Your reader app</h2>
+<ul><li><b>First start:</b> one question at the top of the home screen. It lists only the readers you have installed; with none installed it's skipped.</li>
+<li><b>Later:</b> a <b>Reader app</b> row on the home screen: NeoReader · KOReader · None.</li>
+<li><b>KOReader:</b> same card, same hold for your books (from KOReader's history), same Browse files. It needs Android's <b>All files access</b>, asked once; until then the card says so.</li>
+<li>NeoReader needs nothing extra. InkPalm+ still has no internet permission.</li></ul>
+<h3>Choices to make</h3><ul>
+<li>KOReader access: All files access (shown, one switch) or through Shizuku (no new permission, but Shizuku must be running).</li>
+<li>Other readers (Librera, Moon+…): leave out, or list them with tap-to-open only (no last book).</li></ul></div>""",
+    [frame("First start", "Readers you have installed. Picked once, then it folds away.", FIRST),
+     frame("KOReader picked", "Title from KOReader's book info, else the file name.", device("p", side_reader("78%", KO_CARD))),
+     frame("KOReader · no access yet", "Tap opens the All files access screen.", device("p", side_reader("78%", KO_ASK)))],
+    frame("Home screen · later", "The question becomes a row under Side panel.", SETTING))
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
                    ("08-presets", presets_board), ("09-font", font_board),
                    ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board),
-                   ("13-last-read", lastread_board)]:
+                   ("13-last-read", lastread_board), ("14-reader-app", reader_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

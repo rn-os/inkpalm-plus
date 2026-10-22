@@ -27,6 +27,11 @@ class Prefs(context: Context) {
         get() = sp.getInt("recent_kept", 18)
         set(v) = sp.edit().putInt("recent_kept", v).apply()
 
+    /** The reader app for the side panel's Last read card: a [Readers.App] key, "none", or null (not asked yet). */
+    var readerApp: String?
+        get() = sp.getString("reader_app", null)
+        set(v) = sp.edit().putString("reader_app", v).apply()
+
     /** Show a thin black pill where the strip is. */
     var showStrip: Boolean
         get() = sp.getBoolean("show_strip", true)

@@ -6,7 +6,7 @@ import android.os.Bundle
 
 /**
  * "Browse files…" in the side panel's book list: Android's own file picker, and the file you pick opens in
- * NeoReader. The panel lives in the accessibility service, which can't receive the picker's result, so this
+ * your reader app ([Readers]). The panel lives in the accessibility service, which can't receive the picker's result, so this
  * invisible activity does: it starts the picker and finishes once the file is handed over (or the picker is closed).
  */
 class BrowseActivity : Activity() {
@@ -23,14 +23,14 @@ class BrowseActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         val uri = data?.data
         if (requestCode == PICK && resultCode == RESULT_OK && uri != null) {
-            NeoReader.openUri(this, uri, contentResolver.getType(uri))
+            Readers.chosen(this)?.let { Readers.openUri(this, it, uri, contentResolver.getType(uri)) }
         }
         finish()
     }
 
     companion object {
         private const val PICK = 7
-        /** What NeoReader opens (its VIEW intent-filter). */
+        /** What the readers open (NeoReader's and KOReader's VIEW intent-filters). */
         private val BOOK_TYPES = arrayOf(
             "application/epub+zip", "application/pdf", "application/x-mobipocket-ebook", "application/vnd.amazon.ebook",
             "application/x-fictionbook+xml", "application/vnd.comicbook+zip", "application/x-cbz", "application/zip",

@@ -55,6 +55,13 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - The user's device runs **debug** builds (test key). Moving it to release builds needs one uninstall (different
   signature), which loses InkPalm+'s settings and switches its accessibility service off; ask first.
 
+## Reader app (2026-10-22)
+- Side panel Last read card + "Your books" + Browse files (mockups 13, 14). Reader picked on first start
+  (home screen question, only installed readers) and in a Reader app row: NeoReader, KOReader or None.
+- NeoReader: its exported provider. KOReader: `/sdcard/koreader/history.lua` + `<book>.sdr/metadata.*.lua` titles,
+  needs All files access (MANAGE_EXTERNAL_STORAGE); the card asks for it until granted. Other readers left out.
+- adb taps don't register on DocumentsUI's file list; use keyboard focus (TAB, ENTER) in tests.
+
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown
   landed; the release APK itself was checked: signed with the release key, not debuggable, SectionActivity not

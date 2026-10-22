@@ -20,6 +20,9 @@
 
     <!-- Turns the quick panel back on after a restart if Android didn't (Survival.BootReceiver). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- All files access, only if you pick KOReader: its reading history is a file in shared storage. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
 
     <!-- "Save + reopen": ends the tuned app in the background so it reopens at its new DPI. -->
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
@@ -29,6 +32,9 @@
         <!-- NeoReader: its book list (an exported provider) and opening books in it, for the side panel. -->
         <package android:name="com.onyx.kreader" />
         <provider android:authorities="com.onyx.content.database.ContentProvider" />
+        <!-- KOReader (Play/GitHub and F-Droid builds): opening books in it. -->
+        <package android:name="org.koreader.launcher" />
+        <package android:name="org.koreader.launcher.fdroid" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

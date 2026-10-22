@@ -16,7 +16,7 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
   the sub-screens; `eink` holds the e-ink settings, "Search apps" and the per-app list.
 - `AppActivity`: one app's settings page.
 - `QuickPanelService` (accessibility service: edge strip, foreground app, debug test hooks). The strip opens `SidePanel`
-  (recent apps, paged; its footer button "E-ink · this app" opens `QuickPanel`, the e-ink overlay). `RecentApps` records
+  (recent apps, paged; a Last read card from `Readers` (NeoReader's provider, KOReader's history.lua) on top; its footer button "E-ink · this app" opens `QuickPanel`, the e-ink overlay). `RecentApps` records
   each app that comes to the front (own file `recent_apps.xml`),
   `EdgeHandleView` (from SuperBoox), `Live` (applies settings to the open app: eink service, font-scale nudge),
   `Rotation` (manual rotation through an overlay window, remembered per app), `RefreshHelpers` (Speed while

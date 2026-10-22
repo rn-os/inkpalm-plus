@@ -40,6 +40,10 @@ open class MainActivity : Activity() {
     private val section: String? get() = intent.getStringExtra(EXTRA_SECTION)
     private lateinit var keepBox: LinearLayout
     private lateinit var navBox: LinearLayout
+    private val askBox by lazy { vbox() }
+    /** The first-start question's pick so far: a reader, or null for No reader ([askPicked] says whether one was tapped). */
+    private var askPick: Readers.App? = null
+    private var askPicked = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,6 +89,7 @@ open class MainActivity : Activity() {
             SECTION_TOUCH -> root.addView(touchBox)
             SECTION_KEEP_ON -> root.addView(keepBox)
             else -> {
+                root.addView(askBox)
                 root.addView(sectionTitle("Side panel"))
                 root.addView(panelBox)
                 root.addView(sectionTitle("More"))
@@ -123,7 +128,7 @@ open class MainActivity : Activity() {
                 SECTION_EINK -> { renderAccess(via); renderDevice(); renderApps() }
                 SECTION_TOUCH -> renderTouch()
                 SECTION_KEEP_ON -> renderKeepOn()
-                else -> { renderPanel(); renderNav() }
+                else -> { renderAsk(); renderPanel(); renderNav() }
             }
         }
     }
@@ -216,6 +221,7 @@ open class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
         val prefs = Prefs(this)
+        renderReaderRow(prefs)
         fun previewStrip() = sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName).putExtra(QuickPanelService.EXTRA_PREVIEW, true))
         fun choices(title: String, detail: String, labels: List<String>, current: Int, pick: (Int) -> Unit) = panelBox.addView(hbox().apply {
             setPadding(dp(16), dp(10), dp(16), dp(10))
@@ -250,6 +256,72 @@ open class MainActivity : Activity() {
                 sendBroadcast(Intent(QuickPanelService.ACTION_CLEAR_RECENTS).setPackage(packageName))
                 toast("Recent apps cleared")
             })
+        })
+    }
+
+    // ---- Reader app (docs/mockups/14-reader-app.png) -------------------------------------------
+
+    /** First start: which reader's last book the side panel shows. Only installed readers; skipped with none. */
+    private fun renderAsk() {
+        askBox.removeAllViews()
+        val apps = Readers.installedApps(this)
+        if (Prefs(this).readerApp != null || apps.isEmpty()) return
+        askBox.addView(vbox().apply {
+            background = outline(3, 14)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            addView(text("Which reader do you use?", 19f, bold = true))
+            addView(text("The side panel keeps the last book you read in it one tap away. You can change this later.", 13f, color = Ink.MUTED)
+                .apply { setPadding(0, dp(2), 0, dp(8)) })
+            fun option(app: Readers.App?, sub: String) {
+                val on = askPicked && askPick == app
+                addView(hbox().apply {
+                    pressable(outline(if (on) 3 else 2, 12))
+                    setPadding(dp(12), dp(8), dp(12), dp(8))
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(vbox().apply {
+                        addView(text(app?.label ?: "No reader", 17f, bold = true))
+                        addView(text(sub, 13f, color = Ink.MUTED))
+                    }, lp(0, WRAP, 1f))
+                    addView(text(if (on) "●" else "○", 22f, bold = true))
+                    setOnClickListener { askPick = app; askPicked = true; renderAsk() }
+                }, lp(MATCH, WRAP).apply { bottomMargin = dp(7) })
+            }
+            for (app in apps) option(app, if (Readers.hasAccess(app)) "Installed · works as is" else "Installed · asks once for All files access")
+            option(null, "No book card in the panel")
+            addView(inkButton("Continue", 16f) {
+                if (!askPicked) return@inkButton
+                Prefs(this@MainActivity).readerApp = askPick?.key ?: "none"
+                askPick?.let { if (!Readers.hasAccess(it)) runCatching { startActivity(Readers.accessIntent(this@MainActivity)) } }
+                renderAsk(); renderPanel()
+            }.apply { isEnabled = askPicked; alpha = if (askPicked) 1f else 0.4f }, lp(MATCH, WRAP))
+        }, lp(MATCH, WRAP).apply { setMargins(dp(16), dp(8), dp(16), dp(8)) })
+    }
+
+    /** Reader app row: NeoReader · KOReader · None (installed readers only). */
+    private fun renderReaderRow(prefs: Prefs) {
+        val apps = Readers.installedApps(this)
+        if (apps.isEmpty()) return
+        val chosen = Readers.chosen(this)
+        val needsAccess = chosen != null && !Readers.hasAccess(chosen)
+        panelBox.addView(vbox().apply {
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            addView(vbox().apply {
+                addView(text("Reader app", 17f, medium = true))
+                addView(text(if (needsAccess) "Needs All files access · tap here to allow" else "Its last book sits at the top of the side panel", 13f,
+                    color = if (needsAccess) Ink.INK else Ink.MUTED, bold = needsAccess))
+                if (needsAccess) { pressable(); setOnClickListener { runCatching { startActivity(Readers.accessIntent(this@MainActivity)) } } }
+            })
+            val chips = hbox().apply { setPadding(0, dp(6), 0, 0) }
+            addView(chips)
+            val current = if (prefs.readerApp == "none") apps.size else apps.indexOf(chosen)
+            (apps.map { it.label } + "None").forEachIndexed { i, l ->
+                chips.addView(chip(l, i == current) {
+                    val app = apps.getOrNull(i)
+                    prefs.readerApp = app?.key ?: "none"
+                    if (app != null && !Readers.hasAccess(app)) runCatching { startActivity(Readers.accessIntent(this@MainActivity)) }
+                    renderAsk(); renderPanel()
+                }, lp(WRAP, WRAP).apply { if (i > 0) marginStart = dp(6) })
+            }
         })
     }
 

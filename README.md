@@ -48,6 +48,7 @@ A few things to know:
 - **It's quick.** The panel opens in about 30 ms.
 - **Clear all** leaves the app you're in. An app that's playing audio in the background may keep running after ✕.
 - **Home screens and InkPalm+ itself** aren't listed. The list is kept across restarts.
+- **Last read.** Pick your reader (NeoReader or KOReader) and the last book you read in it sits at the top. Tap it to keep reading. Hold it for your books, newest first, and **Browse files…** for anything new. KOReader needs Android's All files access, so InkPalm+ can read its history.
 
 <img src="docs/launch/2-hold.png" width="720" alt="Holding an app: Remove from list, Open its e-ink settings, App info">
 
@@ -131,6 +132,7 @@ These are the actions already built into the device. Changes apply on the next t
 <img src="docs/launch/5-home.png" width="720" alt="The home screen: side panel settings, touch button, e-ink settings">
 
 - **Side panel.** Opens Accessibility so you can turn the service on or off.
+- **Reader app.** NeoReader, KOReader or None. You're asked once, the first time you open InkPalm+.
 - **Strip side.** Left or Right.
 - **Strip width.** 6 to 40 dp.
 - **Show strip.** Draws a thin black line where you swipe.

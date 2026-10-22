@@ -38,7 +38,7 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - README and Reddit launch draft (`docs/launch/reddit-post.md`, images in `docs/launch/reddit/`) are pushed.
   **Don't post until a release APK exists.**
 
-## Release setup (in progress)
+## Release setup
 - **Lockdown:** InkPalm+'s broadcasts (open/close panel, strip, clear recents) need the signature permission
   `com.inkpalmplus.permission.PANEL`; test hooks are registered only in debuggable builds; `SectionActivity` is
   exported only in debug builds (`manifestPlaceholders["sectionExported"]`).
@@ -50,6 +50,8 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - **CI** (`.github/workflows/build.yml`, modeled on SuperBoox's): tag `v1.2.3` → stable release; push to `main`
   → pre-release `NEXT_VERSION-dev.N` (Obtainium: "Include prereleases"); other branches/PRs → signed test APK as a
   workflow artifact. The key comes from repo secrets `IPP_KEYSTORE_B64`, `IPP_KEYSTORE_PASSWORD`, `IPP_KEY_ALIAS`.
+- **First pre-release:** `1.0.0-dev.2` (2026-10-22), APK verified: release key, not debuggable. No stable
+  release yet; for a stable one add `docs/releases/v1.0.0.md` and push tag `v1.0.0`.
 - The user's device runs **debug** builds (test key). Moving it to release builds needs one uninstall (different
   signature), which loses InkPalm+'s settings and switches its accessibility service off; ask first.
 

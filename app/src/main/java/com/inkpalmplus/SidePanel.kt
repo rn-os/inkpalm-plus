@@ -25,6 +25,8 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     private lateinit var root: FrameLayout
     private lateinit var content: LinearLayout
     private var page = 0
+    private var previousPkg: String? = null
+
     /** The app whose hold menu is showing, or null. */
     private var menuFor: String? = null
     private var menuLayer: View? = null
@@ -32,32 +34,80 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     private val landscape get() = ctx.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     private val perPage get() = if (landscape) 8 else 9
 
+    /** When [prepare] built the rows, and for which app in front: a prepared panel is only used while both still hold. */
+    var builtAt = 0L
+        private set
+    var builtFor: String? = null
+        private set
+    private var builtVersion = -1
+    private var builtWidth = 0
+    private var onRight = true
+    private lateinit var lp: WindowManager.LayoutParams
+
+    /**
+     * Builds the panel (rows included, ~70 ms) without showing it. The service does this shortly after each
+     * app switch, so a swipe only has to add the window.
+     */
     @SuppressLint("ClickableViewAccessibility")
-    fun show(wm: WindowManager) {
-        val right = Prefs(ctx).edgeRight
+    fun prepare(): SidePanel {
+        onRight = Prefs(ctx).edgeRight
         val r = ctx.dp(18).toFloat()
         root = FrameLayout(ctx).apply {
             // Rounded on the inner side only, like a card slid in from the edge.
             background = GradientDrawable().apply {
                 setColor(Ink.PAPER)
                 setStroke(ctx.dp(3), Ink.INK)
-                cornerRadii = if (right) floatArrayOf(r, r, 0f, 0f, 0f, 0f, r, r) else floatArrayOf(0f, 0f, r, r, r, r, 0f, 0f)
+                cornerRadii = if (onRight) floatArrayOf(r, r, 0f, 0f, 0f, 0f, r, r) else floatArrayOf(0f, 0f, r, r, r, r, 0f, 0f)
             }
-            setPadding(if (right) ctx.dp(3) else 0, ctx.dp(3), if (right) 0 else ctx.dp(3), ctx.dp(3))
+            setPadding(if (onRight) ctx.dp(3) else 0, ctx.dp(3), if (onRight) 0 else ctx.dp(3), ctx.dp(3))
             setOnTouchListener { _, e -> if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) onClose(); false }
         }
         content = ctx.vbox()
         root.addView(content, FrameLayout.LayoutParams(MATCH, MATCH))
-        val width = ctx.resources.displayMetrics.widthPixels * (if (landscape) 50 else Prefs(ctx).panelWidthPct) / 100
-        val lp = WindowManager.LayoutParams(
+        val width = currentWidth()
+        lp = WindowManager.LayoutParams(
             width, WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT,
-        ).apply { gravity = Gravity.TOP or if (right) Gravity.END else Gravity.START }
-        wm.addView(root, lp)
+        ).apply { gravity = Gravity.TOP or if (onRight) Gravity.END else Gravity.START }
         render()
+        // Measure and lay out at the window's size now, so showing it doesn't have to.
+        val h = ctx.resources.displayMetrics.heightPixels
+        root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
+        root.layout(0, 0, width, h)
+        builtAt = android.os.SystemClock.uptimeMillis()
+        builtFor = service.foreground
+        builtVersion = service.recents.version
+        builtWidth = width
+        return this
+    }
+
+    /**
+     * Still matches what's on screen: same app in front, same list, same edge and width, built under a minute
+     * ago (so the "2 min ago" times stay right).
+     */
+    fun fresh(): Boolean = builtAt > 0 && builtFor == service.foreground && builtVersion == service.recents.version &&
+        onRight == Prefs(ctx).edgeRight && builtWidth == currentWidth() &&
+        android.os.SystemClock.uptimeMillis() - builtAt < 60_000
+
+    private fun currentWidth() = ctx.resources.displayMetrics.widthPixels * (if (landscape) 50 else Prefs(ctx).panelWidthPct) / 100
+
+    fun show(wm: WindowManager, startedAt: Long = android.os.SystemClock.uptimeMillis()) {
+        val prepared = builtAt > 0
+        if (!prepared) prepare()
+        val tAdd = android.os.SystemClock.uptimeMillis()
+        wm.addView(root, lp)
+        android.util.Log.i(QuickPanelService.TAG, "timing: ${if (prepared) "prepared panel" else "rows built on the swipe"}, window added in ${android.os.SystemClock.uptimeMillis() - tAdd} ms")
+        // Timing: from the strip swipe to the panel's first frame.
+        root.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                root.viewTreeObserver.removeOnPreDrawListener(this)
+                android.util.Log.i(QuickPanelService.TAG, "timing: side panel drawn ${android.os.SystemClock.uptimeMillis() - startedAt} ms after the swipe")
+                return true
+            }
+        })
     }
 
     fun dismiss(wm: WindowManager) {
@@ -68,6 +118,8 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
 
     private fun open(pkg: String) {
         if (pkg == service.foreground) return onClose()
+        service.switchTo = pkg
+        service.switchAt = android.os.SystemClock.uptimeMillis()
         // Like Android's recents: brings the app's existing task forward, or starts it.
         ctx.packageManager.getLaunchIntentForPackage(pkg)?.let {
             ctx.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
@@ -115,11 +167,15 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
 
     // ---- Views --------------------------------------------------------------------------------
 
-    private fun all(): List<RecentApps.Entry> = service.recents.list()
+    /** The list as of this draw (read once per [render]). */
+    private var entries: List<RecentApps.Entry> = emptyList()
+    private fun all(): List<RecentApps.Entry> = entries
     private fun pages(): Int = ((all().size + perPage - 1) / perPage).coerceAtLeast(1)
     private fun visible(): List<RecentApps.Entry> = all().drop(page * perPage).take(perPage)
 
     private fun render() {
+        entries = service.recents.list()
+        previousPkg = entries.firstOrNull { it.pkg != service.foreground }?.pkg
         content.removeAllViews()
         menuLayer?.let { root.removeView(it) }
         menuLayer = null
@@ -186,15 +242,14 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     }
 
     private fun row(e: RecentApps.Entry, compact: Boolean): View = ctx.hbox().apply {
-        val pm = ctx.packageManager
-        val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(e.pkg, 0)).toString() }.getOrDefault(e.pkg)
+        val label = RecentApps.Info.label(ctx, e.pkg)
         val now = e.pkg == service.foreground
-        val previous = !now && e.pkg == all().firstOrNull { it.pkg != service.foreground }?.pkg
+        val previous = !now && e.pkg == previousPkg
         background = ctx.outline(if (now || previous) 3 else 2, 12)
         setPadding(ctx.dp(10), ctx.dp(4), ctx.dp(10), ctx.dp(4))
         contentDescription = label
         val iconSize = if (compact) 32 else 40
-        val appIcon = ctx.icon(runCatching { pm.getApplicationIcon(e.pkg) }.getOrNull(), iconSize, tint = false)
+        val appIcon = ctx.icon(RecentApps.Info.icon(ctx, e.pkg), iconSize, tint = false)
         if (previous) {
             // As in SuperBoox's "Previous app": the icon with a small round ← badge on its corner.
             addView(FrameLayout(ctx).apply {
@@ -245,8 +300,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
 
     /** Hold menu: a rounded card over the list. */
     private fun showMenu(pkg: String) {
-        val pm = ctx.packageManager
-        val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+        val label = RecentApps.Info.label(ctx, pkg)
         val shade = FrameLayout(ctx).apply {
             isClickable = true
             setOnClickListener { menuFor = null; render() }

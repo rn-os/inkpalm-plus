@@ -40,6 +40,13 @@ Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister p
 - Installing and testing debug builds on the connected InkPalm is fine. Don't change other apps' rows in Moaan's
   table except through the harness (which restores them) or when the user asks.
 
+## Speed (side panel, measured 2026-10-21; logcat tag InkPalmPlus, lines "timing: ...")
+- Swipe → panel drawn: started at ~265 ms; now ~26–94 ms. The panel is built, measured and laid out ahead
+  (`SidePanel.prepare`, 1.5 s after each app switch or close) and reused while `fresh()` (same app in front, same
+  `RecentApps.version`, edge and width, < 60 s old). App names/icons are cached (`RecentApps.Info`).
+- Tap → app in front: ~250–400 ms, Android's own task switch.
+- One full refresh per switch: the panel doesn't flash on close when the target gets a clean-on-open refresh.
+
 ## Mockups
 - UI changes get mockups first: `docs/mockups/build.py` (boards as HTML, `panel.css`) and `docs/mockups/render.sh`
   (renders PNGs with macOS Quick Look; no Playwright needed). Quick Look draws about 1200×1200 CSS px, so boards are two rows.

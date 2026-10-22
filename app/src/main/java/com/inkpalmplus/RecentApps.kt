@@ -48,11 +48,13 @@ class RecentApps(private val context: Context) {
         save()
     }
 
-    /** Newest first; apps uninstalled since are dropped. */
-    fun list(): List<Entry> {
-        val gone = entries.filter { context.packageManager.getLaunchIntentForPackage(it.pkg) == null }
-        if (gone.isNotEmpty()) { entries.removeAll(gone.toSet()); save() }
-        return entries.toList()
+    /** Newest first. Cheap: uninstalled apps are dropped when Android reports them ([remove]), not here. */
+    fun list(): List<Entry> = entries.toList()
+
+    /** Loads the listed apps' names and icons into [Info] in the background, so the panel draws without looking them up. */
+    fun warm() {
+        val pkgs = entries.map { it.pkg }
+        Shell.io.execute { pkgs.forEach { Info.load(context, it) } }
     }
 
     private fun trim() {
@@ -69,8 +71,35 @@ class RecentApps(private val context: Context) {
         trim()
     }
 
+    /** Goes up with every change, so a panel built ahead of time knows it's out of date. */
+    var version = 0
+        private set
+
     private fun save() {
+        version++
         store.edit().putString("apps", entries.joinToString("\n") { "${it.pkg} ${it.at}" }).apply()
+    }
+
+    /** App names and icons, cached across panel openings (the lookups are what made opening slow). */
+    object Info {
+        private val labels = java.util.concurrent.ConcurrentHashMap<String, String>()
+        private val icons = java.util.concurrent.ConcurrentHashMap<String, android.graphics.drawable.Drawable>()
+
+        fun load(context: Context, pkg: String) {
+            if (labels.containsKey(pkg) && icons.containsKey(pkg)) return
+            val pm = context.packageManager
+            val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull() ?: return
+            labels[pkg] = pm.getApplicationLabel(info).toString()
+            runCatching { pm.getApplicationIcon(info) }.getOrNull()?.let { icons[pkg] = it }
+        }
+
+        fun label(context: Context, pkg: String): String = labels[pkg] ?: run { load(context, pkg); labels[pkg] ?: pkg }
+
+        /** A fresh copy each time: one Drawable shouldn't be shared by two views. */
+        fun icon(context: Context, pkg: String): android.graphics.drawable.Drawable? =
+            (icons[pkg] ?: run { load(context, pkg); icons[pkg] })?.let { it.constantState?.newDrawable(context.resources) ?: it }
+
+        fun forget(pkg: String) { labels.remove(pkg); icons.remove(pkg) }
     }
 
     companion object {

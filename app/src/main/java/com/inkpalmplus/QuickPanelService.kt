@@ -30,6 +30,14 @@ class QuickPanelService : AccessibilityService() {
     var foreground: String? = null
         private set
 
+    private val packageGone = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            val pkg = i.data?.schemeSpecificPart ?: return
+            recents.remove(pkg)
+            RecentApps.Info.forget(pkg)
+        }
+    }
+
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             when (i.action) {
@@ -54,6 +62,9 @@ class QuickPanelService : AccessibilityService() {
             if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) addAction(ACTION_TEST)
         }
         registerReceiver(receiver, filter, RECEIVER_EXPORTED_COMPAT)
+        // Uninstalled apps leave the recent list (so the panel never has to check while drawing).
+        registerReceiver(packageGone, IntentFilter(Intent.ACTION_PACKAGE_FULLY_REMOVED).apply { addDataScheme("package") })
+        recents.warm()
         showStrip()
         // The app in front isn't known until the next window change: the service doesn't read window
         // content (so rootInActiveWindow is null), only window-state events.
@@ -62,6 +73,7 @@ class QuickPanelService : AccessibilityService() {
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(receiver) }
+        runCatching { unregisterReceiver(packageGone) }
         removeStrip()
         closePanel()
         closeSide()
@@ -110,7 +122,13 @@ class QuickPanelService : AccessibilityService() {
             leftAt = now
             foreground = pkg
             Log.i(TAG, "foreground $pkg")
+            if (pkg == switchTo) {
+                Log.i(TAG, "timing: switch to $pkg took ${android.os.SystemClock.uptimeMillis() - switchAt} ms (tap to window)")
+                switchTo = null
+            }
             recents.record(pkg)
+            recents.warm()
+            prepareSoon()
             rotation.apply(Prefs(this).rotation(pkg))
             helpers.onForeground(pkg)
             // Another app came to the front under the panel: it belongs to the old one.
@@ -137,6 +155,7 @@ class QuickPanelService : AccessibilityService() {
             old.dismiss(wm)
             panel = QuickPanel(this, old.pkg) { closePanel() }.also { it.show(wm) }
         }
+        prepared = null
         side?.let { old ->
             old.dismiss(wm)
             side = SidePanel(this) { closeSide() }.also { it.show(wm) }
@@ -235,13 +254,38 @@ class QuickPanelService : AccessibilityService() {
     fun toggleSide() {
         if (side != null) return closeSide()
         closePanel()
-        side = SidePanel(this) { closeSide() }.also { it.show(wm) }
+        switchTo = null
+        val t0 = android.os.SystemClock.uptimeMillis()
+        val ready = prepared?.takeIf { it.fresh() }
+        prepared = null
+        side = (ready ?: SidePanel(this) { closeSide() }).also { it.show(wm, t0) }
     }
+
+    /** A side panel built ahead of the next swipe ([SidePanel.prepare]), so opening only adds the window. */
+    private var prepared: SidePanel? = null
+    private val prepare = Runnable {
+        if (side == null && ::wm.isInitialized) prepared = SidePanel(this) { closeSide() }.prepare()
+    }
+
+    /** Builds the next panel once things are quiet (not during an app switch, which it would slow). */
+    private fun prepareSoon() {
+        Shell.main.removeCallbacks(prepare)
+        Shell.main.postDelayed(prepare, 1_500)
+    }
+
+    /** A switch started from the side panel: [switchTo] and when, to log how long it took to arrive. */
+    var switchTo: String? = null
+    var switchAt = 0L
 
     fun closeSide() {
         val s = side ?: return
         side = null
         s.dismiss(wm)
+        prepareSoon()
+        // Switching to an app that gets a clean refresh on open: that one refresh is enough, so the
+        // panel doesn't flash the screen as well (two full refreshes made switching slower).
+        val target = switchTo
+        if (target != null && Prefs(this).helperOn(Prefs.CLEAN_ON_OPEN, target)) return
         Shell.io.execute { Thread.sleep(150); Live.fullRefresh() }
     }
 

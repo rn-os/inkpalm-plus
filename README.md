@@ -1,10 +1,15 @@
 # InkPalm+
 
-A **side panel of recent apps**, and e-ink tuning for each app, for the Moaan InkPalm Plus.
+A **side panel of recent apps**, plus e-ink tuning for each app, for the Moaan InkPalm Plus.
 
-Swipe up or down along a thin strip at the edge of the screen, in any app, and a panel slides in with your recent apps, newest first. Tap one to switch to it. Tap the one marked **Previous** to go straight back.
+Swipe up or down along the edge of the screen, in any app, and a panel slides in. It holds:
 
-It also lets you set each app's size (DPI), refresh mode and contrast, pick a font, and change what the touch button does. These use the InkPalm's own hidden per-app settings.
+- your recent apps, newest first
+- the app you were just in, one tap away
+- a button for the e-ink settings of the app in front
+- Clear all, and a ✕ on every app
+
+You can also set each app's size, refresh mode and contrast, pick a font, and change what the touch button does.
 
 No internet permission. Not affiliated with Moaan.
 
@@ -20,7 +25,7 @@ No internet permission. Not affiliated with Moaan.
 2. **Open InkPalm+.** On the home screen, tap **Side panel**. It opens Android's Accessibility settings. Turn on **InkPalm+ quick panel**. This is the only required step.
 3. **Swipe** up or down along the right edge of the screen.
 
-The service only learns which app is in front, and that a page scrolled, text was typed or the screen changed. It doesn't read what's on screen or what you type. That's what the refresh helpers and the "Previous" list need.
+The service only learns which app is in front, and that a page scrolled, text was typed or the screen changed. It doesn't read what's on screen or what you type.
 
 ## What's in the panel
 
@@ -37,14 +42,13 @@ From top to bottom:
 | **E-ink · this app** | Opens the e-ink panel for the app in front (see below) | |
 | **Android recents** | Opens Android's own recents | |
 
-Details:
+A few things to know:
 
-- **Newest first.** The app open now says **Open now**. The one before it has a small **←** on its icon and a **Previous** tag.
+- **Newest first.** The app open now says **Open now**. The one before it has a small **←** on its icon and a **Previous** tag. Tap it to go straight back.
 - **Pages, not scrolling,** so nothing smears on e-ink. 9 apps fit on a page in portrait, 8 in landscape.
-- **✕ closes with Android's background kill,** as swiping an app away in recents would. An app that's playing audio in the background may keep running.
-- **Clear all** leaves the app you're in.
-- **It's fast.** The panel is built ahead of time, after each app switch, so it opens in about 30 ms.
-- **InkPalm+ keeps its own list.** Android doesn't let apps read its recents, so InkPalm+ notes each app that comes to the front. Home screens and InkPalm+ itself are left out. The list is kept across restarts.
+- **It's quick.** The panel opens in about 30 ms.
+- **Clear all** leaves the app you're in. An app that's playing audio in the background may keep running after ✕.
+- **Home screens and InkPalm+ itself** aren't listed. The list is kept across restarts.
 
 ### Landscape
 
@@ -67,7 +71,7 @@ Tap **E-ink · this app** in the side panel (or hold an app and choose **Open it
 
 At the bottom, **Full refresh now** flashes the screen once, and **Reset app** puts that app back to its defaults. **More** opens the app's own page, and **⚙** opens the home screen.
 
-Changes apply right away and are saved. Contrast and refresh apply live. Size also applies live: InkPalm+ moves the system font scale by a hair, which makes Android redraw the open app in place, at the new DPI. That needs **Modify system settings** (see below). Without it, size applies the next time you open the app.
+Changes apply right away and are saved, and Size redraws the open app in place. For that, turn on **Modify system settings** (see [Permissions](#permissions-and-privacy)). Without it, Size applies the next time you open the app.
 
 New apps start on **System**, which leaves Moaan's own settings alone.
 
@@ -92,7 +96,7 @@ On the home screen, tap **E-ink settings**.
 **Whole device:**
 
 - **Live size changes.** Opens the "Modify system settings" screen.
-- **Animations off.** Window, transition and animator scales at 0, for less flashing. Needs Shizuku, or the one-time `WRITE_SECURE_SETTINGS` grant below.
+- **Animations off.** Turns window and transition animations off, for less flashing. Needs Shizuku, or the one-time `WRITE_SECURE_SETTINGS` grant below.
 - **Refresh helpers.** Each is one switch for every app, and each app can override it on its own page:
   - **Fast while scrolling** (on). Speeds up refresh while a list or page moves, then goes back to normal and cleans the screen.
   - **Fast while typing** (on). The same while you type.
@@ -110,7 +114,7 @@ On the home screen, tap **E-ink settings**.
 - **Refresh helpers:** Default, On or Off for this app. They apply right away
 - **Moaan extras:** **Bleach**, **Bold text**, **Animation filter**. What they do depends on the app
 
-Use **Save** to keep your changes, or **Save + reopen** to also end the app in the background so it reopens at its new size. **Reset** puts the page back to the defaults, and you then **Save** it.
+Use **Save** to keep your changes, or **Save + reopen** to also close the app so it reopens at its new size. **Reset** puts the page back to the defaults, and you then **Save** it.
 
 ### Touch button
 
@@ -145,7 +149,7 @@ On the home screen, tap **Keeping the panel on**. Both switches here are optiona
 adb shell pm grant com.inkpalmplus android.permission.WRITE_SECURE_SETTINGS
 ```
 
-Per-app settings, saved to Moaan's table, work without Shizuku. If the app can't reach that table on your firmware, the E-ink settings screen says so and points you to [Shizuku](https://shizuku.rikka.app/).
+Per-app settings work without Shizuku. If InkPalm+ can't reach them on your firmware, the E-ink settings screen says so and points you to [Shizuku](https://shizuku.rikka.app/).
 
 ## Permissions and privacy
 
@@ -164,7 +168,6 @@ Per-app settings, saved to Moaan's table, work without Shizuku. If the app can't
 - Tested only on the **InkPalm Plus**, firmware `MAS_EPD305_L81B804_T44_V09`, Android 11. Other Moaan models may differ.
 - The e-ink features use Moaan's firmware. They won't work on other phones. The side panel itself is plain Android, but it hasn't been tried elsewhere.
 - Android doesn't let apps read its recents, so the list only has apps that came to the front **after** InkPalm+ was switched on.
-- ✕ is Android's background kill. An app that plays audio in the background may keep running.
 
 ### Before you uninstall
 

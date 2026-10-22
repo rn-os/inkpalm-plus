@@ -1,0 +1,83 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body { margin: 0; height: 1200px; background: #ececec; font-family: -apple-system, "Helvetica Neue", sans-serif; color: #000; }
+/* Fixed 1200 CSS px canvas (Quick Look's width), content centred; render.sh crops the height. */
+.stage { display: flex; align-items: center; justify-content: center; gap: 40px; width: 1200px; height: 820px; box-sizing: border-box; }
+.stage.short { height: 560px; }
+.phone { background: #222; border-radius: 34px; padding: 16px 12px 22px; box-shadow: 0 6px 20px rgba(0,0,0,.18); flex: none; }
+.phone.l { padding: 12px 22px 12px 16px; }
+.screen { position: relative; width: 360px; height: 720px; background: #fff; overflow: hidden; border-radius: 4px; }
+.phone.l .screen { width: 720px; height: 360px; }
+.status { height: 20px; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; font-size: 10px; font-weight: 600; }
+.book { padding: 10px 22px; font-family: Georgia, serif; font-size: 13px; line-height: 1.6; text-align: justify; }
+.book h4 { text-align: center; font-size: 17px; margin: 8px 0 2px; font-weight: 400; }
+.book .sub { text-align: center; font-size: 10px; letter-spacing: .2em; margin-bottom: 10px; }
+.phone.l .book { columns: 2; column-gap: 28px; padding: 6px 26px; }
+
+/* Side panel, as SidePanel.kt draws it */
+.side { position: absolute; top: 20px; bottom: 0; right: 0; background: #fff; border: 2.5px solid #000; border-right: 0;
+        border-radius: 14px 0 0 14px; display: flex; flex-direction: column; }
+.hd { display: flex; align-items: center; gap: 5px; padding: 8px 7px 6px 11px; }
+.hd b { flex: 1; font-size: 15.5px; }
+.btn { border: 2px solid #000; border-radius: 7px; display: flex; align-items: center; justify-content: center;
+       font-size: 11px; font-weight: 700; min-height: 28px; padding: 0 8px; box-sizing: border-box; background: #fff; white-space: nowrap; }
+.btn.sq { width: 30px; padding: 0; font-size: 13px; }
+.btn.on { background: #000; color: #fff; }
+.list { flex: 1; display: flex; flex-direction: column; padding: 0 6px; gap: 5px; }
+.row { flex: 1; display: flex; align-items: center; gap: 9px; border: 2px solid #000; border-radius: 10px; padding: 0 7px 0 8px; min-height: 0; }
+.row.strong { border-width: 3px; }
+.ic { width: 28px; height: 28px; border-radius: 7px; background: #000; color: #fff; font-weight: 700; font-size: 12px;
+      display: flex; align-items: center; justify-content: center; flex: none; position: relative; }
+.badge { position: absolute; left: -6px; top: -6px; width: 15px; height: 15px; border-radius: 50%; background: #fff; border: 1.7px solid #000;
+         font-size: 10px; font-weight: 900; color: #000; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.tx { flex: 1; min-width: 0; } .tx b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tx span { display: block; font-size: 9.5px; color: #333; }
+.tag { font-size: 8.5px; font-weight: 700; border: 1.6px solid #000; border-radius: 5px; padding: 1px 4px; flex: none; }
+.x { width: 22px; height: 22px; border: 2px solid #000; border-radius: 6px; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+.pager { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 6px 0 4px; font-size: 12px; font-weight: 700; }
+.pager .btn { width: 40px; }
+.foot { display: flex; gap: 5px; padding: 5px 7px 8px; } .foot .btn { flex: 1; font-size: 10.5px; }
+.shade { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
+.menu { position: absolute; left: 14px; right: 14px; top: 230px; background: #fff; border: 3px solid #000; border-radius: 12px; padding: 6px; }
+.menu b { display: block; font-size: 13.5px; padding: 4px 8px 6px; }
+.menu .btn { margin-top: 5px; min-height: 30px; font-size: 12px; }
+
+/* E-ink panel (QuickPanel.kt): bottom sheet */
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-top: 3px solid #000; }
+.sheet .hd2 { display: flex; align-items: center; gap: 5px; padding: 7px 7px 3px 11px; }
+.sheet .hd2 .t { flex: 1; } .sheet .hd2 b { display: block; font-size: 14px; } .sheet .hd2 span { font-size: 9px; color: #333; }
+.line { display: flex; align-items: center; gap: 5px; padding: 4px 8px 4px 11px; }
+.line .lab { width: 54px; font-size: 11.5px; font-weight: 500; }
+.line .val { flex: 1; text-align: center; font-size: 12.5px; font-weight: 700; border-bottom: 2px solid #000; padding: 2px 0; }
+.line .val small { display: block; font-size: 8px; font-weight: 400; color: #333; }
+.line .sys { width: 34px; }
+.sheet .foot .btn { font-size: 10.5px; }
+
+/* Home screen (MainActivity) */
+.home { padding: 6px 0; }
+.home h1 { font-size: 22px; margin: 6px 14px 0; } .home .subt { font-size: 10.5px; color: #333; margin: 2px 14px 8px; }
+.sec { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; margin: 8px 14px 0; padding-bottom: 3px; border-bottom: 2px solid #000; }
+.hr { display: flex; align-items: center; gap: 6px; padding: 7px 14px; }
+.hr .n { flex: 1; } .hr .n b { display: block; font-size: 13px; font-weight: 500; } .hr .n span { display: block; font-size: 9px; color: #333; }
+
+/* Callouts */
+.notes { display: flex; flex-direction: column; gap: 22px; width: 340px; }
+.callout { font-size: 17px; line-height: 1.35; }
+.callout b { display: block; font-size: 19px; margin-bottom: 2px; }
+.num { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; background: #000; color: #fff; font-size: 14px; font-weight: 700;
+       align-items: center; justify-content: center; margin-right: 8px; vertical-align: 2px; }
+.pin { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #000; color: #fff; font-size: 11px; font-weight: 700;
+       display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2.5px #fff; z-index: 5; }
+.title { font-size: 30px; font-weight: 800; margin-bottom: 4px; }
+.lead { font-size: 16px; color: #333; margin-bottom: 6px; }
+</style></head><body><div class="stage short"><div style="display:flex;flex-direction:column;gap:22px"><div class="phone l"><div class="screen"><div class="status"><span>9:41</span><span>Wi‑Fi · 86%</span></div><div class="book"><h4>The Lighthouse Year</h4><div class="sub">CHAPTER THREE</div>
+<p>The ferry left at six, and by the time the fog lifted the harbour was only a grey line behind them. Mara kept her
+notebook on her knee and wrote down everything: the colour of the water, the gulls that followed the wake, the way the
+engine changed its note whenever the boat turned into the wind.</p>
+<p>Her uncle had told her the island was smaller than it looked on the map. He had not said that the map was forty
+years old, or that half the roads on it no longer went anywhere at all.</p>
+<p>When the pier came into view she counted the houses along the shore. There were eleven, and only three had smoke
+rising from their chimneys. On the hill above them stood the lighthouse, white and patient, its lamp dark in the
+morning light.</p>
+<p>"You'll want to walk," said the ferryman, tying off the rope. "Nothing on wheels gets far here."</p>
+<p>She thanked him and stepped onto the boards, which moved a little under her feet, as if the pier itself were still
+deciding whether to let her stay.</p></div><div class="side" style="width:50%"><div class="hd"><b>Recent apps</b><div class="btn">Clear all</div><div class="btn sq">⚙</div><div class="btn sq">✕</div></div><div class="list"><div style="display:flex;gap:5px;flex:1"><div class="row strong"><div class="ic">K</div><div class="tx"><b>KOReader</b><span>Open now</span></div></div><div class="row strong"><div class="ic">F<div class="badge">←</div></div><div class="tx"><b>Feeder</b><span>Previous · 4 min ago</span></div><div class="x">✕</div></div></div><div style="display:flex;gap:5px;flex:1"><div class="row"><div class="ic">A</div><div class="tx"><b>AnkiDroid</b><span>12 min ago</span></div><div class="x">✕</div></div><div class="row"><div class="ic">I</div><div class="tx"><b>Instapaper</b><span>35 min ago</span></div><div class="x">✕</div></div></div><div style="display:flex;gap:5px;flex:1"><div class="row"><div class="ic">P</div><div class="tx"><b>AntennaPod</b><span>1 h ago</span></div><div class="x">✕</div></div><div class="row"><div class="ic">L</div><div class="tx"><b>Libby</b><span>2 h ago</span></div><div class="x">✕</div></div></div><div style="display:flex;gap:5px;flex:1"><div class="row"><div class="ic">C</div><div class="tx"><b>Calendar</b><span>3 h ago</span></div><div class="x">✕</div></div><div class="row"><div class="ic">E</div><div class="tx"><b>EinkBro</b><span>Yesterday</span></div><div class="x">✕</div></div></div></div><div class="pager"><div class="btn">◀</div>1 / 2<div class="btn">▶</div></div><div class="foot"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div></div></div><div class="callout" style="width:720px"><b>Landscape too</b>Half the screen, two columns, the same taps. Each app can be set to always open in landscape.</div></div></div></body></html>

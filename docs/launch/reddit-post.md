@@ -2,14 +2,13 @@
 
 **Title:** I built a recent-apps side panel and per-app e-ink tuning for the Moaan InkPalm Plus (free, open source)
 
-**Images (in order)** (in `docs/launch/reddit/`):
+**Images (in order)** (in `docs/launch/`):
 
-1. `1-side-panel.png`: the panel over an app
-2. `2-hold-menu.png`: holding an app for its menu
-3. `3-landscape.png`: the panel in landscape
-4. `4-eink-panel.png`: the e-ink panel for the app in front
-5. `5-eink-settings.png`: the E-ink settings screen
-6. `6-home.png`: the home screen
+1. `1-panel.png`: the side panel over a book, with the previous app, paging, ✕ and the e-ink button called out
+2. `2-hold.png`: holding an app for its menu
+3. `3-eink.png`: the e-ink panel (Preset, Size, Contrast, Rotate)
+4. `4-landscape.png`: the panel in landscape
+5. `5-home.png`: the home screen
 
 ---
 

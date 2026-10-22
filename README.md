@@ -14,14 +14,13 @@ You can also set each app's size, refresh mode and contrast, pick a font, and ch
 No internet permission. Not affiliated with Moaan.
 
 <p>
-  <img src="docs/screenshots/1-side-panel.png" width="300" alt="The side panel over an app">
-  <img src="docs/screenshots/2-hold-menu.png" width="300" alt="Holding an app in the panel">
+  <img src="docs/launch/1-panel.png" width="720" alt="The side panel over a book: the previous app one tap away, pages you swipe, ✕ to close apps, and e-ink settings for the app in front">
 </p>
 
 ## Getting started
 
-1. **Install.** There is no release yet. When there is, builds will appear under [Releases](https://github.com/rn-os/inkpalm-plus/releases), and you can follow them with [Obtainium](https://github.com/ImranR98/Obtainium): tap **Add App**, paste `https://github.com/rn-os/inkpalm-plus`, then **Add** and **Install**.
-   Until then, build it yourself (see [Building](#building)).
+1. **Install.** Install [Obtainium](https://github.com/ImranR98/Obtainium) on the InkPalm. In Obtainium, tap **Add App**, paste `https://github.com/rn-os/inkpalm-plus`, then tap **Add** and **Install**. Obtainium will let you know when there's a new build.
+   You can also download the latest `inkpalm-plus-….apk` from [Releases](https://github.com/rn-os/inkpalm-plus/releases) and open it on the phone.
 2. **Open InkPalm+.** On the home screen, tap **Side panel**. It opens Android's Accessibility settings. Turn on **InkPalm+ quick panel**. This is the only required step.
 3. **Swipe** up or down along the right edge of the screen.
 
@@ -50,17 +49,19 @@ A few things to know:
 - **Clear all** leaves the app you're in. An app that's playing audio in the background may keep running after ✕.
 - **Home screens and InkPalm+ itself** aren't listed. The list is kept across restarts.
 
+<img src="docs/launch/2-hold.png" width="720" alt="Holding an app: Remove from list, Open its e-ink settings, App info">
+
 ### Landscape
 
 In landscape the panel is half the screen wide, with two columns.
 
-<img src="docs/screenshots/3-landscape.png" width="500" alt="The side panel in landscape">
+<img src="docs/launch/4-landscape.png" width="720" alt="The side panel in landscape, in two columns">
 
 ## E-ink panel and settings
 
 Tap **E-ink · this app** in the side panel (or hold an app and choose **Open its e-ink settings**). The panel opens over the app in front. It has four lines, each with ◀ and ▶. Tap the value to see the full list.
 
-<img src="docs/screenshots/5-eink-panel.png" width="300" alt="The e-ink panel over an app">
+<img src="docs/launch/3-eink.png" width="720" alt="The e-ink panel over a book: Preset, Size, Contrast and Rotate">
 
 | Line | What it does |
 |---|---|
@@ -127,7 +128,7 @@ These are the actions already built into the device. Changes apply on the next t
 
 ## Home screen
 
-<img src="docs/screenshots/4-home.png" width="300" alt="The home screen">
+<img src="docs/launch/5-home.png" width="720" alt="The home screen: side panel settings, touch button, e-ink settings">
 
 - **Side panel.** Opens Accessibility so you can turn the service on or off.
 - **Strip side.** Left or Right.
@@ -181,7 +182,7 @@ Some changes live in the phone, not in InkPalm+, so they stay after you uninstal
 
 ## Building
 
-There are no builds to download yet.
+You don't need to: download the APK from [Releases](https://github.com/rn-os/inkpalm-plus/releases). To build it yourself:
 
 `./gradlew assembleDebug` needs JDK 17 and the Android SDK (set `sdk.dir` in `local.properties`). Then install it:
 
@@ -191,6 +192,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## For developers
 
+- `docs/screenshots`: real screenshots from the device (the pictures above are drawn from the same UI by `docs/launch/build.py`).
 - `CLAUDE.md`: project layout, how to build and test, and product direction.
 - `docs/firmware.md`: what was learned about the InkPalm's firmware (Moaan's per-app table, how DPI and refresh are applied, live changes). Check it before decompiling anything.
 - `tools/device-test.sh`: scripted checks over adb (`tools/device-test.sh list`, then `run all`). See `tools/README.md`.

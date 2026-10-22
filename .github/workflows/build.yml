@@ -74,7 +74,9 @@ jobs:
       - name: Check signature
         run: |
           APK=app/build/outputs/apk/release/app-release.apk
-          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$APK" | grep -q "CN=InkPalm Plus" \
+          # The newest build-tools only (runners have several installed).
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          "$APKSIGNER" verify --print-certs "$APK" | tee /dev/stderr | grep -q "CN=InkPalm Plus" \
             || { echo "::error::APK is not signed with the release key"; exit 1; }
           cp "$APK" "inkpalm-plus-${{ steps.version.outputs.name }}.apk"
       - name: Remove release key

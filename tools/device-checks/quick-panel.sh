@@ -1,22 +1,7 @@
 # Quick panel over a running app: changes must apply live, without reopening the app.
 # Driven through the debug test hooks (QuickPanelService.test): `uiautomator dump` would unbind the
-# accessibility service, so the panel's own views aren't dumped. Needs the quick panel switched on in
+# accessibility service, so the panel's own views aren't dumped. hook() and prop() are in device-test.sh. Needs the quick panel switched on in
 # Accessibility and "Modify system settings" allowed (live DPI); the checks say so when they're not.
-
-# hook <cmd> [value]: sends a test command; returns non-zero unless the service answered "ok".
-hook() {
-  adb_ logcat -c
-  # adb drops empty arguments, so "none" stands for no value.
-  adb_ shell am broadcast -a com.inkpalmplus.TEST -p $PKG --es cmd "$1" --es value "${2:-none}" >/dev/null
-  local i line
-  for i in 1 2 3 4 5 6; do
-    line=$(adb_ logcat -d -s InkPalmPlus:I | grep " test $1 " | tail -1)
-    [ -n "$line" ] && break
-    sleep 0.5
-  done
-  HOOK_OUT="$line"
-  case "$line" in *" ok "*) return 0 ;; *) return 1 ;; esac
-}
 
 # Opens the target app and the quick panel over it.
 open_panel_over_target() {
@@ -30,8 +15,6 @@ open_panel_over_target() {
   case "$HOOK_OUT" in *"panel=$TARGET"*) note_ok "panel opened on $TARGET" ;; *) note_fail "panel opened on the wrong app: $HOOK_OUT"; return 1 ;; esac
   sleep 2   # the panel loads the app's row
 }
-
-prop() { adb_ shell getprop "$1" | tr -d '\r'; }
 
 check_contrast_live() {
   open_panel_over_target || return
@@ -121,11 +104,11 @@ check_strip_width_and_side() {
   local l r; l=$(echo "$f" | awk -F'[][,]' '{print $2}'); r=$(echo "$f" | awk -F'[][,]' '{print $5}')
   [ $((r - l)) -ge 40 ] && [ $((r - l)) -le 42 ] && note_ok "24 dp strip is $((r - l)) px wide" || note_fail "24 dp strip is '$f'"
   [ "$r" = 720 ] && note_ok "on the right edge" || note_fail "strip not on the right edge: $f"
-  hook side left >/dev/null; sleep 1.5
+  hook strip_side left >/dev/null; sleep 1.5
   f=$(strip_frame); l=$(echo "$f" | awk -F'[][,]' '{print $2}')
   [ "$l" = 0 ] && note_ok "Left puts it on the left edge" || note_fail "strip not on the left edge: $f"
-  hook strip "$w0" >/dev/null; hook side "$([ "$r0" = true ] && echo right || echo left)" >/dev/null
-  manual "a swipe in from the strip still goes Back (system gesture); up/down opens the panel"
+  hook strip "$w0" >/dev/null; hook strip_side "$([ "$r0" = true ] && echo right || echo left)" >/dev/null
+  manual "a swipe in from the strip still goes Back (system gesture); up/down opens the side panel"
 }
 
 # Refresh helpers (on by default). The scroll part swipes Android's Settings list (always long
@@ -145,7 +128,8 @@ check_refresh_helpers() {
   for i in $(seq 1 20); do adb_ logcat -d -s InkPalmPlus:I | grep -q "clean on open ($TARGET)" && break; sleep 0.5; done
   adb_ logcat -d -v time -s InkPalmPlus:I > "$OUT/$CHECK-open.txt"
   grep -q "clean on open ($TARGET)" "$OUT/$CHECK-open.txt" && note_ok "clean screen on open: full refresh when the app opened" || note_fail "no clean on open (log: $CHECK-open.txt)"
-  adb_ shell am start -a android.settings.SETTINGS >/dev/null; sleep 3
+  adb_ shell am start -a android.settings.SETTINGS >/dev/null
+  for i in 1 2 3 4 5 6 7 8; do [ "$(top_package)" = com.android.settings ] && break; sleep 1; done; sleep 2.5
   local r0; r0=$(prop persist.sys.mogu.refresh_type)
   adb_ logcat -c
   # Both ways, so the list moves whichever end it's at. Sampling the property over adb is too slow
@@ -163,6 +147,9 @@ check_refresh_helpers() {
 # Fast while typing: types into Android's Settings search (the harness's only typing outside InkPalm+).
 check_typing_boost() {
   local i; for i in $(seq 1 20); do hook state && break; sleep 1; done
+  # The whole-device switch may have been turned off by hand: switch it on for the check, then put it back.
+  local tb0; tb0=$(adb_ shell run-as $PKG cat shared_prefs/inkpalmplus.xml | grep -o 'typing_boost" value="[a-z]*' | grep -o '[a-z]*$')
+  hook helper typing_boost:on >/dev/null
   adb_ shell am broadcast -a com.inkpalmplus.CLOSE_PANEL -p $PKG >/dev/null
   go_home; sleep 2
   adb_ shell am start -n com.android.settings.intelligence/.search.SearchActivity >/dev/null; sleep 3
@@ -174,6 +161,7 @@ check_typing_boost() {
   echo "$log" | grep -q "boost off" && note_ok "boost ended after typing stopped" || note_fail "typing boost never ended"
   [ "$(prop persist.sys.mogu.refresh_type)" = "$r0" ] && note_ok "back to the app's mode ($r0)" || note_fail "refresh mode $(prop persist.sys.mogu.refresh_type) after typing, was $r0"
   adb_ shell input keyevent BACK; go_home
+  case "$tb0" in true) hook helper typing_boost:on ;; false) hook helper typing_boost:off ;; *) hook helper typing_boost:default ;; esac >/dev/null
 }
 
 # Clean after idle (off by default): switched on and shortened to 3 s through the hooks. The screen

@@ -17,6 +17,16 @@ class Prefs(context: Context) {
         get() = sp.getInt("strip_width", 16)
         set(v) = sp.edit().putInt("strip_width", v.coerceIn(STRIP_MIN, STRIP_MAX)).apply()
 
+    /** How much of the screen width the side panel covers in portrait, in percent. */
+    var panelWidthPct: Int
+        get() = sp.getInt("panel_width", 78)
+        set(v) = sp.edit().putInt("panel_width", v).apply()
+
+    /** How many recent apps the side panel remembers. */
+    var recentKept: Int
+        get() = sp.getInt("recent_kept", 18)
+        set(v) = sp.edit().putInt("recent_kept", v).apply()
+
     /** Show a thin black pill where the strip is. */
     var showStrip: Boolean
         get() = sp.getBoolean("show_strip", true)

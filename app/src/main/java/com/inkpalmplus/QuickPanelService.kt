@@ -20,6 +20,9 @@ class QuickPanelService : AccessibilityService() {
     private lateinit var wm: WindowManager
     private var strip: View? = null
     private var panel: QuickPanel? = null
+    private var side: SidePanel? = null
+    lateinit var recents: RecentApps
+        private set
     private lateinit var rotation: Rotation
     lateinit var helpers: RefreshHelpers
         private set
@@ -33,6 +36,7 @@ class QuickPanelService : AccessibilityService() {
                 ACTION_OPEN -> openPanel()
                 ACTION_CLOSE -> closePanel()
                 ACTION_STRIP -> showStrip(preview = i.getBooleanExtra(EXTRA_PREVIEW, false))
+                ACTION_CLEAR_RECENTS -> recents.clear()
                 ACTION_TEST -> test(i)
             }
         }
@@ -43,9 +47,10 @@ class QuickPanelService : AccessibilityService() {
         Prefs(this).panelWanted = true
         wm = getSystemService(WindowManager::class.java)
         rotation = Rotation(this, wm)
+        recents = RecentApps(this)
         helpers = RefreshHelpers(this)
         val filter = IntentFilter().apply {
-            addAction(ACTION_OPEN); addAction(ACTION_CLOSE); addAction(ACTION_STRIP)
+            addAction(ACTION_OPEN); addAction(ACTION_CLOSE); addAction(ACTION_STRIP); addAction(ACTION_CLEAR_RECENTS)
             if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) addAction(ACTION_TEST)
         }
         registerReceiver(receiver, filter, RECEIVER_EXPORTED_COMPAT)
@@ -59,6 +64,7 @@ class QuickPanelService : AccessibilityService() {
         runCatching { unregisterReceiver(receiver) }
         removeStrip()
         closePanel()
+        closeSide()
         if (::rotation.isInitialized) rotation.release()
         if (::helpers.isInitialized) helpers.release()
         instance = null
@@ -104,10 +110,12 @@ class QuickPanelService : AccessibilityService() {
             leftAt = now
             foreground = pkg
             Log.i(TAG, "foreground $pkg")
+            recents.record(pkg)
             rotation.apply(Prefs(this).rotation(pkg))
             helpers.onForeground(pkg)
             // Another app came to the front under the panel: it belongs to the old one.
             if (panel != null && panel?.pkg != pkg) closePanel()
+            if (side != null) closeSide()
         }
     }
 
@@ -128,6 +136,10 @@ class QuickPanelService : AccessibilityService() {
         panel?.let { old ->
             old.dismiss(wm)
             panel = QuickPanel(this, old.pkg) { closePanel() }.also { it.show(wm) }
+        }
+        side?.let { old ->
+            old.dismiss(wm)
+            side = SidePanel(this) { closeSide() }.also { it.show(wm) }
         }
     }
 
@@ -150,7 +162,7 @@ class QuickPanelService : AccessibilityService() {
         removeStrip()
         Shell.main.removeCallbacks(endPreview)
         val prefs = Prefs(this)
-        val v = EdgeHandleView(this, prefs.edgeRight, prefs.showStrip, solid = preview) { openPanel() }
+        val v = EdgeHandleView(this, prefs.edgeRight, prefs.showStrip, solid = preview) { toggleSide() }
         if (preview) Shell.main.postDelayed(endPreview, 3_000)
         val h = resources.displayMetrics.heightPixels
         val lp = WindowManager.LayoutParams(
@@ -181,6 +193,15 @@ class QuickPanelService : AccessibilityService() {
         val ok = when (cmd) {
             "state" -> true
             "open" -> { if (panel == null) openPanel(); panel != null }
+            "side" -> { if (side == null) toggleSide(); side != null }
+            "side_close" -> { closeSide(); true }
+            "side_tap" -> side?.tap(value.toInt()) ?: false
+            "side_close_app" -> side?.testClose(value.toInt()) ?: false
+            "side_clear_all" -> side?.testClearAll() ?: false
+            "side_page" -> side?.testPage(value == "next") ?: false
+            "side_state" -> { Log.i(TAG, "side: ${side?.describe() ?: "closed"}"); true }
+            "remember" -> { recents.record(value); true }
+            "recents_clear" -> { recents.clear(); true }
             // "scroll_boost:off", "idle_clean:on", "typing_boost:default": the whole-device switch for a helper.
             "helper" -> { val (k, v) = value.split(":"); Prefs(this).apply { if (v == "default") sp.edit().remove(k).apply() else setHelperDefault(k, v == "on") }; true }
             "idle_ms" -> { helpers.idleMs = value.toLong(); true }
@@ -201,11 +222,27 @@ class QuickPanelService : AccessibilityService() {
                 when (k) { "tap" -> TouchButton.setTap(this, v.toInt()); "hold" -> TouchButton.setHold(this, v.toInt()); else -> TouchButton.setOn(this, v == "1") }
             }
             "strip" -> { Prefs(this).stripWidthDp = value.toInt(); showStrip(preview = true); true }
-            "side" -> { Prefs(this).edgeRight = value == "right"; showStrip(preview = true); true }
+            "strip_side" -> { Prefs(this).edgeRight = value == "right"; showStrip(preview = true); true }
             "rotate" -> { val f = foreground; if (f != null) setRotation(f, Rotation.Mode.of(value)); f != null }
             else -> panel?.test(cmd, value) ?: false
         }
         Log.i(TAG, "test $cmd $value ${if (ok) "ok" else "fail"} foreground=$foreground panel=${panel?.pkg} rotation=${rotation.mode.name}")
+    }
+
+    // ---- Side panel (recent apps) -------------------------------------------------------------
+
+    /** The strip opens the side panel; a second swipe, ✕ or a tap outside closes it. */
+    fun toggleSide() {
+        if (side != null) return closeSide()
+        closePanel()
+        side = SidePanel(this) { closeSide() }.also { it.show(wm) }
+    }
+
+    fun closeSide() {
+        val s = side ?: return
+        side = null
+        s.dismiss(wm)
+        Shell.io.execute { Thread.sleep(150); Live.fullRefresh() }
     }
 
     // ---- Panel --------------------------------------------------------------------------------
@@ -230,6 +267,7 @@ class QuickPanelService : AccessibilityService() {
         const val ACTION_CLOSE = "com.inkpalmplus.CLOSE_PANEL"
         const val ACTION_STRIP = "com.inkpalmplus.REFRESH_STRIP"
         const val ACTION_TEST = "com.inkpalmplus.TEST"
+        const val ACTION_CLEAR_RECENTS = "com.inkpalmplus.CLEAR_RECENTS"
         const val EXTRA_PREVIEW = "preview"
         /** Window changes from the app that just left, within this long, are its last gasp, not a switch back. */
         const val BOUNCE_MS = 500L

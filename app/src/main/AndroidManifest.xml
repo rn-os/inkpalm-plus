@@ -42,6 +42,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Home's sub-screens; exported so the device checks can open the E-ink screen directly. -->
+        <activity
+            android:name=".SectionActivity"
+            android:exported="true" />
+
         <activity
             android:name=".AppActivity"
             android:exported="false" />

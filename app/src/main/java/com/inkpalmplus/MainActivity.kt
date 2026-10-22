@@ -18,7 +18,7 @@ import rikka.shizuku.Shizuku
  * Home: whether InkPalm+ can reach Moaan's settings, the whole-device tweaks,
  * and every app with its e-ink settings. Tap an app to tune it ([AppActivity]).
  */
-class MainActivity : Activity() {
+open class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private lateinit var accessBox: LinearLayout
     private lateinit var deviceBox: LinearLayout
@@ -36,40 +36,61 @@ class MainActivity : Activity() {
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { _, _ -> reload() }
     private val binderListener = Shizuku.OnBinderReceivedListener { Shell.main.post { reload() } }
 
+    /** Which screen this is: null for home, else [SECTION_EINK], [SECTION_TOUCH] or [SECTION_KEEP_ON]. */
+    private val section: String? get() = intent.getStringExtra(EXTRA_SECTION)
+    private lateinit var keepBox: LinearLayout
+    private lateinit var navBox: LinearLayout
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         root = vbox()
-        root.addView(text(getString(R.string.app_name), 26f, bold = true).apply {
-            setPadding(dp(16), dp(16), dp(16), dp(4))
+        accessBox = vbox(); panelBox = vbox(); deviceBox = vbox(); touchBox = vbox(); appsBox = vbox(); keepBox = vbox(); navBox = vbox()
+        val (title, sub) = when (section) {
+            SECTION_EINK -> "E-ink settings" to "Per-app DPI, refresh, contrast, presets, font and refresh helpers"
+            SECTION_TOUCH -> "Touch button" to "The button below the screen"
+            SECTION_KEEP_ON -> "Keeping the panel on" to "So the side panel survives Clear Memory and restarts"
+            else -> getString(R.string.app_name) to "A side panel of recent apps for the InkPalm Plus"
+        }
+        root.addView(hbox().apply {
+            setPadding(dp(8), dp(12), dp(16), dp(4))
+            if (section != null) addView(inkIconButton(R.drawable.ic_back, "Back", 44) { finish() }, lp(dp(44), dp(44)).apply { marginEnd = dp(10) })
+            else setPadding(dp(16), dp(16), dp(16), dp(4))
+            addView(text(title, 26f, bold = true), lp(0, WRAP, 1f))
         })
-        root.addView(text("Per-app DPI, refresh and contrast for the InkPalm Plus", 14f, color = Ink.MUTED).apply {
-            setPadding(dp(16), 0, dp(16), dp(8))
-        })
-        accessBox = vbox().also { root.addView(it) }
-        root.addView(sectionTitle("Quick panel"))
-        panelBox = vbox().also { root.addView(it) }
-        root.addView(sectionTitle("Whole device"))
-        deviceBox = vbox().also { root.addView(it) }
-        root.addView(sectionTitle("Touch button"))
-        touchBox = vbox().also { root.addView(it) }
-        root.addView(sectionTitle("Apps"))
-        root.addView(EditText(this).apply {
-            hint = "Search apps"
-            textSize = 16f
-            setTextColor(Ink.INK)
-            setSingleLine()
-            background = outline(2, 6)
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-            addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun afterTextChanged(s: Editable?) {
-                    filter = s?.toString().orEmpty().trim()
-                    renderApps()
-                }
-            })
-        }, lp(MATCH, WRAP).apply { setMargins(dp(16), dp(8), dp(16), dp(4)) })
-        appsBox = vbox().also { root.addView(it) }
+        root.addView(text(sub, 14f, color = Ink.MUTED).apply { setPadding(dp(16), 0, dp(16), dp(8)) })
+        when (section) {
+            SECTION_EINK -> {
+                root.addView(accessBox)
+                root.addView(sectionTitle("Whole device"))
+                root.addView(deviceBox)
+                root.addView(sectionTitle("Apps"))
+                root.addView(EditText(this).apply {
+                    hint = "Search apps"
+                    textSize = 16f
+                    setTextColor(Ink.INK)
+                    setSingleLine()
+                    background = outline(2, 6)
+                    setPadding(dp(12), dp(10), dp(12), dp(10))
+                    addTextChangedListener(object : TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                        override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                        override fun afterTextChanged(s: Editable?) {
+                            filter = s?.toString().orEmpty().trim()
+                            renderApps()
+                        }
+                    })
+                }, lp(MATCH, WRAP).apply { setMargins(dp(16), dp(8), dp(16), dp(4)) })
+                root.addView(appsBox)
+            }
+            SECTION_TOUCH -> root.addView(touchBox)
+            SECTION_KEEP_ON -> root.addView(keepBox)
+            else -> {
+                root.addView(sectionTitle("Side panel"))
+                root.addView(panelBox)
+                root.addView(sectionTitle("More"))
+                root.addView(navBox)
+            }
+        }
         setContentView(ScrollView(this).apply {
             isFillViewport = true
             addView(root)
@@ -91,18 +112,44 @@ class MainActivity : Activity() {
     }
 
     private fun reload() {
+        val eink = section == SECTION_EINK
         Shell.background({
-            val (via, rows) = EinkDb.load(this)
-            Triple(via, launchableApps(), rows)
+            // The per-app list (~100 icons) only loads on the E-ink screen.
+            if (eink) { val (via, rows) = EinkDb.load(this); Triple(via, launchableApps(), rows) } else Triple(null, emptyList(), emptyMap())
         }) { (via, list, rows) ->
             apps = list
             profiles = rows
-            renderAccess(via)
-            renderPanel()
-            renderDevice()
-            renderTouch()
-            renderApps()
+            when (section) {
+                SECTION_EINK -> { renderAccess(via); renderDevice(); renderApps() }
+                SECTION_TOUCH -> renderTouch()
+                SECTION_KEEP_ON -> renderKeepOn()
+                else -> { renderPanel(); renderNav() }
+            }
         }
+    }
+
+    private fun openSection(name: String) = startActivity(Intent(this, SectionActivity::class.java).putExtra(EXTRA_SECTION, name))
+
+    /** Home: one row per sub-screen, with what's set there. */
+    private fun renderNav() {
+        navBox.removeAllViews()
+        fun nav(title: String, detail: String, name: String) = navBox.addView(hbox().apply {
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            pressable()
+            addView(vbox().apply {
+                addView(text(title, 17f, medium = true))
+                addView(text(detail, 13f, color = Ink.MUTED))
+            }, lp(0, WRAP, 1f))
+            addView(inkButton("Open", 15f) { openSection(name) })
+            setOnClickListener { openSection(name) }
+        })
+        val touch = if (!TouchButton.canChange(this)) "Needs a permission" else if (!TouchButton.on(this)) "Off"
+            else "Tap: ${TouchButton.TAP_ACTIONS[TouchButton.tap(this)]} · Hold: ${TouchButton.HOLD_ACTIONS[TouchButton.hold(this)]}"
+        nav("Touch button", touch, SECTION_TOUCH)
+        nav("E-ink settings", "Per-app DPI, refresh, contrast, presets, font, refresh helpers", SECTION_EINK)
+        val keep = listOfNotNull(if (Survival.inWhitelist(this)) "Survives Clear Memory" else null,
+            if (Survival.canRepair(this)) "turns itself back on" else null).joinToString(" · ").ifEmpty { "Not set up" }
+        nav("Keeping the panel on", keep, SECTION_KEEP_ON)
     }
 
     private fun launchableApps(): List<AppEntry> {
@@ -161,44 +208,24 @@ class MainActivity : Activity() {
 
     private fun renderPanel() {
         panelBox.removeAllViews()
-        panelBox.addView(text("Swipe up or down along the screen edge in any app to change its size, refresh, contrast and rotation while you look at it.", 14f, color = Ink.MUTED).apply {
+        panelBox.addView(text("Swipe up or down along the screen edge in any app for your recent apps.", 14f, color = Ink.MUTED).apply {
             setPadding(dp(16), dp(8), dp(16), dp(4))
         })
         val on = QuickPanelService.enabled(this)
-        panelBox.addView(toggleRow("Quick panel", if (on) "On" else "Turn on InkPalm+ in Accessibility", on) {
+        panelBox.addView(toggleRow("Side panel", if (on) "On" else "Turn on InkPalm+ in Accessibility", on) {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
-        val live = Live.canNudge(this)
-        panelBox.addView(toggleRow("Live size changes", if (live) "Apps redraw at the new DPI in place" else "Allow \"Modify system settings\" so apps redraw at the new DPI without reopening", live) {
-            startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:$packageName")))
-        })
         val prefs = Prefs(this)
-        if (on || Prefs(this).panelWanted) {
-            val listed = Survival.inWhitelist(this)
-            panelBox.addView(toggleRow("Survives Clear Memory",
-                if (listed) "InkPalm+ is on Moaan's Clear Memory whitelist"
-                else if (Shell.allowed()) "Tap to add InkPalm+ to Moaan's whitelist; Clear Memory would switch the panel off"
-                else "Clear Memory would switch the panel off. Start Shizuku, or run: ${Survival.whitelistAdbCommand(this)}", listed) {
-                if (!listed) Shell.background({ Survival.addToWhitelist(this) }) { ok -> if (!ok) toast("Needs Shizuku"); renderPanel() }
-            })
-            val repair = Survival.canRepair(this)
-            panelBox.addView(toggleRow("Turns itself back on",
-                if (repair) "If the panel is ever switched off by mistake, InkPalm+ turns it back on"
-                else if (Shell.allowed()) "Tap to let InkPalm+ turn the panel back on if it's ever switched off"
-                else "Start Shizuku, or run: ${Survival.grantAdbCommand(this)}", repair) {
-                if (!repair) Shell.background({ Survival.grantRepair(this) }) { ok -> if (!ok) toast("Needs Shizuku"); renderPanel() }
-            })
-        }
         fun previewStrip() = sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName).putExtra(QuickPanelService.EXTRA_PREVIEW, true))
-        panelBox.addView(hbox().apply {
+        fun choices(title: String, detail: String, labels: List<String>, current: Int, pick: (Int) -> Unit) = panelBox.addView(hbox().apply {
             setPadding(dp(16), dp(10), dp(16), dp(10))
             addView(vbox().apply {
-                addView(text("Strip side", 17f, medium = true))
-                addView(text("Swipe up or down along this edge", 13f, color = Ink.MUTED))
+                addView(text(title, 17f, medium = true))
+                if (detail.isNotEmpty()) addView(text(detail, 13f, color = Ink.MUTED))
             }, lp(0, WRAP, 1f))
-            addView(chip("Left", !prefs.edgeRight) { prefs.edgeRight = false; previewStrip(); renderPanel() }, lp(WRAP, WRAP).apply { marginEnd = dp(6) })
-            addView(chip("Right", prefs.edgeRight) { prefs.edgeRight = true; previewStrip(); renderPanel() })
+            labels.forEachIndexed { i, l -> addView(chip(l, i == current) { pick(i); renderPanel() }, lp(WRAP, WRAP).apply { marginStart = dp(6) }) }
         })
+        choices("Strip side", "Where you swipe", listOf("Left", "Right"), if (prefs.edgeRight) 1 else 0) { prefs.edgeRight = it == 1; previewStrip() }
         val w = prefs.stripWidthDp
         panelBox.addView(stepperRow("Strip width", "$w dp",
             onMinus = { prefs.stripWidthDp = w - 2; previewStrip(); renderPanel() },
@@ -207,6 +234,41 @@ class MainActivity : Activity() {
             prefs.showStrip = !prefs.showStrip
             sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName))
             renderPanel()
+        })
+        val widths = listOf(66, 78, 90)
+        choices("Panel width", "How much of the screen it covers", widths.map { "$it%" }, widths.indexOf(prefs.panelWidthPct)) { prefs.panelWidthPct = widths[it] }
+        val kept = listOf(9, 18, 27)
+        choices("Apps kept", "Recent apps the panel remembers", kept.map { "$it" }, kept.indexOf(prefs.recentKept)) { prefs.recentKept = kept[it] }
+        panelBox.addView(hbox().apply {
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            addView(vbox().apply {
+                addView(text("Clear recent apps", 17f, medium = true))
+                addView(text("Start the list again", 13f, color = Ink.MUTED))
+            }, lp(0, WRAP, 1f))
+            addView(inkButton("Clear", 15f) {
+                getSharedPreferences("recent_apps", MODE_PRIVATE).edit().clear().apply()
+                sendBroadcast(Intent(QuickPanelService.ACTION_CLEAR_RECENTS).setPackage(packageName))
+                toast("Recent apps cleared")
+            })
+        })
+    }
+
+    /** Keeping the panel on: Clear Memory whitelist and turning the service back on. */
+    private fun renderKeepOn() {
+        keepBox.removeAllViews()
+        val listed = Survival.inWhitelist(this)
+        keepBox.addView(toggleRow("Survives Clear Memory",
+            if (listed) "InkPalm+ is on Moaan's Clear Memory whitelist"
+            else if (Shell.allowed()) "Tap to add InkPalm+ to Moaan's whitelist; Clear Memory would switch the panel off"
+            else "Clear Memory would switch the panel off. Start Shizuku, or run: ${Survival.whitelistAdbCommand(this)}", listed) {
+            if (!listed) Shell.background({ Survival.addToWhitelist(this) }) { ok -> if (!ok) toast("Needs Shizuku"); renderKeepOn() }
+        })
+        val repair = Survival.canRepair(this)
+        keepBox.addView(toggleRow("Turns itself back on",
+            if (repair) "If the panel is ever switched off by mistake, InkPalm+ turns it back on"
+            else if (Shell.allowed()) "Tap to let InkPalm+ turn the panel back on if it's ever switched off"
+            else "Start Shizuku, or run: ${Survival.grantAdbCommand(this)}", repair) {
+            if (!repair) Shell.background({ Survival.grantRepair(this) }) { ok -> if (!ok) toast("Needs Shizuku"); renderKeepOn() }
         })
     }
 
@@ -220,8 +282,8 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(8), dp(16), dp(4))
         })
         if (!TouchButton.canChange(this)) {
-            touchBox.addView(text(if (Shell.allowed()) "Allow InkPalm+ to change it under Quick panel → Turns itself back on."
-                else "Needs the same permission as Quick panel → Turns itself back on. Start Shizuku, or run: ${Survival.grantAdbCommand(this)}", 14f).apply {
+            touchBox.addView(text(if (Shell.allowed()) "Allow it first under Keeping the panel on → Turns itself back on."
+                else "Needs the same permission as Keeping the panel on → Turns itself back on. Start Shizuku, or run: ${Survival.grantAdbCommand(this)}", 14f).apply {
                 setPadding(dp(16), dp(4), dp(16), dp(8))
             })
             return
@@ -255,6 +317,10 @@ class MainActivity : Activity() {
 
     private fun renderDevice() {
         deviceBox.removeAllViews()
+        val live = Live.canNudge(this)
+        deviceBox.addView(toggleRow("Live size changes", if (live) "Apps redraw at the new DPI in place" else "Allow \"Modify system settings\" so apps redraw at the new DPI without reopening", live) {
+            startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:$packageName")))
+        })
         val animOff = ANIMATION_KEYS.all { Settings.Global.getFloat(contentResolver, it, 1f) == 0f }
         deviceBox.addView(toggleRow("Animations off", "Window, transition and animator scales at 0. Less flashing on e-ink.", animOff) { on ->
             val v = if (on) "0" else "1"
@@ -376,6 +442,11 @@ class MainActivity : Activity() {
     private fun toast(s: String) = android.widget.Toast.makeText(this, s, android.widget.Toast.LENGTH_SHORT).show()
 
     companion object {
+        const val EXTRA_SECTION = "section"
+        const val SECTION_EINK = "eink"
+        const val SECTION_TOUCH = "touch"
+        const val SECTION_KEEP_ON = "keep_on"
+
         val ANIMATION_KEYS = listOf(
             Settings.Global.WINDOW_ANIMATION_SCALE,
             Settings.Global.TRANSITION_ANIMATION_SCALE,
@@ -393,3 +464,9 @@ fun android.content.Context.chip(label: String, selected: Boolean, onClick: () -
         }
         minWidth = dp(56)
     }
+
+/**
+ * The home screen's sub-screens (E-ink settings, Touch button, Keeping the panel on): the same screen code,
+ * as its own activity because the home screen is single-task and would swallow the intent.
+ */
+class SectionActivity : MainActivity()

@@ -22,12 +22,22 @@ Screenshots are taken only for failures; every tap leaves a `uiautomator` XML du
 - `uiautomator dump` unbinds the quick panel service for a few seconds; the quick panel checks wait for it to come
   back, and drive the panel through debug test hooks instead of dumps.
 
+## Feature files
+- `per-app.sh`: the app's page, driven by node text.
+- `quick-panel.sh`: the e-ink panel, refresh helpers, presets, font, touch button, through test hooks.
+- `side-panel.sh`: the recent-apps side panel: a real app switch is recorded, paging (hooks and a real swipe), tap switches
+  app, close one app, clear all. The harness snapshots the recent list (`recents-before.txt`, oldest first) and puts it
+  back with the `recents_clear` / `remember` hooks (`recents-after.txt` shows it matched).
+
 ## Adding checks
 Create `tools/device-checks/<feature>.sh` with functions named `check_<what>`. Helpers:
 
 | Helper | Does |
 |---|---|
-| `open_target` | Opens InkPalm+ on the target app's page through the app list |
+| `open_target` | Opens InkPalm+ on the target app's page through the E-ink screen's app list (`SectionActivity --es section eink`) |
+| `hook <cmd> [value]` | Sends a debug test hook to the service; non-zero unless it answered ok (`$HOOK_OUT` has the log line) |
+| `prop <name>` | `getprop` without the carriage return |
+| `go_home`, `top_package` | Start the home screen; the package in front |
 | `tap <kind> <value>` | Dump, then tap the one matching node (kinds: `text`, `desc`, `textprefix`, `label`, `labelprefix`) |
 | `expect <label> <kind> <value>` | Passes if the node is on screen |
 | `expect_row <label> <column> <value>` | Passes if the target's row in Moaan's table has that value |

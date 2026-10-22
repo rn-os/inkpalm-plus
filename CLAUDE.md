@@ -11,9 +11,12 @@ Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister p
 
 ## Code (`app/src/main/java/com/inkpalmplus/`)
 - `EinkDb`: the model (`Profile`, `Refresh`), reading/writing Moaan's table (directly, Shizuku fallback), `setAppDpiToMap`.
-- `MainActivity`: access status, whole-device tweaks (animations, text size), app list.
+- `MainActivity`: home screen: side-panel settings plus rows opening sub-screens. `SectionActivity` (exported; `--es section eink|touch|keep_on`):
+  the sub-screens; `eink` holds the e-ink settings, "Search apps" and the per-app list.
 - `AppActivity`: one app's settings page.
-- `QuickPanelService` (accessibility service: edge strip, foreground app, debug test hooks), `QuickPanel` (the overlay),
+- `QuickPanelService` (accessibility service: edge strip, foreground app, debug test hooks). The strip opens `SidePanel`
+  (recent apps, paged; its footer button "E-ink · this app" opens `QuickPanel`, the e-ink overlay). `RecentApps` records
+  each app that comes to the front (own file `recent_apps.xml`),
   `EdgeHandleView` (from SuperBoox), `Live` (applies settings to the open app: eink service, font-scale nudge),
   `Rotation` (manual rotation through an overlay window, remembered per app), `RefreshHelpers` (Speed while
   scrolling, clean screen on open; whole-device switches with per-app overrides), `Survival` (Clear Memory whitelist,
@@ -30,7 +33,7 @@ Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister p
   debug build, drives the app by node text, checks Moaan's table and the firmware's `performCreate.dpi` log, restores
   the target app's row, and prints a short summary. Read the summary; open screenshots/dumps only for failures.
   Add checks in `tools/device-checks/<feature>.sh` (`check_*` functions; helpers in `tools/README.md`).
-- Quick panel checks (`quick-panel`) drive it through debug test hooks, not `uiautomator`, which would unbind
+- Quick panel and side panel checks (`quick-panel`, `side-panel`) drive them through debug test hooks, not `uiautomator`, which would unbind
   the accessibility service. They need the service on and "Modify system settings" allowed.
 - Prefer the harness over ad-hoc taps and screenshots. When a screenshot is needed, downscale it
   (`sips -Z 700`) before reading it.

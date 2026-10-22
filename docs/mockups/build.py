@@ -408,9 +408,82 @@ Volume up here and map that key in Key Mapper.</span></div></div>
 <li>Home goes to your current home app (inkOS), not Moaan's launcher.</li></ul></div>
 </div>""")
 
+# ---- Board 11: side panel, recent apps first ----------------------------------------------------
+
+RECENT = [("KOReader", "K", "Open now", "now"), ("Feeder", "F", "2 min ago", "prev"), ("AnkiDroid", "A", "8 min ago", ""),
+          ("Instapaper", "I", "25 min ago", ""), ("AntennaPod", "P", "1 h ago", ""), ("Libby", "L", "3 h ago", ""),
+          ("EinkBro", "E", "Yesterday", ""), ("Etar", "C", "Yesterday", ""), ("Aurora Store", "S", "2 days ago", "")]
+
+
+def ra_rows(items, compact=False):
+    out = ""
+    for name, letter, when, kind in items:
+        tag = '<div class="rtag">OPEN NOW</div>' if kind == "now" else '<div class="rtag">PREVIOUS</div>' if kind == "prev" else ""
+        if compact and kind == "prev":
+            tag, when = "", "Previous · " + when
+        elif compact and kind == "now":
+            tag = ""
+        out += f'<div class="ra-row {kind}"><div class="ai">{letter}</div><div class="tx"><b>{name}</b><span>{when}</span></div>{tag}</div>'
+    return out
+
+
+def side_panel(width, items, pager, extra=""):
+    return (f'<div class="dim2" style="right:{width}"></div><div class="side2" style="width:{width}">'
+            f'<div class="ra-hd"><b>Recent apps</b><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+            f'{ra_rows(items)}<div class="pager2">{pager}</div>'
+            f'<div class="ra-foot"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>{extra}')
+
+
+MENU = '<div class="menu" style="right:30px;top:250px"><div>Remove from list</div><div>Open its e-ink settings</div><div>App info</div></div>'
+
+side_board = board("Side panel: recent apps", """<div class="notes"><h2>11 · Side panel: recent apps</h2>
+<ul><li>Swipe the strip: the panel slides in from that edge, ~78% wide; the app stays visible beside it (tap there to close).</li>
+<li><b>Recent apps</b>, newest first. The app you came from is marked <b>Previous</b>, right under the one open now: one tap switches back.</li>
+<li>Pages (◀ 1/2 ▶) instead of scrolling, as in SuperBoox: no smeared scroll on e-ink.</li>
+<li>Hold a row: Remove from list, Open its e-ink settings, App info.</li>
+<li>Footer: <b>E-ink · this app</b> opens today's e-ink panel as its own overlay; <b>Android recents</b> for anything older.</li>
+<li>The list is InkPalm+'s own (apps can't read Android's); home screens and InkPalm+ are left out. It survives restarts.</li></ul>
+<h3>Choices to make</h3><ul>
+<li>Panel width (78% shown) and how many apps to keep (shown: 9 per page, 18 kept).</li>
+<li>Show “2 min ago”, or names only.</li></ul></div>""",
+    [frame("Portrait", "Previous app one tap away; 9 per page.", device("p", side_panel("78%", RECENT, "◀ &nbsp; 1 / 2 &nbsp; ▶"))),
+     frame("Portrait · held “AnkiDroid”", "A small menu, no scrolling.", device("p", side_panel("78%", RECENT, "◀ &nbsp; 1 / 2 &nbsp; ▶", MENU)))],
+    frame("Landscape", "Half the width, two columns so a page still shows 8.",
+          device("l", f'<div class="dim2" style="right:50%"></div><div class="side2" style="width:50%"><div class="ra-hd"><b>Recent apps</b><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+                      f'<div class="ra-grid">{ra_rows(RECENT[:8], compact=True)}</div><div class="pager2">◀ &nbsp; 1 / 2 &nbsp; ▶</div>'
+                      f'<div class="ra-foot"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>')))
+
+
+# ---- Board 12: home screen reorganized -----------------------------------------------------------
+
+def hrow(name, sub, right):
+    return f'<div class="srow"><div class="n"><b>{name}</b><span>{sub}</span></div>{right}</div>'
+
+
+home_board = page("Home screen", f"""
+<div class="row">
+<div class="card" style="width:430px"><div class="ttl">INKPALM+ · HOME</div>
+{hrow("Side panel", "On · swipe up or down along the right edge", '<div class="btn on">On</div>')}
+{hrow("Strip side", "Where you swipe", '<div class="btn">Left</div><div class="btn on">Right</div>')}
+{hrow("Strip width", "", '<div class="btn sq">−</div><b style="width:44px;text-align:center">18 dp</b><div class="btn sq">+</div>')}
+{hrow("Show strip", "A thin black line where you swipe", '<div class="btn">On</div><div class="btn on">Off</div>')}
+{hrow("Panel width", "How much of the screen the panel covers", '<div class="btn">66%</div><div class="btn on">78%</div><div class="btn">90%</div>')}
+{hrow("Apps kept", "Recent apps the panel remembers", '<div class="btn">9</div><div class="btn on">18</div><div class="btn">27</div>')}
+{hrow("Clear recent apps", "Start the list again", '<div class="btn">Clear</div>')}
+{hrow("Touch button", "Tap: Home · Hold: Full refresh", '<div class="btn">Open</div>')}
+{hrow("E-ink settings", "Per-app DPI, refresh, contrast, presets, font, refresh helpers", '<div class="btn">Open</div>')}
+{hrow("Keeping the panel on", "Survives Clear Memory · turns itself back on", '<div class="btn">Open</div>')}
+</div>
+<div class="notes"><h2>12 · Home screen</h2>
+<ul><li>The side panel and recent apps come first; that's what you use.</li>
+<li>Everything e-ink moves to one <b>E-ink settings ▸</b> screen: the per-app list, presets, font, refresh helpers, animations, text size. Nothing is removed, just out of the way.</li>
+<li>Touch button and the keep-on switches get their own small screens too.</li>
+<li>The e-ink panel you had stays available from the side panel's <b>E-ink · this app</b> button, as its own overlay (unchanged).</li></ul></div>
+</div>""")
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
                    ("08-presets", presets_board), ("09-font", font_board),
-                   ("10-touch-button", touch_board)]:
+                   ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

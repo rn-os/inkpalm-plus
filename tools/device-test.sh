@@ -128,11 +128,28 @@ expect_row() {
   [ "$got" = "$3" ] && note_ok "$1" || { note_fail "$1 ($2=$got, wanted $3)"; return 1; }
 }
 
-# Opens InkPalm+ on the target app's page through the app list.
+# hook <cmd> [value]: sends a test command; returns non-zero unless the service answered "ok".
+hook() {
+  adb_ logcat -c
+  # adb drops empty arguments, so "none" stands for no value.
+  adb_ shell am broadcast -a com.inkpalmplus.TEST -p $PKG --es cmd "$1" --es value "${2:-none}" >/dev/null
+  local i line
+  for i in 1 2 3 4 5 6; do
+    line=$(adb_ logcat -d -s InkPalmPlus:I | grep " test $1 " | tail -1)
+    [ -n "$line" ] && break
+    sleep 0.5
+  done
+  HOOK_OUT="$line"
+  case "$line" in *" ok "*) return 0 ;; *) return 1 ;; esac
+}
+
+prop() { adb_ shell getprop "$1" | tr -d '\r'; }
+
+# Opens InkPalm+ on the target app's page through the E-ink screen's app list (home screen > E-ink).
 open_target() {
   # A fresh task, never `am start -S`: force-stopping InkPalm+ kills its accessibility service, and Android
   # then switches the service off as crashed.
-  adb_ shell am start -n $PKG/.MainActivity -f 0x10008000 >/dev/null   # NEW_TASK | CLEAR_TASK
+  adb_ shell am start -n $PKG/.SectionActivity --es section eink -f 0x10008000 >/dev/null   # NEW_TASK | CLEAR_TASK
   sleep 3
   scroll_to text "Search apps"; tap text "Search apps" || return 1
   type_text "${TARGET_LABEL// /%s}"
@@ -165,11 +182,16 @@ manual() { CHECK_NOTES="$CHECK_NOTES
 PROPS="debug.sf.gamma.gamma sys.eink.mode persist.sys.mogu.refresh_type persist.vendor.fullmode_cnt"
 GLOBALS="global:window_animation_scale global:transition_animation_scale global:animator_duration_scale system:font_scale"
 
+# The recent apps list from InkPalm+'s own file, newest first, one package per line.
+recent_list() { adb_ shell run-as $PKG cat shared_prefs/recent_apps.xml 2>/dev/null | tr -d '\r' | grep -o 'name="apps">[^<]*' | sed 's/^name="apps">//; s/&#10;/\n/g' | awk 'NF { print $1 }'; }
+
 snapshot() {
   row > "$OUT/target-row-before.txt"
   [ -s "$OUT/target-row-before.txt" ] || abort "no row for $TARGET in Moaan's table (open it once first)"
   : > "$OUT/globals-before.txt"
   for g in $GLOBALS; do echo "$g=$(adb_ shell settings get ${g%%:*} ${g#*:} | tr -d '\r')" >> "$OUT/globals-before.txt"; done
+  # The side panel's recent list, oldest first (put back with the recents_clear / remember hooks).
+  recent_list | tail -r > "$OUT/recents-before.txt"
   : > "$OUT/props-before.txt"
   for k in $PROPS; do echo "$k=$(adb_ shell getprop $k | tr -d '\r')" >> "$OUT/props-before.txt"; done
 }
@@ -201,6 +223,14 @@ restore_all() {
   row > "$OUT/target-row-after.txt"
   diff -q "$OUT/target-row-before.txt" "$OUT/target-row-after.txt" >/dev/null || log "WARNING: $TARGET's row differs from the snapshot; see $OUT"
   adb_ shell am force-stop "$TARGET"
+  # Recent list: only rewritten if the checks changed it.
+  recent_list > "$OUT/recents-after-run.txt"
+  if [ "$(tail -r "$OUT/recents-before.txt")" != "$(cat "$OUT/recents-after-run.txt")" ] && hook state; then
+    hook side_close >/dev/null; hook recents_clear >/dev/null
+    while read -r p <&3; do hook remember "$p" >/dev/null; done 3< "$OUT/recents-before.txt"
+    recent_list > "$OUT/recents-after.txt"
+    tail -r "$OUT/recents-before.txt" | diff -q - "$OUT/recents-after.txt" >/dev/null || log "WARNING: recent apps list differs from the snapshot; see $OUT"
+  fi
 }
 
 write_summary() {

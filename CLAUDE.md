@@ -7,7 +7,7 @@ Moaan InkPalm Plus, by editing the firmware's own hidden per-app table. Sister p
 ## Read first
 - `docs/firmware.md`: everything known about the firmware. **Check it before decompiling anything**; add to it
   whenever something new is learned, so it's never worked out twice.
-- `docs/device/`: raw `getprop`, packages, services and `dumpsys display` from the device.
+- `docs/device/`: raw `getprop` (serial numbers redacted), services and `dumpsys display` from the device. The installed-app list is deliberately not kept (personal).
 
 ## Code (`app/src/main/java/com/inkpalmplus/`)
 - `EinkDb`: the model (`Profile`, `Refresh`), reading/writing Moaan's table (directly, Shizuku fallback), `setAppDpiToMap`.

@@ -43,12 +43,12 @@ From top to bottom:
 
 A few things to know:
 
-- **Newest first.** The app open now says **Open now**. The one before it has a small **←** on its icon and a **Previous** tag. Tap it to go straight back.
+- **Newest at the bottom,** right above the pager and under your thumb (or at the top, if you prefer: **Newest app** on the home screen). The app open now says **Open now**. The one before it has a small **←** on its icon and a **Previous** tag. Tap it to go straight back.
 - **Pages, not scrolling,** so nothing smears on e-ink. 9 apps fit on a page in portrait, 8 in landscape.
 - **It's quick.** The panel opens in about 30 ms.
 - **Clear all** leaves the app you're in. An app that's playing audio in the background may keep running after ✕.
 - **Home screens and InkPalm+ itself** aren't listed. The list is kept across restarts.
-- **Last read.** Pick your reader (NeoReader or KOReader) and the last book you read in it sits at the top. Tap it to keep reading. Hold it for your books, newest first, and **Browse files…** for anything new. KOReader needs Android's All files access, so InkPalm+ can read its history.
+- **Last read.** Pick your reader (NeoReader or KOReader) and the last book you read in it sits below your apps (above them with Newest app: Top). Tap it to keep reading. Hold it for your books, newest first, and **Browse files…** for anything new. KOReader needs Android's All files access, so InkPalm+ can read its history.
 
 <img src="docs/launch/2-hold.png" width="720" alt="Holding an app: Remove from list, Open its e-ink settings, App info">
 
@@ -133,6 +133,7 @@ These are the actions already built into the device. Changes apply on the next t
 
 - **Side panel.** Opens Accessibility so you can turn the service on or off.
 - **Reader app.** NeoReader, KOReader or None. You're asked once, the first time you open InkPalm+.
+- **Newest app.** Bottom (the default) or Top of the list.
 - **Strip side.** Left or Right.
 - **Strip width.** 6 to 40 dp.
 - **Show strip.** Draws a thin black line where you swipe.

@@ -111,7 +111,8 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
 
     /** The reader picked and whether its history is readable: a prepared panel goes stale when either changes. */
     private var builtReader = ""
-    private fun readerState() = Readers.chosen(ctx)?.let { "${it.key}:${Readers.hasAccess(it)}" } ?: "none"
+    private fun readerState() = (Readers.chosen(ctx)?.let { "${it.key}:${Readers.hasAccess(it)}" } ?: "none") +
+        if (Prefs(ctx).newestAtBottom) "|bottom" else "|top"
 
     private fun currentWidth() = ctx.resources.displayMetrics.widthPixels * (if (landscape) 50 else Prefs(ctx).panelWidthPct) / 100
 
@@ -215,30 +216,44 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
             addView(ctx.inkButton("✕", 16f) { onClose() }, lp(ctx.dp(48), WRAP))
         })
 
-        lastRead?.let { content.addView(lastReadCard(it)) }
-        if (needsAccess) content.addView(accessCard())
+        // Newest at the bottom (mockup 15): the list reads upward, pushed down so the app you're in sits by the
+        // pager, and the reader card goes below every app.
+        val bottom = Prefs(ctx).newestAtBottom
+        fun cards() {
+            val card = lastRead?.let { lastReadCard(it) } ?: if (needsAccess) accessCard() else return
+            if (bottom) (card.layoutParams as LinearLayout.LayoutParams).setMargins(ctx.dp(12), ctx.dp(6), ctx.dp(12), ctx.dp(2))
+            content.addView(card)
+        }
+        if (!bottom) cards()
 
         val apps = visible()
         val list = SwipePager(ctx, onNext = { if (page < pages() - 1) { page++; render() } }, onPrev = { if (page > 0) { page--; render() } })
             .apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
         if (apps.isEmpty()) {
-            list.addView(ctx.text("Apps you open will show up here, newest first.", 15f, color = Ink.MUTED).apply {
+            list.addView(ctx.text("Apps you open will show up here, newest ${if (bottom) "at the bottom" else "first"}.", 15f, color = Ink.MUTED).apply {
                 setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), 0)
             })
         } else if (landscape) {
-            // Two columns of four, so a page still shows eight.
-            apps.chunked(2).forEach { pair ->
+            // Two columns, so a page still shows eight (four with a card). Bottom: the newest pair is the last row.
+            val rows = if (!bottom) apps.chunked(2) else apps.reversed().let { r ->
+                if (r.size % 2 == 1) listOf(listOf(r[0])) + r.drop(1).chunked(2) else r.chunked(2)
+            }
+            fun spacers() = repeat(perPage / 2 - rows.size) { list.addView(View(ctx), lp(MATCH, 0, 1f)) }
+            if (bottom) spacers()
+            rows.forEach { pair ->
                 list.addView(ctx.hbox().apply {
                     for (e in pair) addView(row(e, compact = true), lp(0, MATCH, 1f))
                     if (pair.size == 1) addView(View(ctx), lp(0, MATCH, 1f))
                 }, lp(MATCH, 0, 1f))
             }
-            repeat(perPage / 2 - (apps.size + 1) / 2) { list.addView(View(ctx), lp(MATCH, 0, 1f)) }
+            if (!bottom) spacers()
         } else {
-            for (e in apps) list.addView(row(e, compact = false), lp(MATCH, 0, 1f))
-            repeat(perPage - apps.size) { list.addView(View(ctx), lp(MATCH, 0, 1f)) }
+            if (bottom) repeat(perPage - apps.size) { list.addView(View(ctx), lp(MATCH, 0, 1f)) }
+            for (e in if (bottom) apps.reversed() else apps) list.addView(row(e, compact = false), lp(MATCH, 0, 1f))
+            if (!bottom) repeat(perPage - apps.size) { list.addView(View(ctx), lp(MATCH, 0, 1f)) }
         }
         content.addView(list, lp(MATCH, 0, 1f))
+        if (bottom) cards()
 
         // Pager: only when there's more than one page.
         if (pages() > 1) content.addView(ctx.hbox().apply {

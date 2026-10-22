@@ -231,6 +231,7 @@ open class MainActivity : Activity() {
             }, lp(0, WRAP, 1f))
             labels.forEachIndexed { i, l -> addView(chip(l, i == current) { pick(i); renderPanel() }, lp(WRAP, WRAP).apply { marginStart = dp(6) }) }
         })
+        choices("Newest app", "Where the app you're in sits in the list", listOf("Top", "Bottom"), if (prefs.newestAtBottom) 1 else 0) { prefs.newestAtBottom = it == 1 }
         choices("Strip side", "Where you swipe", listOf("Left", "Right"), if (prefs.edgeRight) 1 else 0) { prefs.edgeRight = it == 1; previewStrip() }
         val w = prefs.stripWidthDp
         panelBox.addView(stepperRow("Strip width", "$w dp",

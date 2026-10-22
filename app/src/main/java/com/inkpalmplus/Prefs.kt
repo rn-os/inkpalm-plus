@@ -32,6 +32,11 @@ class Prefs(context: Context) {
         get() = sp.getString("reader_app", null)
         set(v) = sp.edit().putString("reader_app", v).apply()
 
+    /** Side panel order: the newest app (the one you're in) at the bottom, by the pager, else at the top. */
+    var newestAtBottom: Boolean
+        get() = sp.getBoolean("newest_at_bottom", true)
+        set(v) = sp.edit().putBoolean("newest_at_bottom", v).apply()
+
     /** Show a thin black pill where the strip is. */
     var showStrip: Boolean
         get() = sp.getBoolean("show_strip", true)

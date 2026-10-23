@@ -101,8 +101,8 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   end with it. Older images: Panda says a newer image is needed.
 - Power key sometimes doesn't wake (user report): reproduced as a system issue (also with InkPalm+'s key filter
   off, also with `input keyevent 26`); handed to the KompaktOS session.
-- Still to do by hand: the white repaint flash and Fast vs Quality on a gradient; tiles in KompaktOS QS; the user
-  should uninstall InkControl (both drive modes and light while it's installed).
+- User (2026-10-23): the white repaint flash after a mode change shows. E-ink QS tiles not checked: the user
+  uses the side panels instead (tiles stay, unverified). InkControl to be uninstalled.
 
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown

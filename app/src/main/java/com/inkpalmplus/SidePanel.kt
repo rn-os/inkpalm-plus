@@ -13,6 +13,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView
 
 /**
  * The side panel the strip opens (mockup: docs/mockups/11-side-panel.png): recent apps, newest first,
@@ -44,7 +45,41 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     private var bookPage = 0
 
     // The Last read card takes one row's room (portrait) or two rows (landscape's two columns).
-    private val perPage get() = if (hasCard) (if (landscape) 4 else 8) else (if (landscape) 8 else 9)
+    /**
+     * Apps per page: as many fixed-height rows as fit under the header, Light block and reader card (two per row in
+     * landscape), so rows are the same size whatever else is showing; the rest go to the next page. Set by [fit].
+     */
+    private var perPage = 9
+    /** One row's height: at least 60 dp (50 in landscape), more if the app's text runs bigger (Display size, fonts). */
+    private var rowPx = 0
+    private fun panelHeight() = ctx.resources.displayMetrics.heightPixels
+
+    private fun fit(fixed: List<View>) {
+        val spec = View.MeasureSpec.makeMeasureSpec(currentWidth() - ctx.dp(3), View.MeasureSpec.EXACTLY)
+        val any = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        val used = fixed.sumOf { v ->
+            v.measure(spec, any)
+            v.measuredHeight + ((v.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { it.topMargin + it.bottomMargin } ?: 0)
+        }
+        // A real row, measured at its column's width, sets the row height for every row.
+        rowPx = ctx.dp(if (landscape) 50 else 60)
+        all().firstOrNull()?.let { e ->
+            val colW = (currentWidth() - ctx.dp(3) - ctx.dp(16)) / (if (landscape) 2 else 1)
+            val sample = row(e, compact = landscape)
+            sample.measure(View.MeasureSpec.makeMeasureSpec(colW, View.MeasureSpec.EXACTLY), any)
+            rowPx = maxOf(rowPx, sample.measuredHeight)
+        }
+        val room = panelHeight() - ctx.dp(6) - used
+        val rows = (room / (rowPx + ctx.dp(4))).coerceAtLeast(1)
+        // Share what's left over among the rows (all still the same height) rather than leaving a gap.
+        rowPx = maxOf(rowPx, room / rows - ctx.dp(4))
+        perPage = if (landscape) rows * 2 else rows
+    }
+
+    /** The front light (InkControl, KompaktOS), read when the panel is built; null hides the Light block. */
+    private var light: Light.State? = null
+    /** Set when InkControl reports a light change, so a prepared panel isn't reused with old numbers. */
+    var lightStale = false
     private val booksPerPage get() = if (landscape) 6 else 8
 
     /** When [prepare] built the rows, and for which app in front: a prepared panel is only used while both still hold. */
@@ -85,13 +120,15 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.TOP or if (onRight) Gravity.END else Gravity.START }
+        light = Light.read(ctx)
+        lightStale = false
         reader = Readers.chosen(ctx)
         builtReader = readerState()
         needsAccess = reader?.let { !Readers.hasAccess(it) } ?: false
         lastRead = reader?.let { Readers.lastRead(ctx, it) }
         render()
         // Measure and lay out at the window's size now, so showing it doesn't have to.
-        val h = ctx.resources.displayMetrics.heightPixels
+        val h = panelHeight()
         root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
         root.layout(0, 0, width, h)
         builtAt = android.os.SystemClock.uptimeMillis()
@@ -106,7 +143,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
      * ago (so the "2 min ago" times stay right).
      */
     fun fresh(): Boolean = builtAt > 0 && builtFor == service.foreground && builtVersion == service.recents.version &&
-        onRight == Prefs(ctx).edgeRight && builtWidth == currentWidth() && builtReader == readerState() &&
+        onRight == Prefs(ctx).edgeRight && builtWidth == currentWidth() && builtReader == readerState() && !lightStale &&
         android.os.SystemClock.uptimeMillis() - builtAt < 60_000
 
     /** The reader picked and whether its history is readable: a prepared panel goes stale when either changes. */
@@ -202,84 +239,138 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         content.removeAllViews()
         menuLayer?.let { root.removeView(it) }
         menuLayer = null
-        page = page.coerceIn(0, pages() - 1)
+        val bottom = Prefs(ctx).newestAtBottom
 
         // Header: title, ⚙ (InkPalm+ home), ✕.
-        content.addView(ctx.hbox().apply {
-            setPadding(ctx.dp(14), ctx.dp(10), ctx.dp(10), ctx.dp(8))
-            addView(ctx.text("Recent apps", 19f, bold = true), lp(0, WRAP, 1f))
+        val header = ctx.hbox().apply {
+            setPadding(ctx.dp(14), ctx.dp(if (landscape) 6 else 10), ctx.dp(10), ctx.dp(if (landscape) 4 else 8))
+            // One line, shrinking to fit when Display size or the font runs large.
+            addView(ctx.text("Recents", 19f, bold = true).apply {
+                maxLines = 1
+                setAutoSizeTextTypeUniformWithConfiguration(15, 19, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+            }, lp(0, WRAP, 1f))
             if (all().any { it.pkg != service.foreground }) addView(ctx.inkButton("Clear all", 14f) { clearAll() }, lp(WRAP, WRAP).apply { marginEnd = ctx.dp(6) })
             addView(ctx.inkButton("⚙", 21f) {
                 ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                 onClose()
             }.apply { contentDescription = "InkPalm+ settings" }, lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(6) })
             addView(ctx.inkButton("✕", 16f) { onClose() }, lp(ctx.dp(48), WRAP))
-        })
-
-        // Newest at the bottom (mockup 15): the list reads upward, pushed down so the app you're in sits by the
-        // pager, and the reader card goes below every app.
-        val bottom = Prefs(ctx).newestAtBottom
-        fun cards() {
-            val card = lastRead?.let { lastReadCard(it) } ?: if (needsAccess) accessCard() else return
-            if (bottom) (card.layoutParams as LinearLayout.LayoutParams).setMargins(ctx.dp(12), ctx.dp(6), ctx.dp(12), ctx.dp(2))
-            content.addView(card)
         }
-        if (!bottom) cards()
-
-        val apps = visible()
-        val list = SwipePager(ctx, onNext = { if (page < pages() - 1) { page++; render() } }, onPrev = { if (page > 0) { page--; render() } })
-            .apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
-        if (apps.isEmpty()) {
-            list.addView(ctx.text("Apps you open will show up here, newest ${if (bottom) "at the bottom" else "first"}.", 15f, color = Ink.MUTED).apply {
-                setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), 0)
-            })
-        } else if (landscape) {
-            // Two columns, so a page still shows eight (four with a card). Bottom: the newest pair is the last row.
-            val rows = if (!bottom) apps.chunked(2) else apps.reversed().let { r ->
-                if (r.size % 2 == 1) listOf(listOf(r[0])) + r.drop(1).chunked(2) else r.chunked(2)
-            }
-            fun spacers() = repeat(perPage / 2 - rows.size) { list.addView(View(ctx), lp(MATCH, 0, 1f)) }
-            if (bottom) spacers()
-            rows.forEach { pair ->
-                list.addView(ctx.hbox().apply {
-                    for (e in pair) addView(row(e, compact = true), lp(0, MATCH, 1f))
-                    if (pair.size == 1) addView(View(ctx), lp(0, MATCH, 1f))
-                }, lp(MATCH, 0, 1f))
-            }
-            if (!bottom) spacers()
-        } else {
-            if (bottom) repeat(perPage - apps.size) { list.addView(View(ctx), lp(MATCH, 0, 1f)) }
-            for (e in if (bottom) apps.reversed() else apps) list.addView(row(e, compact = false), lp(MATCH, 0, 1f))
-            if (!bottom) repeat(perPage - apps.size) { list.addView(View(ctx), lp(MATCH, 0, 1f)) }
-        }
-        content.addView(list, lp(MATCH, 0, 1f))
-        if (bottom) cards()
-
-        // Pager: only when there's more than one page.
-        if (pages() > 1) content.addView(ctx.hbox().apply {
-            gravity = Gravity.CENTER
-            setPadding(0, ctx.dp(4), 0, ctx.dp(4))
-            addView(ctx.inkButton("◀", 15f) { if (page > 0) { page--; render() } }.apply { isEnabled = page > 0 }, lp(ctx.dp(56), WRAP))
-            addView(ctx.text("${page + 1} / ${pages()}", 15f, bold = true).apply { gravity = Gravity.CENTER }, lp(ctx.dp(72), WRAP))
-            addView(ctx.inkButton("▶", 15f) { if (page < pages() - 1) { page++; render() } }.apply { isEnabled = page < pages() - 1 }, lp(ctx.dp(56), WRAP))
-        })
-
+        val lightView = light?.let { lightBlock(it) }
+        // The reader card: above the apps, or below every app with newest at the bottom (mockup 15).
+        val card = lastRead?.let { lastReadCard(it) } ?: if (needsAccess) accessCard() else null
+        if (bottom) card?.let { (it.layoutParams as LinearLayout.LayoutParams).setMargins(ctx.dp(12), ctx.dp(6), ctx.dp(12), ctx.dp(2)) }
         // Footer: the e-ink panel for the app in front, and Android's own recents.
-        content.addView(ctx.hbox().apply {
+        val footer = ctx.hbox().apply {
             setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(8))
+            // One line each, shrinking to fit when Display size or the font runs large.
+            fun TextView.oneLine() = apply { maxLines = 1; setAutoSizeTextTypeUniformWithConfiguration(10, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP) }
             addView(ctx.inkButton("E-ink · this app", 14f) {
                 val fg = service.foreground
                 onClose()
                 if (fg != null) service.openPanel()
-            }, lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
+            }.oneLine(), lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
             addView(ctx.inkButton("Android recents", 14f) {
                 onClose()
                 service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
-            }, lp(0, WRAP, 1f))
-        })
+            }.oneLine(), lp(0, WRAP, 1f))
+        }
+        // Room for the pager is always kept, so rows don't change size when a second page appears.
+        fit(listOfNotNull(header, lightView, card, pager(), footer))
+        page = page.coerceIn(0, pages() - 1)
+
+        content.addView(header)
+        lightView?.let { content.addView(it) }
+        if (!bottom) card?.let { content.addView(it) }
+
+        val apps = visible()
+        val rowLp = { lp(MATCH, rowPx).apply { setMargins(0, ctx.dp(2), 0, ctx.dp(2)) } }
+        val list = SwipePager(ctx, onNext = { if (page < pages() - 1) { page++; render() } }, onPrev = { if (page > 0) { page--; render() } })
+            .apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
+        // Fixed-height rows; the spare room sits above them (newest at the bottom) or below.
+        if (bottom) list.addView(View(ctx), lp(MATCH, 0, 1f))
+        if (apps.isEmpty()) {
+            list.addView(ctx.text("Apps you open will show up here, newest ${if (bottom) "at the bottom" else "first"}.", 15f, color = Ink.MUTED).apply {
+                setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), ctx.dp(16))
+            })
+        } else if (landscape) {
+            // Two columns. Bottom: the newest pair is the last row.
+            val rows = if (!bottom) apps.chunked(2) else apps.reversed().let { r ->
+                if (r.size % 2 == 1) listOf(listOf(r[0])) + r.drop(1).chunked(2) else r.chunked(2)
+            }
+            rows.forEach { pair ->
+                list.addView(ctx.hbox().apply {
+                    for (e in pair) addView(row(e, compact = true), lp(0, MATCH, 1f).apply { setMargins(ctx.dp(2), 0, ctx.dp(2), 0) })
+                    if (pair.size == 1) addView(View(ctx), lp(0, MATCH, 1f))
+                }, rowLp())
+            }
+        } else {
+            for (e in if (bottom) apps.reversed() else apps) list.addView(row(e, compact = false), rowLp())
+        }
+        if (!bottom) list.addView(View(ctx), lp(MATCH, 0, 1f))
+        content.addView(list, lp(MATCH, 0, 1f))
+        if (bottom) card?.let { content.addView(it) }
+
+        // Pager: only when there's more than one page.
+        if (pages() > 1) content.addView(pager())
+        content.addView(footer)
 
         menuFor?.let { showMenu(it) }
     }
+
+    private fun pager(): View = ctx.hbox().apply {
+        gravity = Gravity.CENTER
+        setPadding(0, ctx.dp(4), 0, ctx.dp(4))
+        addView(ctx.inkButton("◀", 15f) { if (page > 0) { page--; render() } }.apply { isEnabled = page > 0 }, lp(ctx.dp(56), WRAP))
+        addView(ctx.text("${page + 1} / ${pages()}", 15f, bold = true).apply { gravity = Gravity.CENTER }, lp(ctx.dp(72), WRAP))
+        addView(ctx.inkButton("▶", 15f) { if (page < pages() - 1) { page++; render() } }.apply { isEnabled = page < pages() - 1 }, lp(ctx.dp(56), WRAP))
+    }
+
+    // ---- Front light (docs/mockups/16-front-light.png, sliders per the user: − slider + at the top) ----------
+
+    /**
+     * Brightness and Warmth, each − [label over slider] +, the same in both orientations (the slider applies when
+     * you let go, so e-ink redraws once; the buttons step by 10). Brightness 0% is off: − to 0 turns the light off,
+     * + or the slider turns it back on at the level it had.
+     */
+    private fun lightBlock(s: Light.State): View = ctx.vbox().apply {
+        setPadding(ctx.dp(10), ctx.dp(2), ctx.dp(10), ctx.dp(4))
+        var level = if (s.on) s.level else 0
+        var lastLevel = s.level.takeIf { it > 0 } ?: 50
+        var warmth = s.warmth
+        fun send() {
+            if (level > 0) lastLevel = level
+            light = Light.State(lastLevel, warmth, level > 0)
+            Light.set(ctx, lastLevel, warmth, level > 0)
+        }
+        fun slider(label: () -> String, get: () -> Int, put: (Int) -> Unit) = addView(ctx.hbox().apply {
+            gravity = Gravity.CENTER_VERTICAL
+            val text = ctx.text(label(), 13f, bold = true).apply { gravity = Gravity.CENTER; maxLines = 1 }
+            val bar = android.widget.SeekBar(ctx).apply {
+                max = 100
+                progress = get()
+                progressTintList = android.content.res.ColorStateList.valueOf(Ink.INK)
+                progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Ink.MUTED)
+                thumbTintList = android.content.res.ColorStateList.valueOf(Ink.INK)
+                setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(b: android.widget.SeekBar, p: Int, fromUser: Boolean) {}
+                    override fun onStartTrackingTouch(b: android.widget.SeekBar) {}
+                    override fun onStopTrackingTouch(b: android.widget.SeekBar) { put(b.progress); send(); text.text = label() }
+                })
+            }
+            fun step(d: Int) { put((get() + d).coerceIn(0, 100)); bar.progress = get(); send(); text.text = label() }
+            addView(ctx.inkButton("−", 18f) { step(-10) }, lp(ctx.dp(44), WRAP))
+            addView(ctx.vbox().apply {
+                addView(text, lp(MATCH, WRAP))
+                addView(bar, lp(MATCH, WRAP))
+            }, lp(0, WRAP, 1f))
+            addView(ctx.inkButton("+", 18f) { step(10) }, lp(ctx.dp(44), WRAP))
+        }, lp(MATCH, WRAP).apply { topMargin = ctx.dp(2) })
+        slider({ if (level == 0) "Light off" else "Brightness $level%" }, { level }, { level = it })
+        slider({ "Warmth $warmth%" }, { warmth }, { warmth = it })
+    }.also { it.layoutParams = LinearLayout.LayoutParams(MATCH, WRAP) }
+
+    fun describeLight(): String = light?.let { "light level=${it.level} warmth=${it.warmth} on=${it.on}" } ?: "light none"
 
     // ---- Reader app (docs/mockups/13-last-read.png, 14-reader-app.png) --------------------------------------------
 

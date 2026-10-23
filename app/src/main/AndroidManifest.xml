@@ -32,6 +32,8 @@
         <!-- NeoReader: its book list (an exported provider) and opening books in it, for the side panel. -->
         <package android:name="com.onyx.kreader" />
         <provider android:authorities="com.onyx.content.database.ContentProvider" />
+        <!-- InkControl (KompaktOS): the front light's API, for the side panel's Light block. -->
+        <package android:name="org.neoport.inkcontrol" />
         <!-- KOReader (Play/GitHub and F-Droid builds): opening books in it. -->
         <package android:name="org.koreader.launcher" />
         <package android:name="org.koreader.launcher.fdroid" />

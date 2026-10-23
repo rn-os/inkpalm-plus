@@ -3,6 +3,7 @@ package com.inkpalmplus
 import android.accessibilityservice.AccessibilityService
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.os.Build
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.PixelFormat
@@ -50,6 +51,13 @@ class QuickPanelService : AccessibilityService() {
         }
     }
 
+    private val lightChanged = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            prepared?.lightStale = true
+            if (side == null) prepareSoon()
+        }
+    }
+
     override fun onServiceConnected() {
         instance = this
         Prefs(this).panelWanted = true
@@ -61,14 +69,19 @@ class QuickPanelService : AccessibilityService() {
         val filter = IntentFilter().apply {
             addAction(ACTION_OPEN); addAction(ACTION_CLOSE); addAction(ACTION_STRIP); addAction(ACTION_CLEAR_RECENTS)
         }
-        registerReceiver(receiver, filter, PERMISSION, null)
+        // Android 13+ wants each receiver marked exported or not (Android 14+ throws without it; KompaktOS is 16).
+        val notExported = if (Build.VERSION.SDK_INT >= 33) Context.RECEIVER_NOT_EXPORTED else 0
+        val exported = if (Build.VERSION.SDK_INT >= 33) Context.RECEIVER_EXPORTED else 0
+        registerReceiver(receiver, filter, PERMISSION, null, notExported)
         // The test hooks (tools/device-test.sh, sent from adb) exist only in debuggable builds.
         if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-            registerReceiver(receiver, IntentFilter(ACTION_TEST))
+            registerReceiver(receiver, IntentFilter(ACTION_TEST), exported)
             testHooks = true
         }
         // Uninstalled apps leave the recent list (so the panel never has to check while drawing).
         registerReceiver(packageGone, IntentFilter(Intent.ACTION_PACKAGE_FULLY_REMOVED).apply { addDataScheme("package") })
+        // InkControl's front light changed (from anywhere): a prepared panel would show old numbers.
+        registerReceiver(lightChanged, IntentFilter(Light.ACTION_CHANGED), exported)
         recents.warm()
         showStrip()
         // The app in front isn't known until the next window change: the service doesn't read window
@@ -79,6 +92,7 @@ class QuickPanelService : AccessibilityService() {
     override fun onDestroy() {
         runCatching { unregisterReceiver(receiver) }
         runCatching { unregisterReceiver(packageGone) }
+        runCatching { unregisterReceiver(lightChanged) }
         removeStrip()
         closePanel()
         closeSide()
@@ -230,6 +244,7 @@ class QuickPanelService : AccessibilityService() {
             "side_card" -> side?.testCard(hold = value == "hold") ?: false
             "side_book" -> side?.testBook(value.toInt()) ?: false
             "side_browse" -> side?.testBrowse() ?: false
+            "light_state" -> { Log.i(TAG, side?.describeLight() ?: "light: panel closed"); true }
             "books_state" -> { Log.i(TAG, "books: ${side?.describeBooks() ?: "closed"}"); true }
             "side_state" -> { Log.i(TAG, "side: ${side?.describe() ?: "closed"}"); true }
             "remember" -> { recents.record(value); true }

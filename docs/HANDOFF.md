@@ -63,6 +63,15 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - Newest app setting (mockup 15): Bottom by default (list reads upward, reader card below every app), or Top.
 - adb taps don't register on DocumentsUI's file list; use keyboard focus (TAB, ENTER) in tests.
 
+## KompaktOS (2026-10-23)
+- The user's InkPalm now runs KompaktOS 1.2 (Android 16). InkPalm+ crashed there on start (receivers need
+  RECEIVER_EXPORTED/NOT_EXPORTED on Android 14+); fixed. Moaan's e-ink table doesn't exist there, so the
+  E-ink features do nothing on KompaktOS.
+- Front light: `Light.kt` uses InkControl's API (org.neoport.inkcontrol, repo ~/Github Repos/InkPalm-KompaktOS).
+  Built per the user's direction rather than mockup 16: sliders with − and + at the top, no On/Off (0% = off).
+- Rows have one measured height (a real row, at least 60/50 dp); apps per page = what fits, rest on the next page.
+- Landscape with the Light block isn't checked on the device yet.
+
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown
   landed; the release APK itself was checked: signed with the release key, not debuggable, SectionActivity not

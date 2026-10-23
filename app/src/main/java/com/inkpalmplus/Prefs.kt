@@ -37,6 +37,25 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("newest_at_bottom", true)
         set(v) = sp.edit().putBoolean("newest_at_bottom", v).apply()
 
+    /** KompaktOS: the screen panel's strip on the other edge (mockup 19). */
+    var screenPanel: Boolean
+        get() = sp.getBoolean("screen_panel", true)
+        set(v) = sp.edit().putBoolean("screen_panel", v).apply()
+
+    /** The screen panel's strip is there: wanted, and on KompaktOS (stock keeps Moaan's e-ink panel). */
+    val screenPanelOn: Boolean get() = screenPanel && Eink.isKompakt
+
+    /** An inward swipe from either edge is Back. On by default on KompaktOS, which has no navigation bar (so no back
+     *  gesture); off on stock, where Android's own gesture works over the strips and both would fire. */
+    var edgeBack: Boolean
+        get() = sp.getBoolean("edge_back", Eink.isKompakt)
+        set(v) = sp.edit().putBoolean("edge_back", v).apply()
+
+    /** Holding the touch button is a full refresh (KompaktOS; stock firmware has its own setting for it). */
+    var holdRefresh: Boolean
+        get() = Eink.isKompakt && sp.getBoolean("hold_refresh", true)
+        set(v) = sp.edit().putBoolean("hold_refresh", v).apply()
+
     /** Show a thin black pill where the strip is. */
     var showStrip: Boolean
         get() = sp.getBoolean("show_strip", true)

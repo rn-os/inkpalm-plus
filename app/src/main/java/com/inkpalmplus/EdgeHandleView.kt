@@ -10,8 +10,9 @@ import kotlin.math.abs
 
 /**
  * The thin touch strip along the screen edge (from SuperBoox): a swipe up or
- * down along it opens the quick panel. Only along: swiping inward from the edge is
- * the system's back gesture on the InkPalm, so it's left alone.
+ * down along it opens a panel ([onTrigger]; null for a strip that only does Back). Swiping inward from the edge is
+ * the system's back gesture on stock firmware, so it's left alone there; on KompaktOS, which has no navigation bar
+ * and so no back gesture, [onBack] (when set) does Back instead.
  *
  * Once a touch starts inside this window, Android keeps delivering the rest of
  * the gesture here even after the finger leaves the strip.
@@ -23,7 +24,8 @@ class EdgeHandleView(
     private val visible: Boolean,
     /** Settings is changing the strip: draw all of it in black so its size and place can be seen. */
     private val solid: Boolean = false,
-    private val onTrigger: () -> Unit,
+    private val onBack: (() -> Unit)? = null,
+    private val onTrigger: (() -> Unit)?,
 ) : View(context) {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Ink.INK }
@@ -37,7 +39,7 @@ class EdgeHandleView(
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             return
         }
-        if (!visible) return
+        if (!visible || onTrigger == null) return
         // A short dark pill hugging the screen edge.
         val w = dp(4).toFloat()
         val inset = dp(2).toFloat()
@@ -56,9 +58,13 @@ class EdgeHandleView(
             MotionEvent.ACTION_MOVE -> if (!fired) {
                 val dx = event.rawX - downX
                 val dy = event.rawY - downY
-                if (abs(dy) > threshold * 1.5f && abs(dy) > 2 * abs(dx)) {
+                val inward = if (right) -dx else dx
+                if (onTrigger != null && abs(dy) > threshold * 1.5f && abs(dy) > 2 * abs(dx)) {
                     fired = true
-                    onTrigger()
+                    onTrigger.invoke()
+                } else if (onBack != null && inward > threshold * 1.5f && inward > 2 * abs(dy)) {
+                    fired = true
+                    onBack.invoke()
                 }
             }
         }

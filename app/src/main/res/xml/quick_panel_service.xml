@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Window-state events: which app is in front, so the quick panel opens on it.
      Scrolled / text-changed / content-changed: the refresh helpers (RefreshHelpers) need to know *that*
-     the screen moved, someone typed, or something drew. No window content or typed text is read. -->
+     the screen moved, someone typed, or something drew. No window content or typed text is read.
+     Key events (only while "Hold the touch button: full refresh" is on, KompaktOS): only the Home key is looked at. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeViewScrolled|typeViewTextChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="false"
+    android:canRequestFilterKeyEvents="true"
     android:description="@string/a11y_description"
     android:notificationTimeout="100"
     android:settingsActivity="com.inkpalmplus.MainActivity" />

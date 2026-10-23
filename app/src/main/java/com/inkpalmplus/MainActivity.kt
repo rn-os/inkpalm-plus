@@ -39,6 +39,7 @@ open class MainActivity : Activity() {
     /** Which screen this is: null for home, else [SECTION_EINK], [SECTION_TOUCH] or [SECTION_KEEP_ON]. */
     private val section: String? get() = intent.getStringExtra(EXTRA_SECTION)
     private lateinit var keepBox: LinearLayout
+    private lateinit var screenBox: LinearLayout
     private lateinit var navBox: LinearLayout
     private val askBox by lazy { vbox() }
     /** The first-start question's pick so far: a reader, or null for No reader ([askPicked] says whether one was tapped). */
@@ -48,11 +49,12 @@ open class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         root = vbox()
-        accessBox = vbox(); panelBox = vbox(); deviceBox = vbox(); touchBox = vbox(); appsBox = vbox(); keepBox = vbox(); navBox = vbox()
+        accessBox = vbox(); panelBox = vbox(); deviceBox = vbox(); touchBox = vbox(); appsBox = vbox(); keepBox = vbox(); navBox = vbox(); screenBox = vbox()
         val (title, sub) = when (section) {
             SECTION_EINK -> "E-ink settings" to "Per-app DPI, refresh, contrast, presets, font and refresh helpers"
             SECTION_TOUCH -> "Touch button" to "The button below the screen"
             SECTION_KEEP_ON -> "Keeping the panel on" to "So the side panel survives Clear Memory and restarts"
+            SECTION_SCREEN -> "Screen & light" to "Screen modes, front light, sleep and power-off screens"
             else -> getString(R.string.app_name) to "A side panel of recent apps for the InkPalm Plus"
         }
         root.addView(hbox().apply {
@@ -88,6 +90,7 @@ open class MainActivity : Activity() {
             }
             SECTION_TOUCH -> root.addView(touchBox)
             SECTION_KEEP_ON -> root.addView(keepBox)
+            SECTION_SCREEN -> root.addView(screenBox)
             else -> {
                 root.addView(askBox)
                 root.addView(sectionTitle("Side panel"))
@@ -128,6 +131,7 @@ open class MainActivity : Activity() {
                 SECTION_EINK -> { renderAccess(via); renderDevice(); renderApps() }
                 SECTION_TOUCH -> renderTouch()
                 SECTION_KEEP_ON -> renderKeepOn()
+                SECTION_SCREEN -> renderScreen()
                 else -> { renderAsk(); renderPanel(); renderNav() }
             }
         }
@@ -148,10 +152,15 @@ open class MainActivity : Activity() {
             addView(inkButton("Open", 15f) { openSection(name) })
             setOnClickListener { openSection(name) }
         })
-        val touch = if (!TouchButton.canChange(this)) "Needs a permission" else if (!TouchButton.on(this)) "Off"
-            else "Tap: ${TouchButton.TAP_ACTIONS[TouchButton.tap(this)]} · Hold: ${TouchButton.HOLD_ACTIONS[TouchButton.hold(this)]}"
-        nav("Touch button", touch, SECTION_TOUCH)
-        nav("E-ink settings", "Per-app DPI, refresh, contrast, presets, font, refresh helpers", SECTION_EINK)
+        if (Eink.isKompakt) {
+            nav("Screen & light", "${ScreenModes.global(this).title} everywhere · ${if (Light.supported()) "front light · " else ""}sleep and power-off screens", SECTION_SCREEN)
+            nav("Touch button", "Tap: Home · Hold: ${if (Prefs(this).holdRefresh) "Full refresh" else "nothing"}", SECTION_TOUCH)
+        } else {
+            val touch = if (!TouchButton.canChange(this)) "Needs a permission" else if (!TouchButton.on(this)) "Off"
+                else "Tap: ${TouchButton.TAP_ACTIONS[TouchButton.tap(this)]} · Hold: ${TouchButton.HOLD_ACTIONS[TouchButton.hold(this)]}"
+            nav("Touch button", touch, SECTION_TOUCH)
+            nav("E-ink settings", "Per-app DPI, refresh, contrast, presets, font, refresh helpers", SECTION_EINK)
+        }
         val keep = listOfNotNull(if (Survival.inWhitelist(this)) "Survives Clear Memory" else null,
             if (Survival.canRepair(this)) "turns itself back on" else null).joinToString(" · ").ifEmpty { "Not set up" }
         nav("Keeping the panel on", keep, SECTION_KEEP_ON)
@@ -232,7 +241,15 @@ open class MainActivity : Activity() {
             labels.forEachIndexed { i, l -> addView(chip(l, i == current) { pick(i); renderPanel() }, lp(WRAP, WRAP).apply { marginStart = dp(6) }) }
         })
         choices("Newest app", "Where the app you're in sits in the list", listOf("Top", "Bottom"), if (prefs.newestAtBottom) 1 else 0) { prefs.newestAtBottom = it == 1 }
-        choices("Strip side", "Where you swipe", listOf("Left", "Right"), if (prefs.edgeRight) 1 else 0) { prefs.edgeRight = it == 1; previewStrip() }
+        choices("Strip side", if (Eink.isKompakt) "Where you swipe for recent apps" else "Where you swipe", listOf("Left", "Right"), if (prefs.edgeRight) 1 else 0) { prefs.edgeRight = it == 1; previewStrip() }
+        if (Eink.isKompakt) panelBox.addView(toggleRow("Screen & light panel",
+            "Swipe along the ${if (prefs.edgeRight) "left" else "right"} edge for screen modes and the front light", prefs.screenPanel) {
+            prefs.screenPanel = !prefs.screenPanel; previewStrip(); renderPanel()
+        })
+        panelBox.addView(toggleRow("Edge Back", if (Eink.isKompakt) "Swipe in from either edge to go back (KompaktOS has no back gesture)"
+            else "Swipe in from either edge to go back. Android's own back gesture already does this here", prefs.edgeBack) {
+            prefs.edgeBack = !prefs.edgeBack; previewStrip(); renderPanel()
+        })
         val w = prefs.stripWidthDp
         panelBox.addView(stepperRow("Strip width", "$w dp",
             onMinus = { prefs.stripWidthDp = w - 2; previewStrip(); renderPanel() },
@@ -345,12 +362,111 @@ open class MainActivity : Activity() {
         })
     }
 
+    // ---- Screen & light (KompaktOS; from InkControl) ----------------------------------------------
+
+    private fun renderScreen() {
+        screenBox.removeAllViews()
+        val status = vbox().apply {
+            background = outline(2, 8)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            addView(text("E-ink control: ${Eink.describe()}", 16f, bold = true))
+            addView(text(if (Eink.bridgeAvailable()) "Front light, sleep and power-off screens go through KompaktOS's bridge." else "No KompaktOS bridge: front light, sleep and power-off screens aren't available.", 14f, color = Ink.MUTED))
+            if (Light.inkControlInstalled(this@MainActivity)) {
+                addView(text("InkControl is still installed. InkPalm+ does everything it did now; uninstall InkControl so the two don't both drive the screen and light.", 14f, bold = true)
+                    .apply { setPadding(0, dp(8), 0, 0) })
+                addView(inkButton("Uninstall InkControl") {
+                    runCatching { startActivity(Intent(Intent.ACTION_DELETE, android.net.Uri.parse("package:org.neoport.inkcontrol"))) }
+                }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
+            }
+        }
+        screenBox.addView(status, lp(MATCH, WRAP).apply { setMargins(dp(16), dp(8), dp(16), dp(4)) })
+        screenBox.addView(text("Swipe along the ${if (Prefs(this).edgeRight) "left" else "right"} edge for screen modes, full refresh, contrast and the light. A mode can be for one app or everywhere.", 14f, color = Ink.MUTED)
+            .apply { setPadding(dp(16), dp(8), dp(16), dp(4)) })
+
+        screenBox.addView(sectionTitle("Screen"))
+        if (KompaktSync.get(filesDir) != null) screenBox.addView(toggleRow("Follow KompaktOS's per-app modes", "Apps you set in KompaktOS's settings use that mode, unless you pick one here", ScreenModes.followKompakt(this)) {
+            ScreenModes.setFollowKompakt(this, !ScreenModes.followKompakt(this)); renderScreen()
+        })
+        screenBox.addView(toggleRow("Real refresh for KompaktOS's Refresh", "KompaktOS's own refresh tile only flashes black here; this adds a full refresh", ScreenModes.flashOnKompaktRefresh(this)) {
+            ScreenModes.setFlashOnKompaktRefresh(this, !ScreenModes.flashOnKompaktRefresh(this)); renderScreen()
+        })
+
+        if (Light.supported()) {
+            screenBox.addView(sectionTitle("Front light"))
+            screenBox.addView(toggleRow("Follows Android's brightness", "The brightness slider and adaptive brightness dim the light too", Light.followSystem(this)) {
+                Light.setFollowSystem(this, !Light.followSystem(this)); renderScreen()
+            })
+        }
+
+        if (!SleepImages.supported()) return
+        screenBox.addView(sectionTitle("When the screen is off"))
+        fun choices(title: String, detail: String, labels: List<String>, current: Int, pick: (Int) -> Unit) = screenBox.addView(vbox().apply {
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            addView(text(title, 17f, medium = true))
+            if (detail.isNotEmpty()) addView(text(detail, 13f, color = Ink.MUTED))
+            addView(hbox().apply {
+                setPadding(0, dp(6), 0, 0)
+                labels.forEachIndexed { i, l -> addView(chip(l, i == current) { pick(i) }.apply { maxLines = 1 },
+                    lp(0, WRAP, 1f).apply { if (i > 0) marginStart = dp(6) }) }
+            })
+        })
+        choices("Sleep screen", "What stays on the screen while it sleeps", listOf("Moaan's", "Your picture…"), if (SleepImages.customSleep(this)) 1 else 0) { i ->
+            if (i == 1) pickImage(PICK_SLEEP) else work({ if (SleepImages.resetSleep(this)) null else "the bridge isn't there" }, "Sleep screen: Moaan's")
+        }
+        val off = SleepImages.PowerOff.entries
+        choices("Power-off screen", "What stays on the screen when it's off. Panda: Moaan's panda in English", off.map { it.title + if (it == SleepImages.PowerOff.CUSTOM) "…" else "" },
+            off.indexOf(SleepImages.powerOff(this))) { i ->
+            if (off[i] == SleepImages.PowerOff.CUSTOM) pickImage(PICK_POWEROFF)
+            else work({ SleepImages.setPowerOff(this, off[i]) }, "Power-off screen: ${off[i].title}")
+        }
+        if (AutoOff.supported()) {
+            val hours = AutoOff.HOURS
+            choices("Auto power-off", "After this long asleep on battery, like the stock firmware", hours.map { if (it == 0) "Never" else "$it h" },
+                hours.indexOf(AutoOff.hours(this)).coerceAtLeast(0)) { i -> AutoOff.setHours(this, hours[i]); renderScreen() }
+        }
+    }
+
+    private fun pickImage(request: Int) = runCatching {
+        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"), request)
+    }.onFailure { toast("No file picker") }
+
+    /** Runs a blocking bridge step ([job] returns an error or null), then says how it went. */
+    private fun work(job: () -> String?, done: String) = Eink.post {
+        val err = job()
+        Shell.main.post { toast(err?.let { "Didn't work: $it" } ?: done); if (section == SECTION_SCREEN) renderScreen() }
+    }
+
+    @Deprecated("Activity result API isn't used in this app (no AndroidX)")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data ?: return
+        if (resultCode != RESULT_OK) return
+        when (requestCode) {
+            PICK_SLEEP -> work({ SleepImages.setSleep(this, uri) }, "Sleep screen set")
+            PICK_POWEROFF -> work({ SleepImages.setPowerOff(this, SleepImages.PowerOff.CUSTOM, uri) }, "Power-off screen set")
+        }
+    }
+
     // ---- Whole device -------------------------------------------------------------------------
 
     // ---- Touch button (docs/mockups/10-touch-button.png) ------------------------------------------
 
     private fun renderTouch() {
         touchBox.removeAllViews()
+        if (Eink.isKompakt) {
+            // KompaktOS: the button is Home (Moaan's settings for it are gone); InkPalm+ can add the stock hold.
+            touchBox.addView(text("The button below the screen is Home. Holding it can do a full refresh, as on the stock firmware.", 14f, color = Ink.MUTED).apply {
+                setPadding(dp(16), dp(8), dp(16), dp(4))
+            })
+            val prefs = Prefs(this)
+            touchBox.addView(toggleRow("Hold for a full refresh", if (QuickPanelService.enabled(this)) "A short touch is still Home"
+                else "Needs the side panel on (Accessibility)", prefs.holdRefresh) {
+                prefs.holdRefresh = !prefs.holdRefresh
+                sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName))
+                renderTouch()
+            })
+            return
+        }
         touchBox.addView(text("The button below the screen. These are the actions built into the device; changes apply on the next touch.", 14f, color = Ink.MUTED).apply {
             setPadding(dp(16), dp(8), dp(16), dp(4))
         })
@@ -519,6 +635,9 @@ open class MainActivity : Activity() {
         const val SECTION_EINK = "eink"
         const val SECTION_TOUCH = "touch"
         const val SECTION_KEEP_ON = "keep_on"
+        const val SECTION_SCREEN = "screen"
+        private const val PICK_SLEEP = 51
+        private const val PICK_POWEROFF = 52
 
         val ANIMATION_KEYS = listOf(
             Settings.Global.WINDOW_ANIMATION_SCALE,

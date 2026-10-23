@@ -73,4 +73,6 @@ dependencies {
     implementation("dev.rikka.shizuku:provider:$shizuku")
     // Moaan's per-app DPI call lives on a hidden PackageManager method.
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
+    // Unit tests for the pure parts (light curves, mode mapping); `./gradlew testDebugUnitTest`.
+    testImplementation("junit:junit:4.13.2")
 }

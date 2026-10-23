@@ -24,6 +24,10 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <!-- Auto power-off (KompaktOS): an exact alarm after N hours asleep, so Doze can't push it back by hours. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+
     <!-- "Save + reopen": ends the tuned app in the background so it reopens at its new DPI. -->
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
 
@@ -32,7 +36,7 @@
         <!-- NeoReader: its book list (an exported provider) and opening books in it, for the side panel. -->
         <package android:name="com.onyx.kreader" />
         <provider android:authorities="com.onyx.content.database.ContentProvider" />
-        <!-- InkControl (KompaktOS): the front light's API, for the side panel's Light block. -->
+        <!-- InkControl (KompaktOS), which InkPalm+ replaces: its light levels once, and telling the user to remove it. -->
         <package android:name="org.neoport.inkcontrol" />
         <!-- KOReader (Play/GitHub and F-Droid builds): opening books in it. -->
         <package android:name="org.koreader.launcher" />
@@ -44,6 +48,7 @@
     </queries>
 
     <application
+        android:name=".App"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -99,6 +104,103 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Auto power-off timer (AutoOff); only InkPalm+'s own PendingIntent reaches it. -->
+        <receiver
+            android:name=".AutoOff$Alarm"
+            android:exported="false" />
+
+        <!-- Quick Settings tiles (KompaktOS; from InkControl). Their icons are drawn as words at runtime. -->
+        <service
+            android:name=".ModeTile$Fast"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="InkPalm+: Fast"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".ModeTile$Soft"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="InkPalm+: Soft"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".ModeTile$Dither"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="InkPalm+: Dither"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".ModeTile$Text"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="InkPalm+: Text"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".ModeTile$Quality"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="InkPalm+: Quality"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".ModeTile$Auto"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="InkPalm+: Auto"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".ModeCycleTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="InkPalm+: E-ink mode"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".RefreshTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="InkPalm+: Full refresh"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".LightTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="InkPalm+: Front light"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- Receives Shizuku's binder. -->
         <provider

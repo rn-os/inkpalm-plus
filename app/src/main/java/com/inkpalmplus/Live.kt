@@ -1,11 +1,8 @@
 package com.inkpalmplus
 
 import android.content.Context
-import android.os.IBinder
-import android.os.Parcel
 import android.provider.Settings
 import android.util.Log
-import org.lsposed.hiddenapibypass.HiddenApiBypass
 
 /**
  * Applies e-ink settings to the app that's open right now, without reopening it
@@ -23,34 +20,9 @@ object Live {
 
     // ---- System properties through Moaan's eink service ---------------------------------------
 
-    private val einkBinder: IBinder? by lazy {
-        runCatching {
-            HiddenApiBypass.invoke(Class.forName("android.os.ServiceManager"), null, "getService", "eink") as IBinder?
-        }.onFailure { Log.w(TAG, "no eink service: $it") }.getOrNull()
-    }
-
-    /** IEinkManager.setProperty (binder call 5). Falls back to `setprop` through Shizuku. */
-    fun setProperty(key: String, value: String): Boolean {
-        val direct = einkBinder?.let { b ->
-            val data = Parcel.obtain()
-            val reply = Parcel.obtain()
-            try {
-                data.writeInterfaceToken("android.os.IEinkManager")
-                data.writeString(key)
-                data.writeString(value)
-                b.transact(5, data, reply, 0)
-                reply.readException()
-                true
-            } catch (e: Exception) {
-                Log.w(TAG, "eink setProperty $key failed: $e")
-                false
-            } finally {
-                data.recycle()
-                reply.recycle()
-            }
-        } ?: false
-        return direct || Shell.run("setprop $key $value").first == 0
-    }
+    /** IEinkManager.setProperty (binder call 5, the lookup cached in [Eink]). Falls back to `setprop` through Shizuku. */
+    fun setProperty(key: String, value: String): Boolean =
+        Eink.binderSet(key, value) || Shell.run("setprop $key $value").first == 0
 
     private val propGet by lazy {
         runCatching { Class.forName("android.os.SystemProperties").getMethod("get", String::class.java, String::class.java) }
@@ -60,10 +32,15 @@ object Live {
     fun getProperty(key: String, default: String): String =
         runCatching { propGet?.invoke(null, key, default) as String? }.getOrNull() ?: default
 
-    /** One full-screen refresh, as Moaan's EinkManager.sendOneFullFrame does. */
+    /** One full-screen refresh on whatever firmware this is (KompaktOS: the bridge's eink.full, see [Eink.requestFull]). */
     fun fullRefresh() {
+        Eink.requestFull()
+    }
+
+    /** Stock: one full-screen refresh, as Moaan's EinkManager.sendOneFullFrame does. */
+    fun fullRefreshStock(): Boolean {
         // The driver refreshes when the value changes. Apps can't read it, so use one that's always new.
-        setProperty("sys.eink.one_full_mode_timeline", "${(android.os.SystemClock.uptimeMillis() / 100) % 1_000_000}")
+        return setProperty("sys.eink.one_full_mode_timeline", "${(android.os.SystemClock.uptimeMillis() / 100) % 1_000_000}")
     }
 
     // ---- Per-app settings, now ----------------------------------------------------------------

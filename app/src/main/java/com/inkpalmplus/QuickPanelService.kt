@@ -9,19 +9,25 @@ import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 
 /**
- * Keeps the edge strip on screen and opens [QuickPanel] over the app in front.
- * Also tracks which app that is (window-state events), so the panel opens on it.
+ * Keeps the edge strips on screen: one opens [SidePanel] (recent apps), the other, on KompaktOS, [ScreenPanel]
+ * (screen modes and the front light); [QuickPanel] is stock firmware's e-ink panel for the app in front.
+ * Also tracks which app that is (window-state events), so the panels open on it, and puts the app's screen mode
+ * on ([ScreenModes]). On KompaktOS it also does what InkControl did: the front light ([Light]) follows the screen
+ * and the light sensor, auto power-off ([AutoOff]) is armed at sleep, an inward swipe from the edge is Back, and
+ * holding the touch button is a full refresh.
  */
 class QuickPanelService : AccessibilityService() {
     private lateinit var wm: WindowManager
-    private var strip: View? = null
+    private val strips = mutableListOf<View>()
     private var panel: QuickPanel? = null
     private var side: SidePanel? = null
+    private var screen: ScreenPanel? = null
     lateinit var recents: RecentApps
         private set
     private lateinit var rotation: Rotation
@@ -44,22 +50,34 @@ class QuickPanelService : AccessibilityService() {
             when (i.action) {
                 ACTION_OPEN -> openPanel()
                 ACTION_CLOSE -> closePanel()
-                ACTION_STRIP -> showStrip(preview = i.getBooleanExtra(EXTRA_PREVIEW, false))
+                ACTION_STRIP -> { showStrip(preview = i.getBooleanExtra(EXTRA_PREVIEW, false)); syncKeyFilter(); syncLightSensor() }
                 ACTION_CLEAR_RECENTS -> recents.clear()
                 ACTION_TEST -> test(i)
             }
         }
     }
 
-    private val lightChanged = object : BroadcastReceiver() {
+    /** The light follows the screen (off at sleep, back at wake); auto power-off runs only asleep on battery. */
+    private val power = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
-            prepared?.lightStale = true
-            if (side == null) prepareSoon()
+            when (i.action) {
+                Intent.ACTION_SCREEN_OFF -> { Light.screenOff(); syncLightSensor(); AutoOff.arm(c) }
+                Intent.ACTION_SCREEN_ON -> { Light.apply(c); syncLightSensor(); AutoOff.cancel(c) }
+                Intent.ACTION_POWER_CONNECTED -> AutoOff.cancel(c)
+                Intent.ACTION_POWER_DISCONNECTED -> AutoOff.arm(c)
+                Intent.ACTION_SHUTDOWN -> SleepImages.onShutdown(c)
+            }
         }
+    }
+
+    /** Android's brightness slider or adaptive brightness changed: the light follows. */
+    private val brightness = object : android.database.ContentObserver(Shell.main) {
+        override fun onChange(self: Boolean) { syncLightSensor(); Light.apply(this@QuickPanelService) }
     }
 
     override fun onServiceConnected() {
         instance = this
+        Eink.init(this)
         Prefs(this).panelWanted = true
         wm = getSystemService(WindowManager::class.java)
         rotation = Rotation(this, wm)
@@ -80,8 +98,19 @@ class QuickPanelService : AccessibilityService() {
         }
         // Uninstalled apps leave the recent list (so the panel never has to check while drawing).
         registerReceiver(packageGone, IntentFilter(Intent.ACTION_PACKAGE_FULLY_REMOVED).apply { addDataScheme("package") })
-        // InkControl's front light changed (from anywhere): a prepared panel would show old numbers.
-        registerReceiver(lightChanged, IntentFilter(Light.ACTION_CHANGED), exported)
+        registerReceiver(power, IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_POWER_CONNECTED); addAction(Intent.ACTION_POWER_DISCONNECTED); addAction(Intent.ACTION_SHUTDOWN)
+        }, notExported)
+        if (Light.supported()) {
+            for (k in listOf(android.provider.Settings.System.SCREEN_BRIGHTNESS, android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE))
+                contentResolver.registerContentObserver(android.provider.Settings.System.getUriFor(k), false, brightness)
+        }
+        // KompaktOS: contrast and refresh type back after a restart, the light on, the key filter if wanted.
+        ScreenModes.restore(this)
+        Light.apply(this)
+        syncLightSensor()
+        syncKeyFilter()
         recents.warm()
         showStrip()
         // The app in front isn't known until the next window change: the service doesn't read window
@@ -92,10 +121,13 @@ class QuickPanelService : AccessibilityService() {
     override fun onDestroy() {
         runCatching { unregisterReceiver(receiver) }
         runCatching { unregisterReceiver(packageGone) }
-        runCatching { unregisterReceiver(lightChanged) }
+        runCatching { unregisterReceiver(power) }
+        runCatching { contentResolver.unregisterContentObserver(brightness) }
+        runCatching { getSystemService(android.hardware.SensorManager::class.java).unregisterListener(lux) }
         removeStrip()
         closePanel()
         closeSide()
+        closeScreen()
         if (::rotation.isInitialized) rotation.release()
         if (::helpers.isInitialized) helpers.release()
         instance = null
@@ -127,6 +159,12 @@ class QuickPanelService : AccessibilityService() {
         }
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
+        if (pkg == KOMPAKT_SERVICE) {
+            // KompaktOS's refresh (its QS tile, after its mode tiles) shows a bare black View and does nothing else
+            // here: make it a real refresh. Its windows are never the app in front.
+            if (event.className?.toString() == View::class.java.name) ScreenModes.kompaktFlashSeen(this)
+            return
+        }
         if (pkg == packageName || pkg == "com.android.systemui" || pkg == "android" || pkg.contains("inputmethod") || isKeyboard(pkg)) return
         if (pkg != foreground) {
             // An app leaving the screen can report one more window change just after the next app's
@@ -149,10 +187,12 @@ class QuickPanelService : AccessibilityService() {
             recents.warm()
             prepareSoon()
             rotation.apply(Prefs(this).rotation(pkg))
+            ScreenModes.onForeground(this, pkg)
             helpers.onForeground(pkg)
             // Another app came to the front under the panel: it belongs to the old one.
             if (panel != null && panel?.pkg != pkg) closePanel()
             if (side != null) closeSide()
+            if (screen != null) closeScreen()
         }
     }
 
@@ -179,6 +219,10 @@ class QuickPanelService : AccessibilityService() {
             old.dismiss(wm)
             side = SidePanel(this) { closeSide() }.also { it.show(wm) }
         }
+        screen?.let { old ->
+            old.dismiss(wm)
+            screen = ScreenPanel(this) { closeScreen() }.also { it.show(wm) }
+        }
     }
 
     // ---- Rotation -----------------------------------------------------------------------------
@@ -195,29 +239,132 @@ class QuickPanelService : AccessibilityService() {
 
     private val endPreview = Runnable { showStrip() }
 
-    /** [preview]: drawn solid black for a few seconds, while Settings changes its size or side. */
+    /**
+     * The strips: recent apps on the chosen edge, the screen panel on the other (KompaktOS), both mid-edge (30–65% of
+     * the height) for a swipe along them. With edge Back on, an inward swipe on them is Back, and thinner Back-only
+     * strips cover the rest of each edge (12–88%), clear of the status bar and the keyboard's bottom row.
+     * [preview]: drawn solid black for a few seconds, while Settings changes their size or side.
+     */
     fun showStrip(preview: Boolean = false) {
         removeStrip()
         Shell.main.removeCallbacks(endPreview)
         val prefs = Prefs(this)
-        val v = EdgeHandleView(this, prefs.edgeRight, prefs.showStrip, solid = preview) { toggleSide() }
         if (preview) Shell.main.postDelayed(endPreview, 3_000)
         val h = resources.displayMetrics.heightPixels
+        val back: (() -> Unit)? = if (prefs.edgeBack) ({ back() }) else null
+        val midTop = (h * 0.3f).toInt()
+        val midBottom = (h * 0.65f).toInt()
+        val top = (h * 0.12f).toInt()
+        val bottom = (h * 0.88f).toInt()
+        for (right in listOf(true, false)) {
+            val trigger: (() -> Unit)? = when {
+                right == prefs.edgeRight -> ({ toggleSide() })
+                prefs.screenPanelOn -> ({ toggleScreen() })
+                else -> null
+            }
+            if (trigger != null) addStrip(EdgeHandleView(this, right, prefs.showStrip, solid = preview, onBack = back, onTrigger = trigger),
+                right, dp(prefs.stripWidthDp), midTop, midBottom - midTop)
+            if (back == null) continue
+            val w = dp(BACK_STRIP_DP)
+            fun backOnly(y: Int, height: Int) = addStrip(EdgeHandleView(this, right, false, solid = preview, onBack = back, onTrigger = null), right, w, y, height)
+            if (trigger != null) { backOnly(top, midTop - top); backOnly(midBottom, bottom - midBottom) } else backOnly(top, bottom - top)
+        }
+    }
+
+    private fun addStrip(v: View, right: Boolean, width: Int, y: Int, height: Int) {
         val lp = WindowManager.LayoutParams(
-            dp(prefs.stripWidthDp), (h * 0.35f).toInt(),
+            width, height,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or if (prefs.edgeRight) Gravity.END else Gravity.START
-            y = (h * 0.3f).toInt()
+            gravity = Gravity.TOP or if (right) Gravity.END else Gravity.START
+            this.y = y
         }
-        runCatching { wm.addView(v, lp) }.onSuccess { strip = v }.onFailure { Log.w(TAG, "strip: $it") }
+        runCatching { wm.addView(v, lp) }.onSuccess { strips += v }.onFailure { Log.w(TAG, "strip: $it") }
     }
 
     private fun removeStrip() {
-        strip?.let { runCatching { wm.removeView(it) } }
-        strip = null
+        strips.forEach { runCatching { wm.removeView(it) } }
+        strips.clear()
+    }
+
+    /** Edge Back (KompaktOS has no navigation bar, so Android's own back gesture never works there). */
+    fun back() {
+        Log.i(TAG, "edge back")
+        performGlobalAction(GLOBAL_ACTION_BACK)
+    }
+
+    // ---- Repaint, light sensor, touch button ----------------------------------------------------
+
+    /**
+     * The panel only redraws pixels that change, in the mode current at that moment, so a new mode (or a full
+     * refresh request) doesn't show on a still screen. A brief full-screen white overlay makes every non-white
+     * pixel change twice, redrawing the whole screen. Any thread.
+     */
+    fun repaint(holdMs: Long) = Shell.main.post {
+        val v = View(this).apply { setBackgroundColor(Ink.PAPER) }
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.OPAQUE,
+        )
+        if (runCatching { wm.addView(v, lp) }.isFailure) return@post
+        Shell.main.postDelayed({ runCatching { wm.removeView(v) } }, holdMs)
+    }
+
+    private var luxListening = false
+    private val lux = object : android.hardware.SensorEventListener {
+        override fun onSensorChanged(e: android.hardware.SensorEvent) = Light.onLux(this@QuickPanelService, e.values[0])
+        override fun onAccuracyChanged(s: android.hardware.Sensor?, accuracy: Int) {}
+    }
+
+    /** The light sensor, only while the screen is on and adaptive brightness is on (the light follows it, see [Light]). */
+    private fun syncLightSensor() {
+        val sm = getSystemService(android.hardware.SensorManager::class.java) ?: return
+        val want = Light.supported() && Light.followSystem(this) && Light.auto(this) &&
+            getSystemService(android.os.PowerManager::class.java).isInteractive
+        if (want == luxListening) return
+        if (want) sm.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT)?.let {
+            luxListening = sm.registerListener(lux, it, android.hardware.SensorManager.SENSOR_DELAY_NORMAL)
+        } else {
+            sm.unregisterListener(lux)
+            luxListening = false
+        }
+    }
+
+    /** Holding the touch button (KEY_HOMEPAGE → Home on KompaktOS) for [HOLD_MS] is a full refresh, as on stock. */
+    private var filteringKeys = false
+    private var homeHeld = false
+    private val homeHold = Runnable { homeHeld = true; Log.i(TAG, "touch button held: full refresh"); ScreenModes.fullRefresh() }
+
+    /** Key events reach the service only while the option is on (each one passes through it first). */
+    private fun syncKeyFilter() {
+        val want = Prefs(this).holdRefresh
+        val info = serviceInfo ?: return
+        val flag = android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+        if (want == (info.flags and flag != 0)) { filteringKeys = want; return }
+        info.flags = if (want) info.flags or flag else info.flags and flag.inv()
+        serviceInfo = info
+        filteringKeys = want
+    }
+
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        if (!filteringKeys || event.keyCode != KeyEvent.KEYCODE_HOME) return false
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) {
+                homeHeld = false
+                Shell.main.postDelayed(homeHold, HOLD_MS)
+            }
+            KeyEvent.ACTION_UP -> {
+                Shell.main.removeCallbacks(homeHold)
+                // A short touch is still Home.
+                if (!homeHeld && !event.isCanceled) performGlobalAction(GLOBAL_ACTION_HOME)
+            }
+        }
+        return true
     }
 
     /**
@@ -244,7 +391,16 @@ class QuickPanelService : AccessibilityService() {
             "side_card" -> side?.testCard(hold = value == "hold") ?: false
             "side_book" -> side?.testBook(value.toInt()) ?: false
             "side_browse" -> side?.testBrowse() ?: false
-            "light_state" -> { Log.i(TAG, side?.describeLight() ?: "light: panel closed"); true }
+            "light_state" -> { Log.i(TAG, screen?.describeLight() ?: "light: panel closed"); true }
+            "screen" -> { if (screen == null) toggleScreen(); screen != null }
+            "screen_close" -> { closeScreen(); true }
+            "screen_mode" -> screen?.testMode(value) ?: false
+            "screen_scope" -> screen?.testScope(value == "app") ?: false
+            "screen_state" -> { Log.i(TAG, "screen: ${screen?.describe() ?: "closed"} backend=${Eink.backend}"); true }
+            "screen_refresh" -> { ScreenModes.fullRefresh(); true }
+            "contrast" -> { ScreenModes.setContrast(this, value.toInt()); true }
+            "edge_back" -> { Prefs(this).edgeBack = value == "on"; showStrip(); true }
+            "back" -> { back(); true }
             "books_state" -> { Log.i(TAG, "books: ${side?.describeBooks() ?: "closed"}"); true }
             "side_state" -> { Log.i(TAG, "side: ${side?.describe() ?: "closed"}"); true }
             "remember" -> { recents.record(value); true }
@@ -282,6 +438,7 @@ class QuickPanelService : AccessibilityService() {
     fun toggleSide() {
         if (side != null) return closeSide()
         closePanel()
+        closeScreen(refresh = false)
         switchTo = null
         val t0 = android.os.SystemClock.uptimeMillis()
         val ready = prepared?.takeIf { it.fresh() }
@@ -317,6 +474,24 @@ class QuickPanelService : AccessibilityService() {
         Shell.io.execute { Thread.sleep(150); Live.fullRefresh() }
     }
 
+    // ---- Screen panel (KompaktOS) ---------------------------------------------------------------
+
+    /** The other strip opens the screen panel; a second swipe, ✕ or a tap outside closes it. */
+    fun toggleScreen() {
+        if (screen != null) return closeScreen()
+        closePanel()
+        side?.let { side = null; it.dismiss(wm); prepareSoon() }
+        screen = ScreenPanel(this) { closeScreen() }.also { it.show(wm) }
+    }
+
+    fun closeScreen(refresh: Boolean = true) {
+        val s = screen ?: return
+        screen = null
+        s.dismiss(wm)
+        // The panel leaves a ghost on e-ink.
+        if (refresh) Shell.io.execute { Thread.sleep(150); Live.fullRefresh() }
+    }
+
     // ---- Panel --------------------------------------------------------------------------------
 
     fun openPanel() {
@@ -344,6 +519,11 @@ class QuickPanelService : AccessibilityService() {
         /** Window changes from the app that just left, within this long, are its last gasp, not a switch back. */
         const val BOUNCE_MS = 500L
         const val PERMISSION = "com.inkpalmplus.permission.PANEL"
+        const val KOMPAKT_SERVICE = "com.kompakt.service"
+        /** Back-only strips are thinner than the panel strips: they eat taps on the edge's last few dp. */
+        const val BACK_STRIP_DP = 10
+        /** The firmware's own long press (PhoneWindowManager$18). */
+        const val HOLD_MS = 800L
 
         @Volatile var instance: QuickPanelService? = null
             private set

@@ -48,7 +48,7 @@ A few things to know:
 - **It's quick.** The panel opens in about 30 ms.
 - **Clear all** leaves the app you're in. An app that's playing audio in the background may keep running after ✕.
 - **Home screens and InkPalm+ itself** aren't listed. The list is kept across restarts.
-- **Front light** (KompaktOS with InkControl): Brightness and Warmth at the top of the panel, each − slider +. Brightness 0% turns the light off.
+- **Front light** (KompaktOS with InkControl): Brightness and Warmth at the top of the panel, each − slider +. Brightness 0% turns the light off. **Auto** switches Android's adaptive brightness (the light sensor) on or off.
 - **Last read.** Pick your reader (NeoReader or KOReader) and the last book you read in it sits below your apps (above them with Newest app: Top). Tap it to keep reading. Hold it for your books, newest first, and **Browse files…** for anything new. KOReader needs Android's All files access, so InkPalm+ can read its history.
 
 <img src="docs/launch/2-hold.png" width="720" alt="Holding an app: Remove from list, Open its e-ink settings, App info">

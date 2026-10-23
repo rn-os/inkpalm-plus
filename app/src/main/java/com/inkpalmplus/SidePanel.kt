@@ -150,7 +150,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
 
     /** The reader picked and whether its history is readable: a prepared panel goes stale when either changes. */
     private var builtReader = ""
-    private fun readerState() = (Readers.chosen(ctx)?.let { "${it.key}:${Readers.hasAccess(it)}" } ?: "none") +
+    private fun readerState() = "auto=${Light.auto(ctx)}|" + (Readers.chosen(ctx)?.let { "${it.key}:${Readers.hasAccess(it)}" } ?: "none") +
         if (Prefs(ctx).newestAtBottom) "|bottom" else "|top"
 
     private fun currentWidth() = ctx.resources.displayMetrics.widthPixels * (if (twoCols) 72 else if (landscape) 50 else Prefs(ctx).panelWidthPct) / 100
@@ -401,12 +401,15 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         var warmth = s.warmth
         fun send() {
             if (level > 0) lastLevel = level
-            light = Light.State(lastLevel, warmth, level > 0)
+            light = Light.State(lastLevel, warmth, level > 0, s.follows, light?.auto ?: s.auto)
             Light.set(ctx, lastLevel, warmth, level > 0)
         }
-        fun slider(label: () -> String, get: () -> Int, put: (Int) -> Unit) = addView(ctx.hbox().apply {
+        fun slider(label: () -> String, get: () -> Int, put: (Int) -> Unit, extra: View? = null) = addView(ctx.hbox().apply {
             gravity = Gravity.CENTER_VERTICAL
-            val text = ctx.text(label(), 13f, bold = true).apply { gravity = Gravity.CENTER; maxLines = 1 }
+            val text = ctx.text(label(), 13f, bold = true).apply {
+                gravity = Gravity.CENTER; maxLines = 1
+                setAutoSizeTextTypeUniformWithConfiguration(10, 13, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+            }
             val bar = android.widget.SeekBar(ctx).apply {
                 max = 100
                 progress = get()
@@ -422,12 +425,41 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
             fun step(d: Int) { put((get() + d).coerceIn(0, 100)); bar.progress = get(); send(); text.text = label() }
             addView(ctx.inkButton("−", 18f) { step(-10) }, lp(ctx.dp(44), WRAP))
             addView(ctx.vbox().apply {
-                addView(text, lp(MATCH, WRAP))
+                // The label line keeps one height, and the Auto pill one spot, whatever the label says.
+                addView(ctx.hbox().apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(text, lp(0, WRAP, 1f))
+                    extra?.let { addView(it, lp(WRAP, WRAP).apply { marginStart = ctx.dp(4) }) }
+                }, lp(MATCH, WRAP))
                 addView(bar, lp(MATCH, WRAP))
             }, lp(0, WRAP, 1f))
             addView(ctx.inkButton("+", 18f) { step(10) }, lp(ctx.dp(44), WRAP))
         }, lp(MATCH, WRAP).apply { topMargin = ctx.dp(2) })
-        slider({ if (level == 0) "Light off" else "Brightness $level%" }, { level }, { level = it })
+        // Auto (mockup 18): Android's adaptive brightness, which InkControl follows when it scales by the system level.
+        val pill = if (!s.follows) null else ctx.text("Auto", 11f, bold = true).apply {
+            gravity = Gravity.CENTER
+            setPadding(ctx.dp(8), ctx.dp(2), ctx.dp(8), ctx.dp(2))
+            minWidth = ctx.dp(48)
+            fun look(on: Boolean) {
+                background = ctx.outline(2, 10, if (on) Ink.INK else Ink.PAPER)
+                setTextColor(if (on) Ink.PAPER else Ink.INK)
+                contentDescription = if (on) "Auto brightness on" else "Auto brightness off"
+            }
+            look(s.auto)
+            setOnClickListener {
+                val on = !(light?.auto ?: s.auto)
+                if (Light.setAuto(ctx, on)) {
+                    light = light?.let { Light.State(it.level, it.warmth, it.on, it.follows, on) }
+                    look(on)
+                } else {
+                    // Modify system settings isn't allowed yet: Android's screen for it.
+                    runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                        android.net.Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    onClose()
+                }
+            }
+        }
+        slider({ if (level == 0) "Light off" else "Brightness $level%" }, { level }, { level = it }, pill)
         slider({ "Warmth $warmth%" }, { warmth }, { warmth = it })
     }.also { it.layoutParams = LinearLayout.LayoutParams(MATCH, WRAP) }
 

@@ -3,6 +3,7 @@ package com.inkpalmplus
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import android.util.Log
 import kotlin.math.roundToInt
 
@@ -20,7 +21,8 @@ object Light {
     private const val ACTION_SET = "org.neoport.inkcontrol.action.SET_LIGHT"
     private val STATE: Uri = Uri.parse("content://org.neoport.inkcontrol.light/state")
 
-    class State(val level: Int, val warmth: Int, val on: Boolean)
+    /** [follows]: InkControl scales the light by the system brightness, so Android's adaptive brightness ([auto]) applies. */
+    class State(val level: Int, val warmth: Int, val on: Boolean, val follows: Boolean = false, val auto: Boolean = false)
 
     /** The light now, or null when there's no light to control. A cross-app query: keep it off the swipe. */
     fun read(context: Context): State? = runCatching {
@@ -36,7 +38,7 @@ object Light {
                 cold >= warm -> (50f * warm / cold).roundToInt()
                 else -> (100f - 50f * cold / warm).roundToInt()
             }
-            State(level, warmth, int("cold_on") == 1 || int("warm_on") == 1)
+            State(level, warmth, int("cold_on") == 1 || int("warm_on") == 1, int("follow_system") == 1, auto(context))
         }
     }.onFailure { Log.w("InkPalmPlus", "InkControl's light isn't readable: $it") }.getOrNull()
 
@@ -49,6 +51,18 @@ object Light {
                 .putExtra("cold_on", on).putExtra("warm_on", on))
         }.onFailure { Log.w("InkPalmPlus", "couldn't set the light: $it") }
     }
+
+    /** Android's adaptive brightness (the InkPalm's light sensor), on or off. */
+    fun auto(context: Context): Boolean = runCatching {
+        Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE) ==
+            Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+    }.getOrDefault(false)
+
+    /** Turns adaptive brightness on or off; false when InkPalm+ may not (Modify system settings isn't allowed). */
+    fun setAuto(context: Context, on: Boolean): Boolean = Settings.System.canWrite(context) && runCatching {
+        Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE,
+            if (on) Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC else Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+    }.getOrDefault(false)
 
     /** Channel levels for a brightness and warmth: cold = L·min(1, 2(1−t)), warm = L·min(1, 2t). */
     fun mix(level: Int, warmth: Int): Pair<Int, Int> {

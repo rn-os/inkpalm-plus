@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
-import java.io.File
 import kotlin.math.log10
 import kotlin.math.roundToInt
 
@@ -32,8 +31,9 @@ object Light {
 
     class State(val level: Int, val warmth: Int, val on: Boolean, val follows: Boolean = false, val auto: Boolean = false)
 
-    /** The bridge can drive the LEDs: KompaktOS on the InkPalm. */
-    fun supported(): Boolean = Eink.bridgeAvailable() && runCatching { File("/proc/aw99703").exists() }.getOrDefault(false)
+    /** The bridge can drive the LEDs: KompaktOS on the InkPalm (the bridge is only in InkPalm images; /proc/aw99703
+     *  itself may not be visible to apps). */
+    fun supported(): Boolean = Eink.bridgeAvailable()
 
     private fun sp(c: Context) = Prefs(c).sp
 
@@ -111,11 +111,17 @@ object Light {
         else -> runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS) }.getOrDefault(128) / 255f
     }
 
+    /** A write is queued: it reads the state when it runs, so more changes meanwhile (a slider drag) add nothing. */
+    private val queued = java.util.concurrent.atomic.AtomicBoolean(false)
+
     /** Pushes the current state to the LEDs. */
     fun apply(context: Context) {
-        if (!supported()) return
+        if (!supported() || !queued.compareAndSet(false, true)) return
         val c = context.applicationContext
         Eink.post {
+            queued.set(false)
+            // Asleep: the LEDs stay off (a brightness change can arrive then); the screen-on apply restores them.
+            if (!c.getSystemService(android.os.PowerManager::class.java).isInteractive) return@post
             val s = sp(c)
             val (cold, warm) = if (s.getBoolean(K_ON, true)) mix(s.getInt(K_LEVEL, 50), s.getInt(K_WARMTH, 50)) else 0 to 0
             val k = scale(c)

@@ -21,8 +21,11 @@ object Live {
     // ---- System properties through Moaan's eink service ---------------------------------------
 
     /** IEinkManager.setProperty (binder call 5, the lookup cached in [Eink]). Falls back to `setprop` through Shizuku. */
-    fun setProperty(key: String, value: String): Boolean =
-        Eink.binderSet(key, value) || Shell.run("setprop $key $value").first == 0
+    fun setProperty(key: String, value: String): Boolean {
+        // KompaktOS: Moaan's values (refresh type 12, mode 7…) would fight the screen modes; see ScreenModes.
+        if (Eink.bridgeInstalled) return false
+        return Eink.binderSet(key, value) || Shell.run("setprop $key $value").first == 0
+    }
 
     private val propGet by lazy {
         runCatching { Class.forName("android.os.SystemProperties").getMethod("get", String::class.java, String::class.java) }

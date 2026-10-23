@@ -36,10 +36,14 @@ object Eink {
     fun post(work: () -> Unit) = worker.execute { runCatching(work).onFailure { Log.w(TAG, "eink work failed: $it") } }
 
     @Volatile private var filesDir: File? = null
+    @Volatile private var app: Context? = null
 
-    /** Once per process (the service and activities call it; any context will do). */
+    /** Once per process ([App] does it; any context will do). */
     fun init(context: Context) {
-        if (filesDir == null) filesDir = context.applicationContext.filesDir
+        if (filesDir == null) {
+            app = context.applicationContext
+            filesDir = context.applicationContext.filesDir
+        }
     }
 
     /** The root bridge is in the system image (KompaktOS builds from the InkPalm-KompaktOS repo). */
@@ -70,6 +74,7 @@ object Eink {
 
     /** The `eink` service, or null. A miss is remembered for 5 minutes (stock may still be starting it). */
     fun binder(): IBinder? {
+        if (bridgeInstalled) return null
         binder?.takeIf { it.pingBinder() }?.let { return it }
         binder = null
         val now = SystemClock.elapsedRealtime()
@@ -107,7 +112,12 @@ object Eink {
 
     // ---- Direct (platform-signed) -------------------------------------------------------------------
 
-    private val directAllowed: Boolean by lazy { Live.getProperty(PROP_MODE, "").isNotEmpty() }
+    /** Signed with the system's platform key (so it runs as platform_app). A readable `sys.eink.mode` doesn't tell:
+     *  the vendor policy may let every app read vendor_ebook_prop. */
+    private val directAllowed: Boolean by lazy {
+        val c = app ?: return@lazy false
+        runCatching { c.packageManager.checkSignatures("android", c.packageName) == android.content.pm.PackageManager.SIGNATURE_MATCH }.getOrDefault(false)
+    }
 
     private fun directSet(key: String, value: String): Boolean = runCatching {
         HiddenApiBypass.invoke(Class.forName("android.os.SystemProperties"), null, "set", key, value)

@@ -71,8 +71,9 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         }
         val room = panelHeight() - ctx.dp(6) - used
         val rows = (room / (rowPx + ctx.dp(4))).coerceAtLeast(1)
-        // Share what's left over among the rows (all still the same height) rather than leaving a gap.
-        rowPx = maxOf(rowPx, room / rows - ctx.dp(4))
+        // Share what's left over among the rows (all still the same height), up to 15% taller; past that the rest
+        // stays a gap, so a single landscape row isn't much taller than a portrait one.
+        rowPx = (room / rows - ctx.dp(4)).coerceIn(rowPx, rowPx * 115 / 100)
         perPage = if (landscape) rows * 2 else rows
     }
 

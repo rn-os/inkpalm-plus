@@ -97,7 +97,8 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   service stayed enabled across the update adding key filtering; a real swipe on the left strip opens the panel;
   touch-button hold (KEY_HOMEPAGE via sendevent) = full refresh, short = Home; InkControl's light levels imported.
   Panda: apps can't read /vendor/media (avc vendor_file) → app asks the bridge for `standby.req export=1`
-  (files/vendor_poweroff.png; bridge change requested); compose checked with a hand-made copy.
+  (files/vendor_poweroff{,_nopower}.png). Done in InkPalm-KompaktOS main, baked into the next image; verified end to
+  end with it. Older images: Panda says a newer image is needed.
 - Power key sometimes doesn't wake (user report): reproduced as a system issue (also with InkPalm+'s key filter
   off, also with `input keyevent 26`); handed to the KompaktOS session.
 - Still to do by hand: the white repaint flash and Fast vs Quality on a gradient; tiles in KompaktOS QS; the user

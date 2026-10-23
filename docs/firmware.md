@@ -169,6 +169,39 @@ permission check: `adb shell service call activity 218 s16 <key> s16 <value>`.
 - Front light: `/proc/aw99703/led_brightness` + `led_current` (cold), `/proc/aw99703_sec/…` (warm); settings `mogu_cold_led_value`, `mogu_warm_led_value`.
 - `Settings.System.APPS_WHITE_LIST_KEY`: JSON list of apps Clear Memory leaves alone.
 
+## KompaktOS 1.2 (LineageOS 23.2 / Android 16 GSI) — from InkControl and the InkPalm-KompaktOS repo
+
+Source of truth for the image: `~/Github Repos/InkPalm-KompaktOS` (`docs/HANDOFF.md`, `docs/sleep-screen.md`,
+`gsi/vendor-fix/eink-apply.sh`, `tools/inkcontrol/README.md`). What InkPalm+ relies on (2026-10-23):
+
+- **No Moaan framework:** no `eink` binder (each lookup logs an SELinux `service_manager find` denial, so `Eink`
+  never looks when the bridge is present), no e-ink table, no Moaan touch-button keys, no navigation bar
+  (`config_showNavigationBar=false` in the vendor/kompakt overlay, so Android's edge back never works).
+- **Root bridge** (`/system/phh/inkpalm/eink-bridge.sh`, started from the image's rc): `inotifyd` on
+  `/data/data/com.inkpalmplus/files` (and InkControl's), on close-after-write; `eink-apply.sh` applies only:
+  - `eink.req`: `sys.eink.mode=<n>`, `sys.eink.one_full_mode_timeline=<n>`, `eink.full=1` (bumps the timeline:
+    the HWC posts the next frame full), `sys.gray.gammalevel=0..80` (HWC grey256→grey16 contrast, default 30),
+    `persist.sys.mogu.refresh_type=0..5`, `persist.vendor.fullmode_cnt=1..1000` (seeded 40 when unset).
+  - `light.req`: `light.cold` / `light.warm` = 0..2047 → `/proc/aw99703{,_sec}/led_brightness`.
+  - `standby.req`: `apply=1` / `reset=1` (files/standby.png → /data/misc/standby{,_charge,_lowpower}.png),
+    `poweroff=1` / `poweroff_reset=1` (files/poweroff.png → /data/misc/poweroff{,_nopower}.png; one source for both).
+  - `power.req`: `off=1` → shutdown, only if the screen is off and nothing is plugged in.
+  Values must be digits; a second write to the same file before the first is read can replace it (InkPalm+ keeps
+  writes to one file 120 ms apart).
+- **Modes only show on new pixels:** the vendor HWC honours `sys.eink.mode` as asked only with
+  `persist.sys.mogu.refresh_type=0` (1, 2, 4+ re-pick by content, 3 = always GLR16; InkPalm+ writes 0 at service
+  start), and a mode applies to pixels drawn after it. A 150 ms full-screen white accessibility overlay, ~250 ms
+  after the request, redraws everything in it (verified by the user with InkControl 2026-10-23).
+- **Presets** (KompaktOS names → EPD): Fast 12 A2, Soft 14 DU, Dither 13 A2_DITHER, Text 8 PART_GL16,
+  Quality 7 PART_GC16, Auto 22 AUTO_DU.
+- **KompaktService** keeps its config in private prefs (`kompakt.xml`: `eink_mode`, `per_app`, `app_mode_<pkg>`);
+  its refresh shows a bare black `android.view.View` window (package `com.kompakt.service`) and does nothing else
+  on this panel. Copying its prefs to `files/kompakt_prefs.xml` needs a bridge change (not done).
+- **Touch button:** KEY_HOMEPAGE on `fts_ts` → KEYCODE_HOME. Accessibility key filtering sees HOME before the
+  window manager (only volume keys are checked against the policy first), so a service can tell hold from touch.
+- **Front light:** Android 16's adaptive brightness never writes SCREEN_BRIGHTNESS; follow the light sensor instead.
+  The LED driver drops its levels across suspend; nothing rewrites them unless the app does at screen-on.
+
 ## Gotchas
 - `content query` on this Android has no `--arg`; `einksettingsupdate` queries with a `--where` throw. Untested from an app with selectionArgs.
 - `uiautomator dump` leaves out views behind the keyboard; hide it (Back) before dumping.

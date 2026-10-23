@@ -25,11 +25,17 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
   `Fonts` (system font, live), `Prefs`.
 - The quick panel is a bottom sheet in portrait and a half-width side sheet (strip side) in landscape; the service
   rebuilds the strip and panel when the screen turns.
+- KompaktOS (InkControl merged in, mockup 19): `Eink` (backends: stock binder / direct / root bridge request
+  files), `ScreenModes` (`ScreenMode` presets, per-app / KompaktOS / everywhere, repaint, contrast, `KompaktSync`),
+  `ScreenPanel` (the other edge's strip: modes, Full refresh, contrast, `LightBlock`), `Light` (LEDs via the bridge),
+  `AutoOff`, `SleepImages` (sleep and power-off screens), `Tiles` (QS tiles, `TextIcon`). The service also does edge
+  Back (inward swipe) and touch-button hold = full refresh (key filter). `App` gives `Eink` its files dir.
 - `Shell`: Shizuku shell commands and a background helper. `Ui`: e-ink view helpers copied from SuperBoox.
 - Views are built in code, black on white, no animations or ripples (see `Ui.kt` header).
 
 ## Build and test
 - Build: `./gradlew -q assembleDebug` (SDK at `~/Library/Android/sdk`, set in the untracked `local.properties`).
+  Unit tests (pure logic): `./gradlew -q testDebugUnitTest`.
 - **Device checks: `tools/device-test.sh run all`** (or a feature name; `list` shows them). It installs the
   debug build, drives the app by node text, checks Moaan's table and the firmware's `performCreate.dpi` log, restores
   the target app's row, and prints a short summary. Read the summary; open screenshots/dumps only for failures.
@@ -55,7 +61,8 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
 ## Product direction
 - Keep e-ink settings few and plain: the user worries that too many confuse people. New behaviour should default
   to something good, live on the home screen as one switch, and allow per-app overrides only on the app's own page.
-  The quick panel has four lines: Preset, Size, Contrast, Rotate (plus ⚙ to the home screen). New apps start on
+  The quick panel has four lines: Preset, Size, Contrast, Rotate (plus ⚙ to the home screen). On KompaktOS the
+  e-ink and light controls live in the screen panel instead (stock behaviour unchanged). New apps start on
   the System preset; no suggestions by app type.
 
 ## Working agreements

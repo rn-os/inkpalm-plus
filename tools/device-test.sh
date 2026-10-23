@@ -46,7 +46,11 @@ adb_() {
 }
 
 # Moaan's provider lives in SystemUI; if it stops answering, stop before touching anything else.
-healthy() { ADB_TIMEOUT=8 adb_ shell content query --uri $URI --projection id --where "\"package_name='android'\"" >/dev/null 2>&1; }
+# KompaktOS (KOMPAKT=1, set below when the root bridge is in the image) has no such table: check the system answers.
+healthy() {
+  if [ -n "${KOMPAKT:-}" ]; then ADB_TIMEOUT=8 adb_ shell service check activity >/dev/null 2>&1; return; fi
+  ADB_TIMEOUT=8 adb_ shell content query --uri $URI --projection id --where "\"package_name='android'\"" >/dev/null 2>&1
+}
 
 list_features() {
   for f in tools/device-checks/*.sh; do
@@ -57,7 +61,6 @@ list_features() {
 if [ "$CMD" = "list" ]; then list_features; exit 0; fi
 if [ "$CMD" != "run" ] || [ $# -eq 0 ]; then sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 2; fi
 FEATURES=("$@")
-[ "${FEATURES[0]}" = all ] && FEATURES=($(ls tools/device-checks | sed 's/\.sh$//'))
 for f in "${FEATURES[@]}"; do [ -f "tools/device-checks/$f.sh" ] || { echo "no such feature: $f (try: list)"; exit 2; }; done
 
 OUT="${OUT:-$ROOT/tools/device-results/$(date +%Y%m%d-%H%M%S)}"
@@ -180,12 +183,20 @@ manual() { CHECK_NOTES="$CHECK_NOTES
 
 # Display properties the quick panel sets live; put back through Moaan's eink service (it sets any property).
 PROPS="debug.sf.gamma.gamma sys.eink.mode persist.sys.mogu.refresh_type persist.vendor.fullmode_cnt"
+# KompaktOS: what the screen panel sets (put back with setprop; needs adb root).
+KOMPAKT_PROPS="sys.eink.mode sys.gray.gammalevel persist.sys.mogu.refresh_type persist.vendor.fullmode_cnt"
 GLOBALS="global:window_animation_scale global:transition_animation_scale global:animator_duration_scale system:font_scale"
 
 # The recent apps list from InkPalm+'s own file, newest first, one package per line.
 recent_list() { adb_ shell run-as $PKG cat shared_prefs/recent_apps.xml 2>/dev/null | tr -d '\r' | grep -o 'name="apps">[^<]*' | sed 's/^name="apps">//; s/&#10;/\n/g' | awk 'NF { print $1 }'; }
 
 snapshot() {
+  if [ -n "${KOMPAKT:-}" ]; then
+    recent_list | tail -r > "$OUT/recents-before.txt"
+    : > "$OUT/props-before.txt"
+    for k in $KOMPAKT_PROPS; do echo "$k=$(adb_ shell getprop $k | tr -d '\r')" >> "$OUT/props-before.txt"; done
+    return
+  fi
   row > "$OUT/target-row-before.txt"
   [ -s "$OUT/target-row-before.txt" ] || abort "no row for $TARGET in Moaan's table (open it once first)"
   : > "$OUT/globals-before.txt"
@@ -199,6 +210,7 @@ snapshot() {
 restore_all() {
   [ -n "${CLEANED:-}" ] && return 0
   CLEANED=1
+  if [ -n "${KOMPAKT:-}" ]; then restore_kompakt; return; fi
   [ -s "$OUT/target-row-before.txt" ] || return 0
   log "restoring $TARGET's row and global settings"
   local binds="" k v dpi
@@ -233,6 +245,20 @@ restore_all() {
   fi
 }
 
+restore_kompakt() {
+  [ -s "$OUT/props-before.txt" ] || return 0
+  log "restoring e-ink properties and the recent list"
+  local k v
+  while IFS='=' read -r k v; do
+    [ -n "$v" ] && [ "$(adb_ shell getprop "$k" | tr -d '\r')" != "$v" ] && adb_ shell setprop "$k" "$v"
+  done < "$OUT/props-before.txt"
+  recent_list > "$OUT/recents-after-run.txt"
+  if [ "$(tail -r "$OUT/recents-before.txt")" != "$(cat "$OUT/recents-after-run.txt")" ] && hook state; then
+    hook side_close >/dev/null; hook recents_clear >/dev/null
+    while read -r p <&3; do hook remember "$p" >/dev/null; done 3< "$OUT/recents-before.txt"
+  fi
+}
+
 write_summary() {
   local pass fail
   pass=$(grep -c "^PASS" "$RESULTS" 2>/dev/null); fail=$(grep -c "^FAIL" "$RESULTS" 2>/dev/null)
@@ -256,6 +282,13 @@ trap 'ABORTED="interrupted"; exit 130' INT TERM HUP
 
 adb_ get-state >/dev/null 2>&1 || { ABORTED="no device"; exit 2; }
 DEVICE="$(adb_ shell getprop ro.product.model | tr -d '\r') (Android $(adb_ shell getprop ro.build.version.release | tr -d '\r'))"
+# KompaktOS: the root bridge is in the image. Only the side panel and the screen panel apply there; Moaan's
+# table (per-app, quick-panel) is stock-only, and the screen panel is KompaktOS-only.
+adb_ shell test -f /system/phh/inkpalm/eink-bridge.sh && KOMPAKT=1 && DEVICE="$DEVICE, KompaktOS"
+if [ "${FEATURES[0]}" = all ]; then
+  if [ -n "${KOMPAKT:-}" ]; then FEATURES=(side-panel screen-panel)
+  else FEATURES=($(ls tools/device-checks | sed 's/\.sh$//' | grep -vx screen-panel)); fi
+fi
 [ -z "$APK" ] && [ -f app/build/outputs/apk/debug/app-debug.apk ] && APK=app/build/outputs/apk/debug/app-debug.apk
 if [ -n "$APK" ]; then
   log "installing $APK"

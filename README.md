@@ -48,7 +48,6 @@ A few things to know:
 - **It's quick.** The panel opens in about 30 ms.
 - **Clear all** leaves the app you're in. An app that's playing audio in the background may keep running after ✕.
 - **Home screens and InkPalm+ itself** aren't listed. The list is kept across restarts.
-- **Front light** (KompaktOS with InkControl): Brightness and Warmth at the top of the panel, each − slider +. Brightness 0% turns the light off. **Auto** switches Android's adaptive brightness (the light sensor) on or off.
 - **Last read.** Pick your reader (NeoReader or KOReader) and the last book you read in it sits below your apps (above them with Newest app: Top). Tap it to keep reading. Hold it for your books, newest first, and **Browse files…** for anything new. KOReader needs Android's All files access, so InkPalm+ can read its history.
 
 <img src="docs/launch/2-hold.png" width="720" alt="Holding an app: Remove from list, Open its e-ink settings, App info">
@@ -58,6 +57,30 @@ A few things to know:
 In landscape the panel is half the screen wide, with two columns.
 
 <img src="docs/launch/4-landscape.png" width="720" alt="The side panel in landscape, in two columns">
+
+## KompaktOS: screen and light panel
+
+On KompaktOS (the InkPalm-KompaktOS image, which has a small root helper built in), InkPalm+ also does what InkControl did; InkControl isn't needed any more (uninstall it, so the two don't both drive the screen).
+
+Swipe up or down along the **other** edge (the left one, unless recent apps are there) for **Screen & light**:
+
+| Part | What it does |
+|---|---|
+| **Screen mode** | Six big buttons, KompaktOS's presets: **Fast** (black and white, quickest), **Soft** (black and white, gentler), **Dither** (fast, dotted grays for pictures), **Text** (crisp text, fewer flashes), **Quality** (all 16 grays, cleanest), **Auto** (the screen picks for each update). The screen redraws once in the new mode |
+| **Use for this app / Use everywhere** | Where your pick goes. The line below says where the mode in use comes from: the app's own, KompaktOS's per-app setting, or everywhere. **Use everywhere** also drops the app's own |
+| **Full refresh** | One full, clean refresh |
+| **Contrast − +** | Lighter or darker, for the whole phone |
+| **Brightness, Warmth, Auto** | The front light. Brightness 0% turns it off. **Auto** is Android's adaptive brightness, from the light sensor; moving Brightness turns it off |
+
+Also on KompaktOS:
+
+- **Edge Back:** swipe in from either edge to go back (KompaktOS has no navigation bar, so no back gesture). On by default; a switch under Side panel.
+- **Touch button:** a short touch is Home; holding it is a full refresh, as on the stock firmware.
+- **Quick Settings tiles:** one per screen mode, **E-ink mode** (steps through them), **Full refresh** and **Front light**. Add them with the pencil in Quick Settings.
+- **Screen & light settings** (home screen): whether the light follows Android's brightness, your own **sleep screen** picture, the **power-off screen** (Moaan's, Moaan's panda in English, or your picture), and **auto power-off** after 4 to 24 hours asleep on battery.
+- The light goes off with the screen and comes back with it.
+
+On the stock firmware none of this changes anything: the e-ink panel below stays as it is.
 
 ## E-ink panel and settings
 
@@ -165,6 +188,8 @@ Per-app settings work without Shizuku. If InkPalm+ can't reach them on your firm
   - **`WRITE_SECURE_SETTINGS`:** turning the panel back on, and the touch button. Granted once with Shizuku or adb.
   - **Shizuku:** the Clear Memory whitelist, and a fallback for Animations off and for reaching Moaan's settings.
   - **Kill background processes:** used by ✕, **Clear all** and **Save + reopen**.
+  - **Exact alarms** (KompaktOS): auto power-off at the time you chose, even in Doze.
+  - **Key events** (KompaktOS, only while "Hold for a full refresh" is on): the service sees the Home key to tell a hold from a touch. Other keys pass straight through.
   - **Run at startup:** checks after a restart that the panel is back on.
 - The recent-apps list and your choices stay on the phone. **Clear recent apps** empties the list.
 

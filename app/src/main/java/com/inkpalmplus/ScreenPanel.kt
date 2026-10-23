@@ -189,7 +189,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
     fun testMode(key: String): Boolean = ScreenMode.ofKey(key)?.let { pick(it); true } ?: false
     fun testScope(app: Boolean): Boolean { scope(app); return true }
     fun describeLight(): String = lightBlock?.describe() ?: "light none"
-    fun describe(): String = ScreenModes.resolve(ctx, pkg).let { (m, s) -> "pkg=$pkg forApp=$forApp mode=${m.key} code=${m.code} source=${s.name} contrast=${ScreenModes.contrast(ctx)}" }
+    fun describe(): String = ScreenModes.resolve(ctx, pkg).let { (m, s) -> "pkg=$pkg forApp=$forApp global=${ScreenModes.global(ctx).key} mode=${m.key} code=${m.code} source=${s.name} contrast=${ScreenModes.contrast(ctx)}" }
 }
 
 /**

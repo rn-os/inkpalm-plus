@@ -77,6 +77,22 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - **Backburner (user):** a first-open tour that walks through all of these grants (accessibility, Modify system
   settings, All files access, keep-on, reader app).
 
+## InkControl merged in (branch `merge-inkcontrol`, 2026-10-23)
+- Decided by the user: InkPalm+ absorbs InkControl (retired after). Right edge = recents, other edge = **Screen &
+  light** panel (mockup 19, built as drawn; not yet seen by the user). The light moved out of the recents panel.
+- Built and unit-tested locally only (device busy with a system_b flash): backends (`Eink`), screen modes +
+  repaint, contrast, front light via the bridge (sensor, follows brightness, off at screen-off), edge Back (on by
+  default on KompaktOS), touch-button hold = full refresh (key filter, `canRequestFilterKeyEvents`), QS tiles,
+  auto power-off (USE_EXACT_ALARM), sleep screen, power-off screen (Moaan's / Panda / picture), KompaktSync parser.
+- Behaviour change on KompaktOS: full refreshes now work there (`eink.full=1`), so **Clean screen on open** (on by
+  default) and closing a panel flash once, as on stock.
+- **Unverified on the device:** everything above. Specific doubts: reading `/vendor/media/poweroff*.png` from an
+  app (SELinux); whether the HWC shows /data/misc/poweroff.png at a KompaktOS shutdown (parent session checking;
+  `SleepImages.onShutdown` is the hook); the bridge installs one power-off picture for both cases (the Battery low
+  variant needs a bridge change); whether adding `canRequestFilterKeyEvents` keeps the service enabled across the
+  update; Back strips eating taps on the last 10 dp of each edge; tiles' look on KompaktOS QS.
+- Device checks: `tools/device-test.sh run screen-panel` (KompaktOS mode added to the harness).
+
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown
   landed; the release APK itself was checked: signed with the release key, not debuggable, SectionActivity not

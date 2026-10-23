@@ -29,6 +29,13 @@ Screenshots are taken only for failures; every tap leaves a `uiautomator` XML du
   app, close one app, clear all. The harness snapshots the recent list (`recents-before.txt`, oldest first) and puts it
   back with the `recents_clear` / `remember` hooks (`recents-after.txt` shows it matched).
 
+- `screen-panel.sh` (KompaktOS only): the screen and light panel through test hooks: each screen mode reaches
+  `sys.eink.mode`, a mode for one app follows it in and out, Full refresh bumps `one_full_mode_timeline`, contrast
+  reaches `sys.gray.gammalevel`, and an inward edge swipe goes Back. Needs adb root.
+
+On KompaktOS (the bridge script is in the image) the harness skips Moaan's table: no row snapshot, the e-ink
+properties are put back with `setprop`, and `run all` means `side-panel screen-panel`.
+
 ## Adding checks
 Create `tools/device-checks/<feature>.sh` with functions named `check_<what>`. Helpers:
 

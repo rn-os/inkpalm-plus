@@ -697,10 +697,38 @@ books_land = board("Books in landscape", """<div class="notes"><h2>17 · Books i
     [], frame("A · Two columns", "Books and light on the left, apps on the right.", device("l", two_col)))
 books_land = books_land.replace('<div class="row"></div>', '<div class="row">' + frame("B · Slim card", "Half-width panel, one-line card.", device("l", compact_card)) + '</div>')
 
+
+# ---- Board 18: Auto brightness toggle in the light block ---------------------------------------------
+
+def light_auto(auto, style="pill"):
+    pill = f'<span class="pill{" on" if auto else ""}">Auto</span>'
+    lab = "Brightness 100%" if not auto else "Brightness · max 100%"
+    b = (f'<div class="lt2"><div class="btn sq">−</div><div class="mid"><div class="labl"><b>{lab}</b>{pill}</div>'
+         f'<div class="bar"><i style="width:100%"></i></div></div><div class="btn sq">+</div></div>')
+    w = ('<div class="lt2"><div class="btn sq">−</div><div class="mid"><div class="labl"><b>Warmth 30%</b></div>'
+         '<div class="bar"><i style="width:30%"></i></div></div><div class="btn sq">+</div></div>')
+    return f'<div class="light2">{b}{w}</div>'
+
+def side_auto(auto):
+    return (f'<div class="dim2" style="right:78%"></div><div class="side2 modern" style="width:78%">{HD}{light_auto(auto)}{KO_CARD}'
+            f'{ra_rows_modern(BOTTOM_APPS[1:6])}<div style="flex:1"></div><div class="pager2">◀ &nbsp; 1 / 3 &nbsp; ▶</div>{FOOT}</div>')
+
+auto_board = board("Auto brightness", """<div class="notes"><h2>18 · Auto brightness</h2>
+<ul><li>A small <b>Auto</b> pill on the Brightness line: no new row, so no app rows lost.</li>
+<li><b>Auto on</b> (filled): Android's adaptive brightness, from the InkPalm's light sensor, dims and brightens the light. The slider sets the most it goes to ("max 100%").</li>
+<li><b>Auto off</b>: the slider is the level, as now.</li>
+<li>Works because InkControl follows the system brightness. If that's switched off in InkControl, the pill isn't shown.</li></ul></div>""",
+    [frame("Auto off", "Pill outlined; slider is the level.", device("p", side_auto(False))),
+     frame("Auto on", "Pill filled; slider is the ceiling.", device("p", side_auto(True)))],
+    frame("Landscape", "Same pill in the left column.",
+          device("l", f'<div class="dim2" style="right:72%"></div><div class="side2 modern" style="width:72%">{HD}'
+                      f'<div class="cols"><div class="lc">{light_auto(True)}{books_col(1)}</div>'
+                      f'<div class="rc"><div style="flex:1"></div>{ra_rows_modern(list(reversed(BOTTOM_APPS[:3])), compact=True)}<div class="pager2">◀ &nbsp; 1 / 4 &nbsp; ▶</div></div></div>{FOOT}</div>')))
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
                    ("08-presets", presets_board), ("09-font", font_board),
                    ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board),
-                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board), ("17-books-landscape", books_land)]:
+                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board), ("17-books-landscape", books_land), ("18-auto-brightness", auto_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

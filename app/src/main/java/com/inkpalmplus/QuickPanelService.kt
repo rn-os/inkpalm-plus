@@ -65,7 +65,6 @@ class QuickPanelService : AccessibilityService() {
                 Intent.ACTION_SCREEN_ON -> { Light.apply(c); syncLightSensor(); AutoOff.cancel(c) }
                 Intent.ACTION_POWER_CONNECTED -> AutoOff.cancel(c)
                 Intent.ACTION_POWER_DISCONNECTED -> AutoOff.arm(c)
-                Intent.ACTION_SHUTDOWN -> SleepImages.onShutdown(c)
             }
         }
     }
@@ -100,7 +99,7 @@ class QuickPanelService : AccessibilityService() {
         registerReceiver(packageGone, IntentFilter(Intent.ACTION_PACKAGE_FULLY_REMOVED).apply { addDataScheme("package") })
         registerReceiver(power, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_POWER_CONNECTED); addAction(Intent.ACTION_POWER_DISCONNECTED); addAction(Intent.ACTION_SHUTDOWN)
+            addAction(Intent.ACTION_POWER_CONNECTED); addAction(Intent.ACTION_POWER_DISCONNECTED)
         }, notExported)
         if (Light.supported()) {
             for (k in listOf(android.provider.Settings.System.SCREEN_BRIGHTNESS, android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE))

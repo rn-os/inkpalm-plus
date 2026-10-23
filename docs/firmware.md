@@ -185,6 +185,9 @@ Source of truth for the image: `~/Github Repos/InkPalm-KompaktOS` (`docs/HANDOFF
   - `light.req`: `light.cold` / `light.warm` = 0..2047 → `/proc/aw99703{,_sec}/led_brightness`.
   - `standby.req`: `apply=1` / `reset=1` (files/standby.png → /data/misc/standby{,_charge,_lowpower}.png),
     `poweroff=1` / `poweroff_reset=1` (files/poweroff.png → /data/misc/poweroff{,_nopower}.png; one source for both).
+    At a shutdown (not a reboot; auto power-off too) the image's `inkpalm-poweroff.sh` runs if /data/misc/poweroff.png
+    exists: sets `sys.power.shutdown=1` and `sys.power.status` (1 at ≤5% battery → poweroff_nopower.png) and cycles
+    the display so the HWC draws it.
   - `power.req`: `off=1` → shutdown, only if the screen is off and nothing is plugged in.
   Values must be digits; a second write to the same file before the first is read can replace it (InkPalm+ keeps
   writes to one file 120 ms apart).

@@ -16,7 +16,8 @@ import java.io.File
 /**
  * The pictures the vendor HWC draws when the screen goes off (KompaktOS; see InkPalm-KompaktOS docs/sleep-screen.md):
  * `/data/misc/standby*.png` at sleep, `/data/misc/poweroff{,_nopower}.png` at shutdown, falling back to Moaan's own
- * art in /vendor/media. Apps can't write /data/misc, so InkPalm+ saves a PNG in its files dir and the bridge
+ * art in /vendor/media. At a shutdown (also auto power-off) the image's `inkpalm-poweroff.sh` makes the HWC draw
+ * /data/misc/poweroff.png if it exists, so installing or removing it is all the app does. Apps can't write /data/misc, so InkPalm+ saves a PNG in its files dir and the bridge
  * installs it (standby.req: `apply=1` / `reset=1`, `poweroff=1` / `poweroff_reset=1`).
  */
 object SleepImages {
@@ -52,38 +53,27 @@ object SleepImages {
         val err = when (choice) {
             PowerOff.OFF -> if (Eink.bridgeWrite("standby.req", "poweroff_reset=1\n")) null else "the bridge isn't there"
             PowerOff.PANDA -> composePanda(c) ?: install()
-            PowerOff.CUSTOM -> if (uri == null) "no picture" else writePicked(c, uri, "poweroff.png") ?: run {
-                File(c.filesDir, "poweroff.png").copyTo(File(c.filesDir, "poweroff_nopower.png"), overwrite = true)
-                install()
-            }
+            PowerOff.CUSTOM -> if (uri == null) "no picture" else writePicked(c, uri, "poweroff.png") ?: install()
         }
         if (err == null) Prefs(c).sp.edit().putString(K_POWEROFF, choice.name).apply()
         else Log.w(TAG, "power-off screen ${choice.name}: $err")
         return err
     }
 
-    // TODO(bridge): eink-apply.sh installs files/poweroff.png as both poweroff.png and poweroff_nopower.png, so
-    //  the "Battery low" variant written here (files/poweroff_nopower.png) isn't used yet; the bridge should copy it
-    //  when present. Whether the HWC shows /data/misc/poweroff.png at a KompaktOS shutdown (sys.power.shutdown=1,
-    //  set by Moaan's services.jar on stock) is being verified; if it needs a trigger, [onShutdown] is the hook.
+    /** The bridge copies files/poweroff.png to both poweroff.png and poweroff_nopower.png: one picture for a normal
+     *  and a low-battery shutdown (a separate low-battery one would need a second bridge request). */
     private fun install(): String? = if (Eink.bridgeWrite("standby.req", "poweroff=1\n")) null else "the bridge isn't there"
-
-    /** The device is shutting down (ACTION_SHUTDOWN, from the service). Hook for a bridge-side trigger, see the TODO. */
-    fun onShutdown(c: Context) {
-        if (powerOff(c) != PowerOff.OFF) Log.i(TAG, "shutdown: power-off screen ${powerOff(c).name}")
-    }
 
     /** The band of Chinese text on Moaan's power-off art (y 1040–1240 on the 720×1440 panel). */
     fun band(height: Int): IntRange = (height * 1040 / 1440)..(height * 1240 / 1440)
 
     /**
-     * Moaan's own panda pictures, read from the device (never shipped in this repo), with the Chinese text band
-     * whited out and English drawn in its place: "Powered off" / "Hold the power button to start", and for the
-     * low-battery one "Battery low — please charge".
+     * Moaan's own panda picture, read from the device (never shipped in this repo), with the Chinese text band
+     * whited out and English drawn in its place: "Powered off" / "Hold the power button to start". (Used for the
+     * low-battery shutdown too, see [install].)
      */
     private fun composePanda(c: Context): String? {
-        val pairs = listOf("poweroff" to "Hold the power button to start", "poweroff_nopower" to "Battery low — please charge")
-        for ((name, line) in pairs) {
+        for ((name, line) in listOf("poweroff" to "Hold the power button to start")) {
             val src = BitmapFactory.decodeFile("/vendor/media/$name.png") ?: return "can't read /vendor/media/$name.png"
             val out = src.copy(Bitmap.Config.ARGB_8888, true)
             src.recycle()

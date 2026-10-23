@@ -86,10 +86,10 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   auto power-off (USE_EXACT_ALARM), sleep screen, power-off screen (Moaan's / Panda / picture), KompaktSync parser.
 - Behaviour change on KompaktOS: full refreshes now work there (`eink.full=1`), so **Clean screen on open** (on by
   default) and closing a panel flash once, as on stock.
-- **Unverified on the device:** everything above. Specific doubts: reading `/vendor/media/poweroff*.png` from an
-  app (SELinux); whether the HWC shows /data/misc/poweroff.png at a KompaktOS shutdown (parent session checking;
-  `SleepImages.onShutdown` is the hook); the bridge installs one power-off picture for both cases (the Battery low
-  variant needs a bridge change); whether adding `canRequestFilterKeyEvents` keeps the service enabled across the
+- **Unverified on the device:** everything above. Specific doubts: reading `/vendor/media/poweroff.png` from an
+  app (SELinux). Power-off screen: the image's `inkpalm-poweroff.sh` draws /data/misc/poweroff.png at shutdown
+  (verified by the KompaktOS session, also used by auto power-off); one picture for normal and low battery (a
+  separate one needs a second bridge request); whether adding `canRequestFilterKeyEvents` keeps the service enabled across the
   update; Back strips eating taps on the last 10 dp of each edge; tiles' look on KompaktOS QS.
 - Device checks: `tools/device-test.sh run screen-panel` (KompaktOS mode added to the harness).
 

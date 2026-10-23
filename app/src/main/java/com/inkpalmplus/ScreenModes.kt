@@ -77,9 +77,11 @@ object ScreenModes {
         val k = kompakt(c)
         if (k != null) {
             // A KompaktOS master preset changed since we last looked (its own tiles or Settings): adopt it.
-            if (k.master != null && k.master != sp(c).getString(K_LAST_MASTER, null)) {
+            // The first time the copy appears it's only noted, so it doesn't replace the user's own choice.
+            val last = sp(c).getString(K_LAST_MASTER, null)
+            if (k.master != null && k.master != last) {
                 sp(c).edit().putString(K_LAST_MASTER, k.master).apply()
-                ScreenMode.ofKey(k.master)?.let { sp(c).edit().putString(K_GLOBAL, it.key).apply() }
+                if (last != null) ScreenMode.ofKey(k.master)?.let { sp(c).edit().putString(K_GLOBAL, it.key).apply() }
             }
             if (pkg != null && k.perApp) ScreenMode.ofKey(k.appMode[pkg])?.let { return it to Source.KOMPAKT }
         }
@@ -123,17 +125,18 @@ object ScreenModes {
 
     private fun applyAndRepaint(code: Int) = Eink.post {
         write(code, force = true)
-        Thread.sleep(SETTLE_MS)
-        QuickPanelService.instance?.repaint(REPAINT_MS)
+        repaintSoon()
     }
+
+    /** After the request has reached the screen; timed on the main thread so the worker stays free (light writes). */
+    private fun repaintSoon() { Shell.main.postDelayed({ QuickPanelService.instance?.repaint(REPAINT_MS) }, SETTLE_MS) }
 
     /** A real full refresh: the next frames are posted full, and the repaint provides them. */
     fun fullRefresh() {
         lastFlash = SystemClock.elapsedRealtime()
         Eink.post {
             Eink.requestFull()
-            Thread.sleep(SETTLE_MS)
-            QuickPanelService.instance?.repaint(REPAINT_MS)
+            repaintSoon()
         }
     }
 
@@ -156,8 +159,7 @@ object ScreenModes {
         sp(c).edit().putInt(K_CONTRAST, v).apply()
         Eink.post {
             Eink.setProperty("sys.gray.gammalevel", v.toString())
-            Thread.sleep(SETTLE_MS)
-            QuickPanelService.instance?.repaint(REPAINT_MS)
+            repaintSoon()
         }
     }
 

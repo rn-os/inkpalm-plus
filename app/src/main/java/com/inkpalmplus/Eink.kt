@@ -65,7 +65,7 @@ object Eink {
         }
 
     /** KompaktOS / a GSI (not stock Moaan firmware): the left screen panel, Back gesture and the rest apply. */
-    val isKompakt: Boolean get() = backend.let { it == Backend.BRIDGE || it == Backend.DIRECT }
+    val isKompakt: Boolean get() = bridgeInstalled || directAllowed   // no binder IPC: read on the main thread a lot
 
     // ---- Binder (stock) -----------------------------------------------------------------------------
 

@@ -40,7 +40,6 @@ object Light {
     /** The light now, or null when there's no light to control. */
     fun read(context: Context): State? {
         if (!supported()) return null
-        importOnce(context)
         val s = sp(context)
         return State(s.getInt(K_LEVEL, 50), s.getInt(K_WARMTH, 50), s.getBoolean(K_ON, true), followSystem(context), auto(context))
     }
@@ -105,6 +104,9 @@ object Light {
         apply(context)
     }
 
+    /** The sensor stopped (screen off, adaptive off): its last reading is stale; the system level counts until the next. */
+    fun sensorStopped() { autoScale = -1f }
+
     private fun scale(context: Context): Float = when {
         !followSystem(context) -> 1f
         auto(context) && autoScale >= 0 -> autoScale
@@ -122,6 +124,7 @@ object Light {
             queued.set(false)
             // Asleep: the LEDs stay off (a brightness change can arrive then); the screen-on apply restores them.
             if (!c.getSystemService(android.os.PowerManager::class.java).isInteractive) return@post
+            importOnce(c)
             val s = sp(c)
             val (cold, warm) = if (s.getBoolean(K_ON, true)) mix(s.getInt(K_LEVEL, 50), s.getInt(K_WARMTH, 50)) else 0 to 0
             val k = scale(c)
@@ -139,10 +142,10 @@ object Light {
      * Coming from InkControl: its levels once, read through its light API, so the light doesn't jump. (InkControl
      * should be uninstalled afterwards: both apps would drive the LEDs. The home screen says so.)
      */
-    private fun importOnce(context: Context) {
+    @Synchronized
+    private fun importOnce(context: Context) {   // on Eink.worker only (a cross-app query)
         val s = sp(context)
         if (s.getBoolean(K_IMPORTED, false)) return
-        s.edit().putBoolean(K_IMPORTED, true).apply()
         runCatching {
             context.contentResolver.query(INKCONTROL_STATE, null, null, null, null)?.use { c ->
                 if (!c.moveToFirst()) return@use
@@ -162,6 +165,7 @@ object Light {
                 Log.i("InkPalmPlus", "light imported from InkControl: level=$level warmth=$warmth")
             }
         }
+        s.edit().putBoolean(K_IMPORTED, true).apply()
     }
 
     /** InkControl is still installed (it would drive the LEDs and modes too). */

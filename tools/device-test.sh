@@ -61,7 +61,7 @@ list_features() {
 if [ "$CMD" = "list" ]; then list_features; exit 0; fi
 if [ "$CMD" != "run" ] || [ $# -eq 0 ]; then sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 2; fi
 FEATURES=("$@")
-for f in "${FEATURES[@]}"; do [ -f "tools/device-checks/$f.sh" ] || { echo "no such feature: $f (try: list)"; exit 2; }; done
+for f in "${FEATURES[@]}"; do [ "$f" = all ] || [ -f "tools/device-checks/$f.sh" ] || { echo "no such feature: $f (try: list)"; exit 2; }; done
 
 OUT="${OUT:-$ROOT/tools/device-results/$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$OUT"

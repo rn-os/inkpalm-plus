@@ -127,8 +127,10 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             addView(ctx.inkButton("−", 18f) { ScreenModes.setContrast(ctx, level - ScreenModes.CONTRAST_STEP); render() }.apply {
                 contentDescription = "Less contrast"; isEnabled = level > 0
             }, lp(ctx.dp(44), WRAP))
-            addView(ctx.text(ScreenModes.contrastLabel(level), 13f, bold = true).apply { gravity = Gravity.CENTER; maxLines = 1
-                setAutoSizeTextTypeUniformWithConfiguration(10, 13, 1, android.util.TypedValue.COMPLEX_UNIT_SP) }, lp(0, WRAP, 1f))
+            // Two short lines, so the value never gets cut off between − and +.
+            addView(ctx.text(ScreenModes.contrastLabel(level).replaceFirst(" ", "\n").replace("normal", "Normal"), 13f, bold = true).apply {
+                gravity = Gravity.CENTER; maxLines = 2
+            }, lp(0, WRAP, 1f))
             addView(ctx.inkButton("+", 18f) { ScreenModes.setContrast(ctx, level + ScreenModes.CONTRAST_STEP); render() }.apply {
                 contentDescription = "More contrast"; isEnabled = level < ScreenModes.CONTRAST_MAX
             }, lp(ctx.dp(44), WRAP))

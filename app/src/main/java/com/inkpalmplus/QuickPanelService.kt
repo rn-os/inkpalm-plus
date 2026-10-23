@@ -123,6 +123,7 @@ class QuickPanelService : AccessibilityService() {
         runCatching { unregisterReceiver(power) }
         runCatching { contentResolver.unregisterContentObserver(brightness) }
         runCatching { getSystemService(android.hardware.SensorManager::class.java).unregisterListener(lux) }
+        Shell.main.removeCallbacks(endPreview); Shell.main.removeCallbacks(prepare); Shell.main.removeCallbacks(homeHold)
         removeStrip()
         closePanel()
         closeSide()
@@ -331,6 +332,7 @@ class QuickPanelService : AccessibilityService() {
         } else {
             sm.unregisterListener(lux)
             luxListening = false
+            Light.sensorStopped()
         }
     }
 
@@ -400,6 +402,9 @@ class QuickPanelService : AccessibilityService() {
             "contrast" -> { ScreenModes.setContrast(this, value.toInt()); true }
             "edge_back" -> { Prefs(this).edgeBack = value == "on"; showStrip(); true }
             "back" -> { back(); true }
+            "hold_refresh" -> { Prefs(this).holdRefresh = value == "on"; syncKeyFilter(); true }
+            // "off", "panda": the power-off screen (blocking work on Eink's worker; the result is logged).
+            "poweroff" -> { val c = SleepImages.PowerOff.valueOf(value.uppercase()); Eink.post { Log.i(TAG, "poweroff ${c.name}: ${SleepImages.setPowerOff(this, c) ?: "ok"}") }; true }
             "books_state" -> { Log.i(TAG, "books: ${side?.describeBooks() ?: "closed"}"); true }
             "side_state" -> { Log.i(TAG, "side: ${side?.describe() ?: "closed"}"); true }
             "remember" -> { recents.record(value); true }

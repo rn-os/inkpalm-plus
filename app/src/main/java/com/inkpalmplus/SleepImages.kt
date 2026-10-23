@@ -74,7 +74,7 @@ object SleepImages {
      */
     private fun composePanda(c: Context): String? {
         for ((name, line) in listOf("poweroff" to "Hold the power button to start")) {
-            val src = BitmapFactory.decodeFile("/vendor/media/$name.png") ?: return "can't read /vendor/media/$name.png"
+            val src = vendorPicture(c, name) ?: return "needs a newer KompaktOS image (can't read Moaan's $name.png)"
             val out = src.copy(Bitmap.Config.ARGB_8888, true)
             src.recycle()
             val canvas = Canvas(out)
@@ -94,6 +94,21 @@ object SleepImages {
         return null
     }
 
+    /**
+     * Moaan's picture from /vendor/media. Apps may not read vendor files (SELinux, verified 2026-10-23), so the bridge
+     * is asked for a copy in the files dir (standby.req `export=1` → files/vendor_<name>.png; needs a bridge that
+     * knows it) and given a few seconds. Blocking.
+     */
+    private fun vendorPicture(c: Context, name: String): Bitmap? {
+        BitmapFactory.decodeFile("/vendor/media/$name.png")?.let { return it }
+        val copy = File(c.filesDir, "vendor_$name.png")
+        if (!copy.isFile && Eink.bridgeWrite("standby.req", "export=1\n")) {
+            for (i in 0 until 30) { if (copy.isFile && copy.length() > 0) break; Thread.sleep(100) }
+            Thread.sleep(150)   // the bridge's copy may still be finishing
+        }
+        return BitmapFactory.decodeFile(copy.path)
+    }
+
     /** The picked image, centre-cropped to the panel, gray, as files/[name]. Null when done, else what went wrong. */
     private fun writePicked(c: Context, uri: Uri, name: String): String? = runCatching {
         val dm = c.resources.displayMetrics
@@ -102,7 +117,7 @@ object SleepImages {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         c.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
         if (bounds.outWidth <= 0) return "not a picture"
-        val o = BitmapFactory.Options()
+        val o = BitmapFactory.Options().apply { inSampleSize = 1 }   // 0 by default
         while (bounds.outWidth / (o.inSampleSize * 2) >= w && bounds.outHeight / (o.inSampleSize * 2) >= h) o.inSampleSize *= 2
         val src = c.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o) } ?: return "couldn't read the picture"
         val scale = maxOf(w.toFloat() / src.width, h.toFloat() / src.height)

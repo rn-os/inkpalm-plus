@@ -37,7 +37,7 @@ object Live {
 
     /** One full-screen refresh on whatever firmware this is (KompaktOS: the bridge's eink.full, see [Eink.requestFull]). */
     fun fullRefresh() {
-        Eink.requestFull()
+        if (Eink.isKompakt) ScreenModes.fullRefresh() else Eink.requestFull()
     }
 
     /** Stock: one full-screen refresh, as Moaan's EinkManager.sendOneFullFrame does. */

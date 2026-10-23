@@ -92,6 +92,16 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   separate one needs a second bridge request); whether adding `canRequestFilterKeyEvents` keeps the service enabled across the
   update; Back strips eating taps on the last 10 dp of each edge; tiles' look on KompaktOS QS.
 - Device checks: `tools/device-test.sh run screen-panel` (KompaktOS mode added to the harness).
+- **Verified on the device (2026-10-23, KompaktOS 1.2):** `run all` 10/10 (side panel + screen panel: every mode
+  reaches sys.eink.mode, per-app mode follows the app, Full refresh bumps the timeline, contrast, edge Back); the
+  service stayed enabled across the update adding key filtering; a real swipe on the left strip opens the panel;
+  touch-button hold (KEY_HOMEPAGE via sendevent) = full refresh, short = Home; InkControl's light levels imported.
+  Panda: apps can't read /vendor/media (avc vendor_file) → app asks the bridge for `standby.req export=1`
+  (files/vendor_poweroff.png; bridge change requested); compose checked with a hand-made copy.
+- Power key sometimes doesn't wake (user report): reproduced as a system issue (also with InkPalm+'s key filter
+  off, also with `input keyevent 26`); handed to the KompaktOS session.
+- Still to do by hand: the white repaint flash and Fast vs Quality on a gradient; tiles in KompaktOS QS; the user
+  should uninstall InkControl (both drive modes and light while it's installed).
 
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown

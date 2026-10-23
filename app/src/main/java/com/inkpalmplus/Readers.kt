@@ -58,6 +58,12 @@ object Readers {
         App.KOREADER -> if (hasAccess(app)) KOReader.books() else emptyList()
     }
 
+    /** The [n] latest books (titles looked up for those only). */
+    fun recent(context: Context, app: App, n: Int): List<Book> = when (app) {
+        App.NEOREADER -> NeoReader.books(context).take(n)
+        App.KOREADER -> if (hasAccess(app)) KOReader.books(titles = n).take(n) else emptyList()
+    }
+
     fun lastRead(context: Context, app: App): Book? = when (app) {
         App.NEOREADER -> NeoReader.books(context).firstOrNull()
         App.KOREADER -> if (hasAccess(app)) KOReader.books(titles = 1).firstOrNull() else null

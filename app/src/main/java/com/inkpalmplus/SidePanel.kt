@@ -54,7 +54,8 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     private var rowPx = 0
     private fun panelHeight() = ctx.resources.displayMetrics.heightPixels
 
-    private fun fit(fixed: List<View>) {
+    private fun fit(fixed: List<View>, colW: Int = (currentWidth() - ctx.dp(3) - ctx.dp(16)) / (if (landscape) 2 else 1),
+                    columns: Int = if (landscape) 2 else 1) {
         val spec = View.MeasureSpec.makeMeasureSpec(currentWidth() - ctx.dp(3), View.MeasureSpec.EXACTLY)
         val any = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         val used = fixed.sumOf { v ->
@@ -62,10 +63,9 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
             v.measuredHeight + ((v.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { it.topMargin + it.bottomMargin } ?: 0)
         }
         // A real row, measured at its column's width, sets the row height for every row.
-        rowPx = ctx.dp(if (landscape) 50 else 60)
+        rowPx = ctx.dp(if (columns == 2) 50 else 60)
         all().firstOrNull()?.let { e ->
-            val colW = (currentWidth() - ctx.dp(3) - ctx.dp(16)) / (if (landscape) 2 else 1)
-            val sample = row(e, compact = landscape)
+            val sample = row(e, compact = columns == 2)
             sample.measure(View.MeasureSpec.makeMeasureSpec(colW, View.MeasureSpec.EXACTLY), any)
             rowPx = maxOf(rowPx, sample.measuredHeight)
         }
@@ -74,7 +74,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         // Share what's left over among the rows (all still the same height), up to 15% taller; past that the rest
         // stays a gap, so a single landscape row isn't much taller than a portrait one.
         rowPx = (room / rows - ctx.dp(4)).coerceIn(rowPx, rowPx * 115 / 100)
-        perPage = if (landscape) rows * 2 else rows
+        perPage = rows * columns
     }
 
     /** The front light (InkControl, KompaktOS), read when the panel is built; null hides the Light block. */
@@ -113,6 +113,13 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         }
         content = ctx.vbox()
         root.addView(content, FrameLayout.LayoutParams(MATCH, MATCH))
+        light = Light.read(ctx)
+        lightStale = false
+        reader = Readers.chosen(ctx)
+        builtReader = readerState()
+        needsAccess = reader?.let { !Readers.hasAccess(it) } ?: false
+        recentBooks = reader?.let { Readers.recent(ctx, it, 3) } ?: emptyList()
+        lastRead = recentBooks.firstOrNull()
         val width = currentWidth()
         lp = WindowManager.LayoutParams(
             width, WindowManager.LayoutParams.MATCH_PARENT,
@@ -121,12 +128,6 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.TOP or if (onRight) Gravity.END else Gravity.START }
-        light = Light.read(ctx)
-        lightStale = false
-        reader = Readers.chosen(ctx)
-        builtReader = readerState()
-        needsAccess = reader?.let { !Readers.hasAccess(it) } ?: false
-        lastRead = reader?.let { Readers.lastRead(ctx, it) }
         render()
         // Measure and lay out at the window's size now, so showing it doesn't have to.
         val h = panelHeight()
@@ -152,7 +153,15 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     private fun readerState() = (Readers.chosen(ctx)?.let { "${it.key}:${Readers.hasAccess(it)}" } ?: "none") +
         if (Prefs(ctx).newestAtBottom) "|bottom" else "|top"
 
-    private fun currentWidth() = ctx.resources.displayMetrics.widthPixels * (if (landscape) 50 else Prefs(ctx).panelWidthPct) / 100
+    private fun currentWidth() = ctx.resources.displayMetrics.widthPixels * (if (twoCols) 72 else if (landscape) 50 else Prefs(ctx).panelWidthPct) / 100
+
+    /**
+     * Landscape with the light or a reader (mockup 17, option A): a wider panel in two columns, the light and your
+     * latest books on the left, recent apps on the right. People mostly read in landscape.
+     */
+    private val twoCols get() = landscape && (light != null || reader != null)
+    /** The reader's latest books for the left column, read when the panel is built. */
+    private var recentBooks: List<Readers.Book> = emptyList()
 
     fun show(wm: WindowManager, startedAt: Long = android.os.SystemClock.uptimeMillis()) {
         val prepared = builtAt > 0
@@ -276,6 +285,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
                 service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
             }.oneLine(), lp(0, WRAP, 1f))
         }
+        if (twoCols) return renderTwoCols(header, lightView, footer, bottom)
         // Room for the pager is always kept, so rows don't change size when a second page appears.
         fit(listOfNotNull(header, lightView, card, pager(), footer))
         page = page.coerceIn(0, pages() - 1)
@@ -316,6 +326,56 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         if (pages() > 1) content.addView(pager())
         content.addView(footer)
 
+        menuFor?.let { showMenu(it) }
+    }
+
+    /** Landscape, two columns (mockup 17 A): light and latest books on the left, recent apps on the right. */
+    private fun renderTwoCols(header: View, lightView: View?, footer: View, bottom: Boolean) {
+        val inner = currentWidth() - ctx.dp(3)
+        val leftW = inner * 46 / 100
+        val rightW = inner - leftW - ctx.dp(2)
+        // Right column: as many app rows as fit under the header and above the pager and footer.
+        fit(listOf(header, pager(), footer), colW = rightW - ctx.dp(16), columns = 1)
+        page = page.coerceIn(0, pages() - 1)
+        val any = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        fun height(v: View, w: Int): Int { v.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), any); return v.measuredHeight }
+
+        val left = ctx.vbox()
+        lightView?.let { left.addView(it) }
+        if (needsAccess) left.addView(accessCard())
+        else if (recentBooks.isNotEmpty()) {
+            val label = ctx.text("${reader?.label?.uppercase()} · HOLD FOR ALL", 10.5f, bold = true).apply {
+                letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(6), ctx.dp(12), ctx.dp(2))
+            }
+            left.addView(label)
+            // As many of the latest books as fit, each the height of an app row.
+            val room = panelHeight() - ctx.dp(6) - height(header, inner) - height(footer, inner) -
+                (lightView?.let { height(it, leftW) } ?: 0) - height(label, leftW)
+            recentBooks.take((room / (rowPx + ctx.dp(4))).coerceAtLeast(0)).forEach { b ->
+                left.addView(bookRow(b, compact = false).apply { setOnLongClickListener { showBooks(); true } },
+                    lp(MATCH, rowPx).apply { setMargins(ctx.dp(8), ctx.dp(2), ctx.dp(8), ctx.dp(2)) })
+            }
+        }
+
+        val apps = visible()
+        val list = SwipePager(ctx, onNext = { if (page < pages() - 1) { page++; render() } }, onPrev = { if (page > 0) { page--; render() } })
+            .apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
+        if (bottom) list.addView(View(ctx), lp(MATCH, 0, 1f))
+        if (apps.isEmpty()) list.addView(ctx.text("Apps you open will show up here.", 15f, color = Ink.MUTED).apply { setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), ctx.dp(16)) })
+        for (e in if (bottom) apps.reversed() else apps) list.addView(row(e, compact = false), lp(MATCH, rowPx).apply { setMargins(0, ctx.dp(2), 0, ctx.dp(2)) })
+        if (!bottom) list.addView(View(ctx), lp(MATCH, 0, 1f))
+        val right = ctx.vbox().apply {
+            addView(list, lp(MATCH, 0, 1f))
+            if (pages() > 1) addView(pager())
+        }
+
+        content.addView(header)
+        content.addView(ctx.hbox().apply {
+            addView(left, lp(leftW, MATCH))
+            addView(View(ctx).apply { setBackgroundColor(Ink.INK) }, lp(ctx.dp(2), MATCH))
+            addView(right, lp(0, MATCH, 1f))
+        }, lp(MATCH, 0, 1f))
+        content.addView(footer)
         menuFor?.let { showMenu(it) }
     }
 

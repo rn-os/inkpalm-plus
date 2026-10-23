@@ -70,7 +70,12 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - Front light: `Light.kt` uses InkControl's API (org.neoport.inkcontrol, repo ~/Github Repos/InkPalm-KompaktOS).
   Built per the user's direction rather than mockup 16: sliders with − and + at the top, no On/Off (0% = off).
 - Rows have one measured height (a real row, at least 60/50 dp); apps per page = what fits, rest on the next page.
-- Landscape with the Light block isn't checked on the device yet.
+- Landscape (mockup 17 A): a 72% panel in two columns when there's a light or a reader: light and latest books on
+  the left (as many as fit, hold one for all), recent apps on the right. Without either, the old half-width layout.
+- Permissions granted on the user's device by adb (2026-10-23): WRITE_SECURE_SETTINGS, WRITE_SETTINGS, All files
+  access, battery-optimization exemption. Reader app set to KOReader.
+- **Backburner (user):** a first-open tour that walks through all of these grants (accessibility, Modify system
+  settings, All files access, keep-on, reader app).
 
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown

@@ -658,10 +658,49 @@ light_board = board("Front light", """<div class="notes"><h2>16 · Front light</
                       f'<div class="light land"><div class="lt-hd"><b>LIGHT</b><div class="btn on">On</div></div><div class="lt-row"><span>Bright</span><div class="btn sq">−</div><b>60%</b><div class="btn sq">+</div><span>Warm</span><div class="btn sq">−</div><b>40%</b><div class="btn sq">+</div></div></div>'
                       f'<div class="ra-foot" style="margin-top:0"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>')))
 
+
+# ---- Board 17: books in landscape --------------------------------------------------------------------
+
+def light_new(compact=False):
+    def row(label, pct):
+        return (f'<div class="lt2"><div class="btn sq">−</div><div class="mid"><b>{label}</b>'
+                f'<div class="bar"><i style="width:{pct}"></i></div></div><div class="btn sq">+</div></div>')
+    return f'<div class="light2">{row("Brightness 100%", "100%")}{row("Warmth 30%", "30%")}</div>'
+
+BOOKS3 = [("Recursive Language Models", "PDF · 1 h ago"), ("Scaling Managed Agents", "EPUB · 16 h ago"), ("Tribe of Mentors", "EPUB · 20 h ago")]
+
+def books_col(n):
+    rows = "".join(f'<div class="ra-row"><div class="bk2"></div><div class="tx"><b>{t}</b><span>{d}</span></div></div>' for t, d in BOOKS3[:n])
+    return f'<div class="secl">KOREADER · TAP TO OPEN · HOLD FOR ALL</div>{rows}'
+
+HD = '<div class="ra-hd"><b>Recents</b><div class="btn">Clear all</div><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+FOOT = '<div class="ra-foot" style="margin-top:0"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div>'
+
+two_col = (f'<div class="dim2" style="right:72%"></div><div class="side2 modern" style="width:72%">{HD}'
+           f'<div class="cols"><div class="lc">{light_new()}{books_col(2)}</div>'
+           f'<div class="rc"><div style="flex:1"></div>{ra_rows_modern(list(reversed(BOTTOM_APPS[:3])), compact=True)}<div class="pager2">◀ &nbsp; 1 / 4 &nbsp; ▶</div></div></div>{FOOT}</div>')
+
+compact_card = (f'<div class="dim2" style="right:50%"></div><div class="side2 modern" style="width:50%">{HD}{light_new()}'
+                f'<div style="flex:1"></div><div class="ra-grid">{ra_rows_modern(list(reversed(BOTTOM_APPS[:2])), compact=True)}</div>'
+                f'<div class="lastread slim"><div class="bk"></div><div class="tx"><i>LAST READ · KOREADER</i><b>Recursive Language Models</b></div></div>'
+                f'<div class="pager2">◀ &nbsp; 1 / 7 &nbsp; ▶</div>{FOOT}</div>')
+
+books_land = board("Books in landscape", """<div class="notes"><h2>17 · Books in landscape</h2>
+<p>With the light sliders, landscape has room for only one row of apps, so the book card doesn't fit as it is.</p>
+<h3>A · Two columns (top)</h3><ul>
+<li>The panel is wider in landscape (72%). Left: light and your <b>2 latest books</b> (tap to open, hold for all). Right: recent apps, three per page.</li>
+<li>Rows the same size as portrait.</li></ul>
+<h3>B · Slim card (bottom)</h3><ul>
+<li>Panel stays half the screen. A one-line <b>Last read</b> card under the apps; hold it for your books.</li>
+<li>Two apps per page.</li></ul>
+<p>Either way: pick <b>KOReader</b> under Reader app (it's on NeoReader, which has no books on KompaktOS) and allow All files access.</p></div>""",
+    [], frame("A · Two columns", "Books and light on the left, apps on the right.", device("l", two_col)))
+books_land = books_land.replace('<div class="row"></div>', '<div class="row">' + frame("B · Slim card", "Half-width panel, one-line card.", device("l", compact_card)) + '</div>')
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
                    ("08-presets", presets_board), ("09-font", font_board),
                    ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board),
-                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board)]:
+                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board), ("17-books-landscape", books_land)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

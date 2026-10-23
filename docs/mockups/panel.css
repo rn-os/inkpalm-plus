@@ -169,3 +169,12 @@ body { margin: 0; background: #e6e6e6; font-family: -apple-system, "Helvetica Ne
 .light .lt-row span { flex: 1; font-weight: 600; } .light .lt-row b { width: 38px; text-align: center; font-size: 12px; }
 .light.land .lt-row span { flex: none; width: 40px; }
 .light .lt-off { font-size: 10.5px; color: #333; padding: 2px 0 4px; }
+
+/* Board 17 */
+.light2 { padding: 2px 8px 4px; }
+.lt2 { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+.lt2 .mid { flex: 1; text-align: center; font-size: 10px; } .lt2 .mid b { display: block; margin-bottom: 3px; }
+.lt2 .bar { height: 2px; background: #aaa; position: relative; } .lt2 .bar i { position: absolute; left: 0; top: -1px; height: 4px; background: #000; }
+.cols { display: flex; flex: 1; min-height: 0; } .cols .lc { width: 48%; border-right: 2px solid #000; display: flex; flex-direction: column; }
+.cols .rc { flex: 1; display: flex; flex-direction: column; }
+.lastread.slim { padding: 4px 10px; } .lastread.slim .bk { width: 16px; height: 20px; } .lastread.slim .tx b { font-size: 11px; }

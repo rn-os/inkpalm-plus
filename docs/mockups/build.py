@@ -624,10 +624,44 @@ order_board = board("Newest at the bottom", """<div class="notes"><h2>15 · Newe
                       f'{KO_CARD}<div style="flex:1"></div><div class="ra-grid">{ra_rows_modern(list(reversed(BOTTOM_APPS[:4])), compact=True)}</div><div class="pager2">◀ &nbsp; 1 / 2 &nbsp; ▶</div>'
                       f'<div class="ra-foot" style="margin-top:0"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>')))
 
+
+# ---- Board 16: front light in the side panel (KompaktOS + InkControl) ------------------------------
+
+def light_rows(level="60%", warm="40%", on=True):
+    if not on:
+        return ('<div class="light"><div class="lt-hd"><b>LIGHT</b><div class="btn">Off</div></div>'
+                '<div class="lt-off">Light is off · tap Off to turn it on at 60%</div></div>')
+    return (f'<div class="light"><div class="lt-hd"><b>LIGHT</b><div class="btn on">On</div></div>'
+            f'<div class="lt-row"><span>Brightness</span><div class="btn sq">−</div><b>{level}</b><div class="btn sq">+</div></div>'
+            f'<div class="lt-row"><span>Warmth</span><div class="btn sq">−</div><b>{warm}</b><div class="btn sq">+</div></div></div>')
+
+def side_light(width, items, pager, light):
+    return (f'<div class="dim2" style="right:{width}"></div><div class="side2 modern" style="width:{width}">'
+            f'<div class="ra-hd"><b>Recent apps</b><div class="btn">Clear all</div><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+            f'<div style="flex:1"></div>{ra_rows_modern(list(reversed(items)))}{KO_CARD}<div class="pager2">{pager}</div>'
+            f'{light}<div class="ra-foot" style="margin-top:0"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>')
+
+light_board = board("Front light", """<div class="notes"><h2>16 · Front light</h2>
+<ul><li>A <b>Light</b> block above the footer: <b>On/Off</b>, <b>Brightness</b> and <b>Warmth</b>, each <b>− value +</b> in steps of 10%.</li>
+<li>Steps, not sliders: one change per tap, so e-ink redraws once and nothing ghosts while you drag.</li>
+<li>Brightness is the overall level; Warmth is the balance of the cold and warm LEDs (0% all cold, 50% both full, 100% all warm).</li>
+<li>Uses InkControl's light API (KompaktOS). With InkControl missing, or on stock firmware, the block isn't there.</li>
+<li>Recent apps lose one row per page to make room (7 in portrait with the reader card).</li></ul>
+<h3>Choices to make</h3><ul>
+<li>Brightness: InkPalm+'s own level (shown) or Android's brightness slider.</li>
+<li>Light block always shown, or behind a ☀ button in the header.</li></ul></div>""",
+    [frame("Portrait", "Light block above the footer.", device("p", side_light("78%", BOTTOM_APPS[:7], "◀ &nbsp; 1 / 2 &nbsp; ▶", light_rows()))),
+     frame("Light off", "One line; tap Off to turn it back on.", device("p", side_light("78%", BOTTOM_APPS[:8], "◀ &nbsp; 1 / 2 &nbsp; ▶", light_rows(on=False))))],
+    frame("Landscape", "Same block, steppers side by side.",
+          device("l", f'<div class="dim2" style="right:50%"></div><div class="side2 modern" style="width:50%"><div class="ra-hd"><b>Recent apps</b><div class="btn">Clear all</div><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+                      f'<div style="flex:1"></div><div class="ra-grid">{ra_rows_modern(list(reversed(BOTTOM_APPS[:2])), compact=True)}</div>{KO_CARD}<div class="pager2">◀ &nbsp; 1 / 4 &nbsp; ▶</div>'
+                      f'<div class="light land"><div class="lt-hd"><b>LIGHT</b><div class="btn on">On</div></div><div class="lt-row"><span>Bright</span><div class="btn sq">−</div><b>60%</b><div class="btn sq">+</div><span>Warm</span><div class="btn sq">−</div><b>40%</b><div class="btn sq">+</div></div></div>'
+                      f'<div class="ra-foot" style="margin-top:0"><div class="btn">E-ink · this app</div><div class="btn">Android recents</div></div></div>')))
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
                    ("08-presets", presets_board), ("09-font", font_board),
                    ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board),
-                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board)]:
+                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

@@ -183,3 +183,17 @@ body { margin: 0; background: #e6e6e6; font-family: -apple-system, "Helvetica Ne
 .lt2 .labl { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 3px; } .lt2 .labl b { margin: 0; }
 .pill { border: 1.5px solid #000; border-radius: 9px; padding: 0 7px; font-size: 9px; font-weight: 700; line-height: 14px; }
 .pill.on { background: #000; color: #fff; }
+
+/* Board 19: e-ink + light panel on the left edge */
+.side2.left { left: 0; right: auto; border-left: 0; border-right: 3px solid #000; }
+.dim2.r { left: auto; right: 0; }
+.modes { padding: 2px 8px; display: flex; flex-direction: column; gap: 5px; }
+.modes.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.mode { border: 2px solid #000; border-radius: 10px; padding: 6px 10px; }
+.mode b { display: block; font-size: 14px; } .mode span { display: block; font-size: 9.5px; color: #333; }
+.mode.on { background: #000; color: #fff; border-width: 3px; } .mode.on span { color: #fff; }
+.modes.grid .mode { padding: 3px 8px; } .modes.grid .mode b { font-size: 12px; } .modes.grid .mode span { font-size: 8.5px; }
+.scope { display: flex; gap: 6px; padding: 4px 8px 0; } .scope .btn { flex: 1; }
+.src { font-size: 9.5px; color: #333; padding: 3px 12px 4px; }
+.acts { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-top: 2px solid #000; }
+.acts .ct { flex: 1; text-align: center; font-size: 11px; font-weight: 700; }

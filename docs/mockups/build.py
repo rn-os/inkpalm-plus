@@ -725,10 +725,52 @@ auto_board = board("Auto brightness", """<div class="notes"><h2>18 · Auto brigh
                       f'<div class="cols"><div class="lc">{light_auto(True)}{books_col(1)}</div>'
                       f'<div class="rc"><div style="flex:1"></div>{ra_rows_modern(list(reversed(BOTTOM_APPS[:3])), compact=True)}<div class="pager2">◀ &nbsp; 1 / 4 &nbsp; ▶</div></div></div>{FOOT}</div>')))
 
+
+# ---- Board 19: e-ink + light panel on the left edge (KompaktOS, InkControl merged in) ---------------
+
+MODES = [("Fast", "Black and white, quickest"), ("Soft", "Black and white, gentler"), ("Dither", "Fast, dotted grays for pictures"),
+         ("Text", "Crisp text, fewer flashes"), ("Quality", "All 16 grays, cleanest"), ("Auto", "The screen picks for each update")]
+
+def modes(on, grid=False):
+    return (f'<div class="modes{" grid" if grid else ""}">' +
+            "".join(f'<div class="mode{" on" if n == on else ""}"><b>{n}</b><span>{d}</span></div>' for n, d in MODES) + '</div>')
+
+EHD = '<div class="ra-hd"><b>Screen &amp; light</b><div class="btn sq gear">⚙</div><div class="btn sq">✕</div></div>'
+
+def scope(app_on):
+    a = ' on' if app_on else ''
+    e = '' if app_on else ' on'
+    return f'<div class="scope"><div class="btn{a}">Use for KOReader</div><div class="btn{e}">Use everywhere</div></div>'
+
+ACTS = ('<div class="acts"><div class="btn">Full refresh</div><div class="btn sq">−</div>'
+        '<div class="ct">Contrast +1</div><div class="btn sq">+</div></div>')
+
+def eink_side(width, on, app_on, src):
+    return (f'<div class="dim2 r" style="left:{width}"></div><div class="side2 modern left" style="width:{width}">{EHD}'
+            f'<div class="secl" style="margin-top:6px">SCREEN MODE</div>{modes(on)}{scope(app_on)}<div class="src">{src}</div>'
+            f'{ACTS}<div style="flex:1"></div><div style="border-top:2px solid #000">{light_auto(False)}</div></div>')
+
+eink_land = (f'<div class="dim2 r" style="left:72%"></div><div class="side2 modern left" style="width:72%">{EHD}'
+             f'<div class="cols"><div class="lc"><div class="secl" style="margin-top:4px">SCREEN MODE</div>{modes("Text", grid=True)}</div>'
+             f'<div class="rc">{scope(True)}<div class="src">Text · KOReader’s own</div>{ACTS}<div style="flex:1"></div>{light_auto(False)}</div></div></div>')
+
+eink_board = board("Screen and light panel", """<div class="notes"><h2>19 · Left edge: screen &amp; light</h2>
+<ul><li>Swipe up or down along the <b>left</b> edge (the middle, like the right one). The right edge stays recent apps.</li>
+<li><b>Screen mode</b>: six big buttons, each with one line on what it's for (Fast 12, Soft 14, Dither 13, Text 8, Quality 7, Auto 22). The one in use is filled.</li>
+<li><b>Use for KOReader / Use everywhere</b>: where the next tap goes. The line under it says where the mode in use comes from: this app's own, KompaktOS's per-app setting, or everywhere.</li>
+<li>After a change the screen is redrawn once (a 150 ms white flash), since a new mode only shows on newly drawn pixels.</li>
+<li><b>Full refresh</b> and <b>Contrast</b> (− / +, whole device) on one line.</li>
+<li>The <b>light</b> moves here from the recent-apps panel (Brightness, Warmth, Auto pill), so recent apps get their rows back.</li>
+<li>Landscape: 72% wide, modes on the left, the rest on the right.</li>
+<li>Stock Moaan firmware: unchanged (no left panel; its own e-ink panel stays).</li></ul></div>""",
+    [frame("Portrait · this app", "KOReader has its own mode.", device("p", eink_side("78%", "Text", True, "Text · KOReader’s own · tap Use everywhere to clear"))),
+     frame("Portrait · everywhere", "No mode of its own: the device-wide one.", device("p", eink_side("78%", "Quality", False, "Quality · everywhere")))],
+    frame("Landscape", "Two columns.", device("l", eink_land)))
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
                    ("08-presets", presets_board), ("09-font", font_board),
                    ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board),
-                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board), ("17-books-landscape", books_land), ("18-auto-brightness", auto_board)]:
+                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board), ("17-books-landscape", books_land), ("18-auto-brightness", auto_board), ("19-eink-panel", eink_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

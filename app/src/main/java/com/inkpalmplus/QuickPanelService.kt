@@ -402,6 +402,8 @@ class QuickPanelService : AccessibilityService() {
             "contrast" -> { ScreenModes.setContrast(this, value.toInt()); true }
             "edge_back" -> { Prefs(this).edgeBack = value == "on"; showStrip(); true }
             "back" -> { back(); true }
+            // "none", "neoreader", "koreader": the side panel's reader app (screenshots without a book title).
+            "reader" -> { Prefs(this).readerApp = value; prepared = null; true }
             "hold_refresh" -> { Prefs(this).holdRefresh = value == "on"; syncKeyFilter(); true }
             // "off", "panda": the power-off screen (blocking work on Eink's worker; the result is logged).
             "poweroff" -> { val c = SleepImages.PowerOff.valueOf(value.uppercase()); Eink.post { Log.i(TAG, "poweroff ${c.name}: ${SleepImages.setPowerOff(this, c) ?: "ok"}") }; true }

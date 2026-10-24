@@ -60,7 +60,7 @@ In landscape the panel is half the screen wide, with two columns.
 
 ## KompaktOS: screen and light panel
 
-On KompaktOS (the InkPalm-KompaktOS image, which has a small root helper built in), InkPalm+ also does what InkControl did; InkControl isn't needed any more (uninstall it, so the two don't both drive the screen).
+On KompaktOS (the [KompaktOS port for the InkPalm Plus](https://github.com/rn-os/kompaktos-inkpalm-plus), whose image has a small root helper built in), InkPalm+ also does what InkControl did; InkControl isn't needed any more (uninstall it, so the two don't both drive the screen).
 
 Swipe up or down along the **other** edge (the left one, unless recent apps are there) for **Screen & light**:
 
@@ -195,7 +195,7 @@ Per-app settings work without Shizuku. If InkPalm+ can't reach them on your firm
 
 ## Limits
 
-- Tested only on the **InkPalm Plus**, firmware `MAS_EPD305_L81B804_T44_V09`, Android 11. Other Moaan models may differ.
+- Tested only on the **InkPalm Plus**: stock firmware `MAS_EPD305_L81B804_T44_V09` (Android 11), and the KompaktOS 1.2 port (Android 16). Other Moaan models may differ.
 - The e-ink features use Moaan's firmware. They won't work on other phones. The side panel itself is plain Android, but it hasn't been tried elsewhere.
 - Android doesn't let apps read its recents, so the list only has apps that came to the front **after** InkPalm+ was switched on.
 
@@ -228,3 +228,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 - `docs/mockups`: the UI mockups, built by `docs/mockups/build.py`.
 
 The UI is built in code (`Ui.kt`), black on white, with no animations. The only libraries are Shizuku's API and HiddenApiBypass.
+
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE).

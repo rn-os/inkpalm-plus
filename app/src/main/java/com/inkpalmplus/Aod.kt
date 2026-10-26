@@ -37,7 +37,8 @@ import java.util.zip.ZipFile
  * 5 / 15 / 30 / 60 min, aligned to the wall clock. [Alarm] draws the face and asks the bridge for `redraw=1`: it wakes
  * the screen with the front light held off and puts it back to sleep (~5 s), so the HWC draws the new picture. That
  * wake reaches InkPalm+ as SCREEN_ON / SCREEN_OFF, which [redrawWake] / [redrawSleep] swallow (no light, no auto
- * power-off reset). Updates continue while charging (the cost is then free). Below [LOW_BATTERY] % on battery the
+ * power-off reset); [WakeCover] shows the new face over everything during it, so the panel never shows the home
+ * screen or the last app. Updates continue while charging (the cost is then free). Below [LOW_BATTERY] % on battery the
  * face becomes the low-battery box, drawn once, and the updates stop.
  */
 object Aod {
@@ -67,12 +68,17 @@ object Aod {
         return (page.toFloat() / total).coerceIn(0f, 1f)
     }
 
-    /** Milliseconds from [nowMs] to the next local wall-clock multiple of [minutes] (10:15, 10:20, …), at least a minute. */
+    /** The shortest wait for a Live update: an alarm armed nearer than this (at a boundary, or just past one) would
+     *  fire at once, back to back with the redraw that armed it. */
+    const val MIN_DELAY_MS = 60_000L
+
+    /** Milliseconds from [nowMs] to the next local wall-clock multiple of [minutes] (10:15, 10:20, …), never less than
+     *  [MIN_DELAY_MS]: a boundary nearer than that (or reached already) is skipped for the one after. */
     fun delayToNext(nowMs: Long, tzOffsetMs: Long, minutes: Int): Long {
-        val step = minutes * 60_000L
+        val step = minutes.coerceAtLeast(1) * 60_000L
         val local = nowMs + tzOffsetMs
-        var next = (local / step + 1) * step
-        if (next - local < 60_000L) next += step
+        var next = Math.floorDiv(local, step) * step
+        while (next - local < MIN_DELAY_MS) next += step
         return next - local
     }
 
@@ -187,7 +193,10 @@ object Aod {
         }.getOrDefault(false)
         bmp.recycle()
         if (!ok) { Log.w(TAG, "aod: couldn't write the face"); return false }
+        // The redraw's wake shows the new face at once (not the home screen) until the HWC draws it at the sleep.
+        val covered = redraw && WakeCover.show(bmp.copy(Bitmap.Config.ARGB_8888, false), "aod")
         val sent = Eink.bridgeWrite("standby.req", if (redraw) "apply=1\nredraw=1\n" else "apply=1\n")
+        if (covered && !sent) WakeCover.hide("request failed")
         if (sent) lastKey = key
         Log.i(TAG, "aod: ${face.name} ${if (redraw) "redraw" else "installed"} rot=${data.rotation} low=${data.low} in ${SystemClock.uptimeMillis() - t0} ms")
         return sent
@@ -356,11 +365,32 @@ object Aod {
 
     // ---- The redraw's own wake ---------------------------------------------------------------------
 
-    /** A redraw InkPalm+ asked for is in flight until then (elapsedRealtime): its SCREEN_ON is not the user's. */
+    /** A redraw (or auto power-off's predraw) InkPalm+ asked for is in flight until then (elapsedRealtime): its
+     *  SCREEN_ON is not the user's. */
     @Volatile private var redrawUntil = 0L
     @Volatile private var redrawWoke = false
+    /** Auto power-off is underway until then: no more Live updates (they would wake the panel during the shutdown). */
+    @Volatile private var poweringOffUntil = 0L
 
     fun redrawing(): Boolean = SystemClock.elapsedRealtime() < redrawUntil
+
+    /** The bridge is about to wake and sleep the screen for InkPalm+ within [ms]: that wake is not the user's. */
+    fun expectWake(ms: Long) {
+        redrawWoke = false
+        redrawUntil = SystemClock.elapsedRealtime() + ms
+    }
+
+    /** Auto power-off fired ([AutoOff]): its predraw wake is ours, and the Live updates stop. */
+    fun poweringOff(c: Context) {
+        poweringOffUntil = SystemClock.elapsedRealtime() + 120_000L
+        cancel(c)
+        expectWake(30_000L)
+    }
+
+    private fun poweringOff(): Boolean = SystemClock.elapsedRealtime() < poweringOffUntil
+
+    /** The redraw's wake didn't end (the bridge never put the screen back to sleep): it was the user's after all. */
+    fun redrawWakeOver() { redrawUntil = 0; redrawWoke = false }
 
     /** SCREEN_ON: true when it's the redraw's wake (the caller then leaves the light off and the timers alone). */
     fun redrawWake(): Boolean {
@@ -395,7 +425,7 @@ object Aod {
 
     fun schedule(c: Context, delayMs: Long? = null) {
         val minutes = interval(c)
-        if (!supported() || !face(c).drawn || (minutes <= 0 && delayMs == null)) return
+        if (!supported() || !face(c).drawn || (minutes <= 0 && delayMs == null) || poweringOff()) return
         val now = System.currentTimeMillis()
         val wait = delayMs ?: delayToNext(now, TimeZone.getDefault().getOffset(now).toLong(), minutes)
         val at = SystemClock.elapsedRealtime() + wait
@@ -417,7 +447,7 @@ object Aod {
 
     /** One Live update, asleep. Blocking (on [Eink.worker]). */
     fun update(c: Context) {
-        if (!supported() || !face(c).drawn || interactive(c)) return
+        if (!supported() || !face(c).drawn || interactive(c) || poweringOff()) return
         val bat = c.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val level = bat?.let { it.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) * 100 / it.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1) } ?: -1
         val plugged = (bat?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
@@ -425,23 +455,28 @@ object Aod {
         val sp = Prefs(c).sp
         if (low && sp.getBoolean(K_LOW_SHOWN, false)) { Log.i(TAG, "aod: battery $level%, updates stopped"); return }
         // The bridge wakes the screen for ~5 s; until its SCREEN_OFF, the wake is ours.
-        redrawUntil = SystemClock.elapsedRealtime() + 15_000L
-        redrawWoke = false
+        expectWake(15_000L)
         if (!install(c, redraw = true, force = true, low = low)) { redrawUntil = 0; return }
         if (low) { sp.edit().putBoolean(K_LOW_SHOWN, true).apply(); Log.i(TAG, "aod: battery $level%, last update"); return }
         if (interval(c) > 0) schedule(c)
     }
 
-    /** The Live update alarm. Holds a wake lock while the bridge wakes and sleeps the screen. */
+    /** The Live update alarm. Holds a wake lock while the bridge wakes and sleeps the screen. Not exported: only
+     *  InkPalm+'s own PendingIntent reaches it (and root: `am broadcast -n com.inkpalmplus/.Aod\$Alarm` is one
+     *  update now, for checks on release builds, which have no test hooks; with `--es cover poweroff`, only the auto
+     *  power-off cover for [WakeCover.TIMEOUT_MS], no power-off). */
     class Alarm : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             val app = c.applicationContext
+            Log.i(TAG, "aod: alarm${i.getStringExtra("cover")?.let { " (cover $it)" } ?: ""}")
             val wl = app.getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "InkPalmPlus:aod")
             wl.acquire(12_000L)
             Eink.init(app)
             val done = goAsync()
             Eink.post {
-                try { update(app) } finally { done.finish() }
+                try {
+                    if (i.getStringExtra("cover") == "poweroff") AutoOff.showCover(app) else update(app)
+                } finally { done.finish() }
             }
         }
     }

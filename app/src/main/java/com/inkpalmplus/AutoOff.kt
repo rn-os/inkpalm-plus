@@ -6,11 +6,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.BitmapFactory
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
+import java.io.File
 
 /**
  * Auto power-off like the stock Moaan firmware (from InkControl): after the screen has been off for N hours on
@@ -60,14 +62,34 @@ object AutoOff {
     private fun pending(c: Context): PendingIntent = PendingIntent.getBroadcast(c.applicationContext, 0,
         Intent(c.applicationContext, Alarm::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-    /** Timer ran out: shut down if still asleep on battery (the bridge checks again). */
+    /**
+     * The power-off picture over everything ([WakeCover]) before the bridge's predraw wakes the screen to draw it (with
+     * a picture installed; Moaan's own draws without a wake). True when it's up. Blocking (on [Eink.worker]).
+     */
+    fun showCover(c: Context): Boolean {
+        val f = File(c.filesDir, "poweroff.png")
+        if (!f.isFile) return false
+        val bmp = BitmapFactory.decodeFile(f.path) ?: return false
+        return WakeCover.show(bmp, "power-off")
+    }
+
+    /** Timer ran out: shut down if still asleep on battery (the bridge checks again). The bridge first wakes and
+     *  sleeps the screen to draw the power-off picture: like the always-on display's redraw, that wake is InkPalm+'s
+     *  (no light, no Live update armed, see [Aod.poweringOff]), and covered by the picture itself. */
     class Alarm : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             if (hours(c) <= 0 || interactive(c) || plugged(c)) return
             Log.i(TAG, "auto power-off: shutting down")
             val done = goAsync()
-            Eink.init(c)
-            Eink.post { Eink.bridgeWrite("power.req", "off=1\n"); done.finish() }
+            val app = c.applicationContext
+            Eink.init(app)
+            Eink.post {
+                try {
+                    Aod.poweringOff(app)
+                    showCover(app)
+                    Eink.bridgeWrite("power.req", "off=1\n")
+                } finally { done.finish() }
+            }
         }
     }
 }

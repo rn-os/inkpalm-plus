@@ -63,14 +63,38 @@ class QuickPanelService : AccessibilityService() {
             when (i.action) {
                 // The always-on display's redraw wakes and sleeps the screen: not the user's, so the light stays
                 // off and auto power-off keeps counting.
-                Intent.ACTION_SCREEN_OFF -> { if (Aod.redrawSleep()) return; Light.screenOff(); syncLightSensor(); AutoOff.arm(c); Aod.onScreenOff(c) }
-                Intent.ACTION_SCREEN_ON -> { if (Aod.redrawWake()) return; Light.apply(c); syncLightSensor(); AutoOff.cancel(c); Aod.onScreenOn(c) }
+                // Its cover ([WakeCover]) goes 1 s after that sleep, once the HWC has drawn; at once on the user's wake.
+                Intent.ACTION_SCREEN_OFF -> {
+                    Shell.main.removeCallbacks(redrawStuck)
+                    if (Aod.redrawSleep()) { WakeCover.hideAfter(1_000); return }
+                    WakeCover.hide("user sleep")
+                    Light.screenOff(); syncLightSensor(); AutoOff.arm(c); Aod.onScreenOff(c)
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    if (Aod.redrawWake()) { Shell.main.removeCallbacks(redrawStuck); Shell.main.postDelayed(redrawStuck, REDRAW_STUCK_MS); return }
+                    userWake(c)
+                }
                 Intent.ACTION_TIME_TICK, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> Aod.tick(c)
                 // Plugged in while asleep: Live updates start again if the battery had stopped them.
                 Intent.ACTION_POWER_CONNECTED -> { AutoOff.cancel(c); if (!c.getSystemService(android.os.PowerManager::class.java).isInteractive) Aod.schedule(c) }
                 Intent.ACTION_POWER_DISCONNECTED -> AutoOff.arm(c)
             }
         }
+    }
+
+    /** The user's wake: the cover off, the light back, auto power-off and Live updates stopped. */
+    private fun userWake(c: Context) {
+        WakeCover.hide("user wake")
+        Light.apply(c); syncLightSensor(); AutoOff.cancel(c); Aod.onScreenOn(c)
+    }
+
+    /** The bridge puts the screen back to sleep ~5 s after its redraw wake. Still awake well after that: the wake was
+     *  the user's (pressed while the redraw was in flight, so the bridge didn't wake it itself). */
+    private val redrawStuck = Runnable {
+        if (!getSystemService(android.os.PowerManager::class.java).isInteractive) return@Runnable
+        Log.i(TAG, "redraw wake didn't end: taken as the user's")
+        Aod.redrawWakeOver()
+        userWake(this)
     }
 
     /** Android's brightness slider or adaptive brightness changed: the light follows. */
@@ -130,6 +154,8 @@ class QuickPanelService : AccessibilityService() {
         runCatching { contentResolver.unregisterContentObserver(brightness) }
         runCatching { getSystemService(android.hardware.SensorManager::class.java).unregisterListener(lux) }
         Shell.main.removeCallbacks(endPreview); Shell.main.removeCallbacks(prepare); Shell.main.removeCallbacks(homeHold)
+        Shell.main.removeCallbacks(redrawStuck)
+        WakeCover.hide("service gone")
         removeStrip()
         closePanel()
         closeSide()
@@ -333,7 +359,7 @@ class QuickPanelService : AccessibilityService() {
     private fun syncLightSensor() {
         val sm = getSystemService(android.hardware.SensorManager::class.java) ?: return
         val want = Light.supported() && Light.followSystem(this) && Light.auto(this) &&
-            getSystemService(android.os.PowerManager::class.java).isInteractive
+            getSystemService(android.os.PowerManager::class.java).isInteractive && !Aod.redrawing()
         if (want == luxListening) return
         if (want) sm.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT)?.let {
             Light.sensorStarted(this)
@@ -423,6 +449,9 @@ class QuickPanelService : AccessibilityService() {
             "aod_render" -> { Aod.prepare(this, force = true); true }
             "aod_soon" -> { Aod.schedule(this, value.toLong() * 1000); true }
             "aod_fire" -> { Eink.post { Aod.update(this) }; true }
+            // The auto power-off cover alone (no power-off), for WakeCover.TIMEOUT_MS: "cover_poweroff"; "cover_hide".
+            "cover_poweroff" -> { Eink.post { Log.i(TAG, "cover_poweroff: ${AutoOff.showCover(this)}") }; true }
+            "cover_hide" -> { WakeCover.hide("test"); true }
             "aod_arrow" -> { val r = value.toIntOrNull(); Eink.post { Aod.installArrow(this, r) }; true }
             // A picture file as the sleep-screen picture, as if picked: "aod_pick /sdcard/Download/x.png".
             "aod_pick" -> { Eink.post { Log.i(TAG, "aod_pick: ${SleepImages.setSleep(this, android.net.Uri.fromFile(java.io.File(value))) ?: "ok"}") }; true }
@@ -550,6 +579,8 @@ class QuickPanelService : AccessibilityService() {
         const val BACK_STRIP_DP = 10
         /** The firmware's own long press (PhoneWindowManager$18). */
         const val HOLD_MS = 800L
+        /** A redraw wake still on after this long wasn't the bridge's (it sleeps again after ~5 s). */
+        const val REDRAW_STUCK_MS = 10_000L
 
         @Volatile var instance: QuickPanelService? = null
             private set

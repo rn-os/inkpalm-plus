@@ -30,10 +30,51 @@ class MergedLogicTest {
     }
 
     @Test fun luxCurveIsBoundedAndRising() {
-        assertEquals(0.1f, Light.luxScale(0f), 0.001f)
-        assertEquals(1f, Light.luxScale(300f), 0.001f)
+        assertEquals(0.08f, Light.luxScale(0f), 0.001f)
+        assertEquals(1f, Light.luxScale(1999f), 0.001f)
         assertEquals(1f, Light.luxScale(100_000f), 0.001f)
         assertTrue(Light.luxScale(10f) < Light.luxScale(100f))
+        assertEquals(Light.luxScale(200f), Light.luxScale(50f, 2), 0.001f)    // +2 = lux × 4
+        assertEquals(Light.luxScale(25f), Light.luxScale(50f, -1), 0.001f)
+    }
+
+    @Test fun autoHoldsThenAppliesFirstValueDirectly() {
+        val a = AutoLux()
+        a.restart(0)
+        assertEquals(null, a.sample(400, 100f, 0))
+        val r = a.sample(500, 100f, 0)!!
+        assertEquals(Light.luxScale(100f), r.scale, 0.001f)
+        assertEquals(false, r.ramp)
+    }
+
+    @Test fun autoWaitsTwoSecondsUpAndFourDown() {
+        val a = AutoLux()
+        a.restart(0); a.sample(500, 100f, 0)
+        var t = 500L
+        var up: AutoLux.Result? = null
+        while (up == null && t < 20_000) { t += 1000; up = a.sample(t, 1000f, 0) }
+        assertEquals(true, up!!.ramp)
+        assertTrue(t - 500 >= 2000)
+        val b = AutoLux()
+        b.restart(0); b.sample(500, 1000f, 0)
+        t = 500
+        var down: AutoLux.Result? = null
+        while (down == null && t < 20_000) { t += 1000; down = b.sample(t, 100f, 0) }
+        assertTrue(t - 500 >= 4000)
+        assertTrue(down!!.scale < Light.luxScale(1000f))
+    }
+
+    @Test fun autoIgnoresSmallDriftAndSteadyLight() {
+        val a = AutoLux()
+        a.restart(0); a.sample(500, 100f, 0)
+        for (i in 1..20) assertEquals(null, a.sample(500L + i * 1000, if (i % 2 == 0) 108f else 94f, 0))
+    }
+
+    @Test fun sensitivityRescalesAtOnce() {
+        val a = AutoLux()
+        assertEquals(null, a.force(1))
+        a.restart(0); a.sample(500, 50f, 0)
+        assertEquals(Light.luxScale(100f), a.force(1)!!, 0.001f)
     }
 
     @Test fun contrastLabelsCountStepsFromNormal() {

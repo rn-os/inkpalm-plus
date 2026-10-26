@@ -321,14 +321,16 @@ class QuickPanelService : AccessibilityService() {
         override fun onAccuracyChanged(s: android.hardware.Sensor?, accuracy: Int) {}
     }
 
-    /** The light sensor, only while the screen is on and adaptive brightness is on (the light follows it, see [Light]). */
+    /** The light sensor, only while the screen is on and adaptive brightness is on (the light follows it, see [Light]).
+     *  Sampled once a second; the last scale stays on the LEDs while it's off. */
     private fun syncLightSensor() {
         val sm = getSystemService(android.hardware.SensorManager::class.java) ?: return
         val want = Light.supported() && Light.followSystem(this) && Light.auto(this) &&
             getSystemService(android.os.PowerManager::class.java).isInteractive
         if (want == luxListening) return
         if (want) sm.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT)?.let {
-            luxListening = sm.registerListener(lux, it, android.hardware.SensorManager.SENSOR_DELAY_NORMAL)
+            Light.sensorStarted(this)
+            luxListening = sm.registerListener(lux, it, Light.SENSOR_PERIOD_US)
         } else {
             sm.unregisterListener(lux)
             luxListening = false

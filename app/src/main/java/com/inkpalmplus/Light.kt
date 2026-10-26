@@ -2,9 +2,11 @@ package com.inkpalmplus
 
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import kotlin.math.log10
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
@@ -15,9 +17,10 @@ import kotlin.math.roundToInt
  * The panel shows two numbers: Brightness (the overall level) and Warmth (the cold/warm balance: 0 all cold,
  * 50 both channels at the level, 100 all warm), [mix]ed into the two channels, each on a gamma-2 curve (finer steps
  * when dim). With [follows] on, both are scaled by Android's brightness slider, or, with adaptive brightness on,
- * by the light sensor ([onLux]): Android 16's auto brightness never writes SCREEN_BRIGHTNESS, so there's nothing to
- * follow there. Moving Brightness turns adaptive brightness off: the user's choice wins. The LEDs go off when the
- * screen does ([screenOff]; the driver drops its levels across suspend) and come back with it ([apply]).
+ * by the light sensor ([onLux]), and only by that: Android's own auto brightness also rewrites SCREEN_BRIGHTNESS
+ * then, so it's ignored. With Auto on, Brightness is the ceiling the lux scale multiplies (Boox-style), Warmth stays
+ * manual, and only the Auto pill turns it off. The LEDs go off when the screen does ([screenOff]; the driver drops
+ * its levels across suspend) and come back with it ([apply]).
  */
 object Light {
     const val MAX = 2047
@@ -25,6 +28,9 @@ object Light {
     private const val K_WARMTH = "light_warmth"
     private const val K_ON = "light_on"
     private const val K_FOLLOW = "light_follow_system"
+    private const val K_SENS = "light_sensitivity"
+    private const val K_LAST_SCALE = "light_auto_scale"
+    private const val K_LAST_LUX = "light_auto_lux"
     private const val K_IMPORTED = "light_imported"
     private const val INKCONTROL = "org.neoport.inkcontrol"
     private val INKCONTROL_STATE: Uri by lazy { Uri.parse("content://org.neoport.inkcontrol.light/state") }
@@ -44,16 +50,17 @@ object Light {
         return State(s.getInt(K_LEVEL, 50), s.getInt(K_WARMTH, 50), s.getBoolean(K_ON, true), followSystem(context), auto(context))
     }
 
-    /** [level] and [warmth] 0–100, both channels on or off with [on]. A new level turns adaptive brightness off. */
+    /** [level] and [warmth] 0–100, both channels on or off with [on]. With adaptive brightness on, [level] is the ceiling. */
     fun set(context: Context, level: Int, warmth: Int, on: Boolean) {
         val s = sp(context)
         val l = level.coerceIn(0, 100)
-        if (l != s.getInt(K_LEVEL, 50) && auto(context)) setAuto(context, false)
+        if (on && !s.getBoolean(K_ON, true)) autoCurve.restart(SystemClock.elapsedRealtime())
         s.edit().putInt(K_LEVEL, l).putInt(K_WARMTH, warmth.coerceIn(0, 100)).putBoolean(K_ON, on).apply()
         apply(context)
     }
 
     fun setOn(context: Context, on: Boolean) {
+        if (on && !isOn(context)) autoCurve.restart(SystemClock.elapsedRealtime())
         sp(context).edit().putBoolean(K_ON, on).apply()
         apply(context)
     }
@@ -72,9 +79,23 @@ object Light {
 
     /** Turns adaptive brightness on or off; false when InkPalm+ may not (Modify system settings isn't allowed). */
     fun setAuto(context: Context, on: Boolean): Boolean = Settings.System.canWrite(context) && runCatching {
+        autoCurve.restart(SystemClock.elapsedRealtime())
         Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE,
             if (on) Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC else Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
     }.getOrDefault(false)
+
+    const val SENS_MIN = -2
+    const val SENS_MAX = 2
+
+    /** Auto sensitivity -2..2: each step doubles (or halves) the lux before the curve, so + is brighter at the same room. */
+    fun sensitivity(context: Context): Int = sp(context).getInt(K_SENS, 0).coerceIn(SENS_MIN, SENS_MAX)
+
+    fun setSensitivity(context: Context, v: Int) {
+        sp(context).edit().putInt(K_SENS, v.coerceIn(SENS_MIN, SENS_MAX)).apply()
+        autoCurve.force(sensitivity(context))?.let { cancelRamp(); setScale(context, it) }
+        listener?.invoke()
+        apply(context)
+    }
 
     /** Channel levels for a brightness and warmth: cold = L·min(1, 2(1−t)), warm = L·min(1, 2t). */
     fun mix(level: Int, warmth: Int): Pair<Int, Int> {
@@ -89,29 +110,115 @@ object Light {
         return (MAX * x * x * scale.coerceIn(0f, 1f)).roundToInt()
     }
 
-    /** Ambient light → scale: dim in the dark, full from ~300 lux (indoor daylight) up, log-shaped like the eye. */
-    fun luxScale(lux: Float): Float = (0.1 + 0.9 * log10(1.0 + lux.coerceAtLeast(0f)) / log10(301.0)).coerceIn(0.1, 1.0).toFloat()
+    /** Ambient light → scale: 0.08 in the dark, full from ~1500 lux, log-shaped like the eye. [bias] (-2..2) doubles the lux per step. */
+    fun luxScale(lux: Float, bias: Int = 0): Float {
+        val l = lux.coerceAtLeast(0f) * 2f.pow(bias)
+        return (0.08 + 0.92 * log10(1.0 + l) / log10(2000.0)).coerceIn(0.08, 1.0).toFloat()
+    }
 
-    /** Scale from the light sensor while adaptive brightness is on, or -1 before the first reading. */
+    private val autoCurve = AutoLux()
+
+    /** The scale on the LEDs now while adaptive brightness is on (it moves in steps during a ramp), or -1 before any. */
     @Volatile private var autoScale = -1f
 
-    /** A light sensor reading (the service listens while the screen is on and adaptive brightness is on). Small
-     *  changes are ignored so the LEDs don't flicker. */
-    fun onLux(context: Context, lux: Float) {
-        val f = luxScale(lux)
-        if (autoScale >= 0 && kotlin.math.abs(f - autoScale) < 0.05f) return
-        autoScale = f
+    /** Called after the auto scale or the lux readout changed, on the main thread (the open panel's readout). */
+    @Volatile var listener: (() -> Unit)? = null
+
+    /** "120 lux · 63%" for the panel, or null before the first reading. */
+    fun readout(): String? {
+        val lux = autoCurve.smoothed
+        return if (lux.isNaN() || autoScale < 0) null else "${lux.roundToInt()} lux · ${(autoScale * 100).roundToInt()}%"
+    }
+
+    private var lastRaw = Float.NaN
+    private var lastSampleAt = 0L
+    private var ticking: Context? = null
+    private var rampTarget = -1f
+    private var rampLeft = 0
+
+    private fun setScale(context: Context, s: Float) {
+        autoScale = s
         apply(context)
     }
 
-    /** The sensor stopped (screen off, adaptive off): its last reading is stale; the system level counts until the next. */
-    fun sensorStopped() { autoScale = -1f }
+    private fun cancelRamp() { Shell.main.removeCallbacks(rampStep); rampLeft = 0 }
+
+    private val rampStep = object : Runnable {
+        override fun run() {
+            val c = ticking ?: return
+            val s = autoScale + (rampTarget - autoScale) / rampLeft
+            rampLeft--
+            setScale(c, if (rampLeft == 0) rampTarget else s)
+            listener?.invoke()
+            if (rampLeft > 0) Shell.main.postDelayed(this, RAMP_MS)
+        }
+    }
+
+    private fun accept(context: Context, r: AutoLux.Result) {
+        cancelRamp()
+        sp(context).edit().putFloat(K_LAST_SCALE, r.scale).putFloat(K_LAST_LUX, autoCurve.smoothed).apply()
+        if (!r.ramp || autoScale < 0) { setScale(context, r.scale); listener?.invoke(); return }
+        rampTarget = r.scale
+        rampLeft = RAMP_STEPS
+        rampStep.run()
+    }
+
+    /** One sample a second at most (the sensor's own limit is 200 ms, whatever period is asked), the first one at once. */
+    private fun due(now: Long) = autoCurve.smoothed.isNaN() || now - lastSampleAt >= SAMPLE_MS - 50
+
+    private fun process(context: Context, now: Long) {
+        lastSampleAt = now
+        autoCurve.sample(now, lastRaw, sensitivity(context))?.let { accept(context, it) }
+    }
+
+    /** A light sensor reading (the service listens while the screen is on and adaptive brightness is on). */
+    fun onLux(context: Context, lux: Float) {
+        lastRaw = lux
+        val now = SystemClock.elapsedRealtime()
+        if (due(now)) process(context, now)
+    }
+
+    /** The sensor only reports changes, so a steady room sends nothing: this repeats the last reading, once a second,
+     *  so the smoothing and the 2 s / 4 s hysteresis still run (and the first value comes after the 500 ms hold). */
+    private val tick = object : Runnable {
+        override fun run() {
+            val c = ticking ?: return
+            val now = SystemClock.elapsedRealtime()
+            if (!lastRaw.isNaN() && due(now)) process(c, now)
+            Shell.main.postDelayed(this, TICK_MS)
+        }
+    }
+
+    /** The service started listening (screen on, adaptive on): sensor events are ignored for 500 ms, then the first one
+     *  counts. The sensor reports changes only and sends nothing at registration, so until it does, the last reading
+     *  (kept in prefs across restarts) stands in; a changed room sends its own event. */
+    fun sensorStarted(context: Context) {
+        ticking = context.applicationContext
+        if (lastRaw.isNaN()) lastRaw = sp(context).getFloat(K_LAST_LUX, Float.NaN)
+        autoCurve.restart(SystemClock.elapsedRealtime())
+        Shell.main.removeCallbacks(tick)
+        Shell.main.postDelayed(tick, TICK_MS)
+    }
+
+    /** The sensor stopped (screen off, adaptive off). The last scale stays until new data arrives (no reset to the system level). */
+    fun sensorStopped() {
+        Shell.main.removeCallbacks(tick)
+        if (rampLeft > 0) { cancelRamp(); autoScale = rampTarget }
+        ticking = null
+    }
 
     private fun scale(context: Context): Float = when {
         !followSystem(context) -> 1f
-        auto(context) && autoScale >= 0 -> autoScale
+        auto(context) -> if (autoScale >= 0) autoScale else sp(context).getFloat(K_LAST_SCALE, 0.5f)
         else -> runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS) }.getOrDefault(128) / 255f
     }
+
+    private const val RAMP_STEPS = 3
+    private const val RAMP_MS = 300L
+    private const val SAMPLE_MS = 1_000L
+    private const val TICK_MS = 250L
+    /** Sensor sampling period in microseconds. */
+    const val SENSOR_PERIOD_US = 1_000_000
 
     /** A write is queued: it reads the state when it runs, so more changes meanwhile (a slider drag) add nothing. */
     private val queued = java.util.concurrent.atomic.AtomicBoolean(false)

@@ -49,4 +49,22 @@ class AodLogicTest {
         assertEquals(5, Aod.DEFAULT_INTERVAL)
         assertEquals(listOf(0, 5, 15, 30, 60), Aod.INTERVALS)
     }
+
+    @Test fun sleepFreezesTheHeldOrientation() {
+        val o = Aod.Orientation()
+        // Awake in landscape (ROTATION_90): drawn as the display says.
+        assertEquals(1, o.current { 1 })
+        o.sleep()
+        // Asleep and in the redraw's wake the display reports 0: ignored.
+        assertEquals(1, o.current { 0 })
+        o.awake(0)
+        assertEquals(1, o.current { 3 })
+        assertTrue(o.asleep)
+        // The user's wake clears it.
+        o.wake()
+        assertFalse(o.asleep)
+        assertEquals(0, o.current { 0 })
+        o.awake(3); o.sleep()
+        assertEquals(3, o.current { 0 })
+    }
 }

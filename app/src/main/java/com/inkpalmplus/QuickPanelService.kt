@@ -215,7 +215,7 @@ class QuickPanelService : AccessibilityService() {
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         if (!::wm.isInitialized) return
-        Aod.prepare(this)   // a landscape face if the screen turned
+        Aod.onConfigChanged(this)   // a landscape face if the user turned it; not asleep or in the redraw's wake
         showStrip()
         panel?.let { old ->
             old.dismiss(wm)

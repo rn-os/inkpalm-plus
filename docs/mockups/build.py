@@ -767,10 +767,44 @@ eink_board = board("Screen and light panel", """<div class="notes"><h2>19 · Lef
      frame("Portrait · everywhere", "No mode of its own: the device-wide one.", device("p", eink_side("78%", "Quality", False, "Quality · everywhere")))],
     frame("Landscape", "Two columns.", device("l", eink_land)))
 
+
+# ---- Board 22: Boox-style Auto (ceiling slider, sensitivity, lux readout) ------------------------------
+
+def light_boox(auto, sens="0"):
+    pill = f'<span class="pill big{" on" if auto else ""}">Auto</span>'
+    lab = "Maximum 100%" if auto else "Brightness 100%"
+    b = (f'<div class="lt2"><div class="btn sq">−</div><div class="mid"><div class="labl"><b>{lab}</b>{pill}</div>'
+         f'<div class="bar"><i style="width:100%"></i></div></div><div class="btn sq">+</div></div>')
+    w = ('<div class="lt2"><div class="btn sq">−</div><div class="mid"><div class="labl"><b>Warmth 25%</b></div>'
+         '<div class="bar"><i style="width:25%"></i></div></div><div class="btn sq">+</div></div>')
+    s = (f'<div class="lt2 sens"><div class="sl"><b>Sensitivity</b><span>120 lux · 63%</span></div>'
+         f'<div class="btn sq">−</div><b class="sv">{sens}</b><div class="btn sq">+</div></div>') if auto else ""
+    return f'<div class="light2">{b}{w}{s}</div>'
+
+def boox_side(auto, sens="0"):
+    return (f'<div class="dim2 r" style="left:78%"></div><div class="side2 modern left" style="width:78%">{EHD}'
+            f'<div class="secl" style="margin-top:6px">SCREEN MODE</div>{modes("Text")}{scope(False)}<div class="src">Text · everywhere</div>'
+            f'{ACTS}<div style="flex:1"></div><div style="border-top:2px solid #000">{light_boox(auto, sens)}</div></div>')
+
+boox_board = board("Auto brightness, Boox-style", """<div class="notes"><h2>22 · Auto brightness, Boox-style</h2>
+<ul><li>Tapping <b>Auto</b> is the only way to turn it on or off. Dragging Brightness or Warmth never does.</li>
+<li><b>Auto on</b>: the room's light sets the level through a log curve (about 0.4 lux dim, 1500 lux full). The Brightness slider is now the <b>Maximum</b> that curve is multiplied by. Warmth stays yours.</li>
+<li><b>Sensitivity − / +</b> (−2 to +2), shown only with Auto on: each step doubles (or halves) the lux the curve sees, so + is brighter in the same room.</li>
+<li>Under it, what the sensor sees and what it does: <b>120 lux · 63%</b> (63% of the maximum).</li>
+<li>Calm on e-ink: the light follows a smoothed reading, waits 2 s (brighter) or 4 s (darker) before moving, then goes there in 3 small steps. Waking keeps the last level.</li>
+<li>Targets 48 dp.</li></ul></div>""",
+    [frame("Auto off", "As before: the slider is the level.", device("p", boox_side(False))),
+     frame("Auto on", "Maximum, Sensitivity and the readout.", device("p", boox_side(True)))],
+    frame("Landscape", "Same block, right column.",
+          device("l", f'<div class="dim2 r" style="left:72%"></div><div class="side2 modern left" style="width:72%">{EHD}'
+                      f'<div class="cols"><div class="lc"><div class="secl" style="margin-top:4px">SCREEN MODE</div>{modes("Text", grid=True)}</div>'
+                      f'<div class="rc">{scope(False)}<div class="src">Text · everywhere</div><div style="flex:1"></div>{light_boox(True, "+1")}</div></div></div>')))
+
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
                    ("08-presets", presets_board), ("09-font", font_board),
                    ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board),
-                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board), ("17-books-landscape", books_land), ("18-auto-brightness", auto_board), ("19-eink-panel", eink_board)]:
+                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board), ("17-books-landscape", books_land), ("18-auto-brightness", auto_board), ("19-eink-panel", eink_board), ("22-boox-auto", boox_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

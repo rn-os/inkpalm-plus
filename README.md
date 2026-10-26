@@ -70,7 +70,7 @@ Swipe up or down along the **other** edge (the left one, unless recent apps are 
 | **Use for this app / Use everywhere** | Where your pick goes. The line below says where the mode in use comes from: the app's own, KompaktOS's per-app setting, or everywhere. **Use everywhere** also drops the app's own |
 | **Full refresh** | One full, clean refresh |
 | **Contrast − +** | Lighter or darker, for the whole phone |
-| **Brightness, Warmth, Auto** | The front light. Brightness 0% turns it off. **Auto** is Android's adaptive brightness, from the light sensor; moving Brightness turns it off |
+| **Brightness, Warmth, Auto** | The front light. Brightness 0% turns it off. **Auto** (only the pill turns it on or off) sets the light from the room's light sensor, smoothed and slow to change; Brightness becomes the maximum, and a **Sensitivity** −/+ (−2 to +2) and a lux readout appear |
 
 Also on KompaktOS:
 

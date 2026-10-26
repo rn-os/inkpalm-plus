@@ -37,13 +37,35 @@ object Ink {
     val MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 }
 
+/** Corner radii (dp): small for buttons, chips and badges; medium for rows and cards; large for the panel itself. */
+object Radius {
+    const val SMALL = 6
+    const val MEDIUM = 12
+    const val LARGE = 18
+}
+
+/** Type scale (sp). Use these instead of loose numbers: caption, note, body-small, body, title, display. */
+object Type {
+    const val XS = 11f
+    const val S = 12f
+    const val M = 14f
+    const val L = 16f
+    const val XL = 20f
+    const val XXL = 26f
+}
+
+/** Spacing (dp). GUTTER is the screen-edge inset every page's content, titles and back buttons line up on. */
+object Space {
+    const val GUTTER = 16
+}
+
 fun Context.dp(v: Int): Int = (v * resources.displayMetrics.density).roundToInt()
 fun Context.dp(v: Float): Int = (v * resources.displayMetrics.density).roundToInt()
 fun View.dp(v: Int): Int = context.dp(v)
 
 fun Context.text(
     value: CharSequence,
-    sizeSp: Float = 16f,
+    sizeSp: Float = Type.L,
     bold: Boolean = false,
     color: Int = Ink.INK,
     medium: Boolean = false,
@@ -61,8 +83,8 @@ fun Context.text(
 
 /** Bold black section label with a heavy rule underneath. */
 fun Context.sectionTitle(value: String, scale: Float = 1f): View = vbox().apply {
-    setPadding(dp(16 * scale), dp(18 * scale), dp(16 * scale), dp(6 * scale))
-    addView(text(value.uppercase(), 14f * scale, bold = true).apply { letterSpacing = 0.06f })
+    setPadding(dp(Space.GUTTER * scale), dp(18 * scale), dp(Space.GUTTER * scale), dp(6 * scale))
+    addView(text(value.uppercase(), Type.M * scale, bold = true).apply { letterSpacing = 0.06f })
     addView(View(context).apply { setBackgroundColor(Ink.INK) }, lp(MATCH, dp(2)).apply { topMargin = dp(4 * scale) })
 }
 
@@ -85,7 +107,7 @@ fun Context.icon(drawable: Drawable?, sizeDp: Int = 24, tint: Boolean = true): I
     layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp))
 }
 
-fun Context.outline(strokeDp: Int = 2, radiusDp: Int = 8, fill: Int = Ink.PAPER): GradientDrawable =
+fun Context.outline(strokeDp: Int = 2, radiusDp: Int = Radius.MEDIUM, fill: Int = Ink.PAPER): GradientDrawable =
     GradientDrawable().apply {
         setColor(fill)
         setStroke(dp(strokeDp), Ink.INK)
@@ -118,17 +140,18 @@ fun Context.ovalButton(strokeDp: Int = 2): StateListDrawable {
 /** Same, for outlined shapes: keeps the black border while pressed. */
 private fun Context.outlinedStates(radiusDp: Int): StateListDrawable = StateListDrawable().apply {
     addState(intArrayOf(android.R.attr.state_pressed), outline(2, radiusDp, Ink.PRESSED))
-    addState(intArrayOf(-android.R.attr.state_enabled), outline(2, radiusDp, Ink.PAPER).apply { setStroke(dp(2), Ink.DISABLED) })
+    // Disabled: still pure black, but a dashed outline (no grays on e-ink).
+    addState(intArrayOf(-android.R.attr.state_enabled), outline(2, radiusDp, Ink.PAPER).apply { setStroke(dp(2), Ink.INK, dp(4).toFloat(), dp(4).toFloat()) })
     addState(intArrayOf(), outline(2, radiusDp, Ink.PAPER))
 }
 
 /** Outlined black-on-white text button (replaces the gray Material button). */
-fun Context.inkButton(label: String, sizeSp: Float = 15f, onClick: () -> Unit): TextView =
+fun Context.inkButton(label: String, sizeSp: Float = Type.M, onClick: () -> Unit): TextView =
     text(label, sizeSp, bold = true).apply {
         gravity = Gravity.CENTER
         minHeight = dp(48)
         setPadding(dp(12), dp(8), dp(12), dp(8))
-        background = outlinedStates(6)
+        background = outlinedStates(Radius.SMALL)
         isClickable = true
         isFocusable = true
         setOnClickListener { onClick() }
@@ -138,14 +161,14 @@ fun Context.inkButton(label: String, sizeSp: Float = 15f, onClick: () -> Unit): 
 fun Context.inkIconButton(iconRes: Int, label: String, sizeDp: Int = 48, enabled: Boolean = true, onClick: () -> Unit): View =
     android.widget.FrameLayout(this).apply {
         contentDescription = label
-        background = outlinedStates(6)
+        background = outlinedStates(Radius.SMALL)
         isEnabled = enabled
         isClickable = true
         isFocusable = true
         val pad = sizeDp / 5
         setPadding(dp(pad), dp(pad), dp(pad), dp(pad))
         addView(icon(getDrawable(iconRes), sizeDp - 2 * pad).apply {
-            imageTintList = ColorStateList.valueOf(if (enabled) Ink.INK else Ink.DISABLED)
+            imageTintList = ColorStateList.valueOf(Ink.INK)
         })
         layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp)).apply { marginStart = dp(6) }
         setOnClickListener { if (enabled) onClick() }

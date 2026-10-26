@@ -66,7 +66,8 @@ class QuickPanelService : AccessibilityService() {
                 Intent.ACTION_SCREEN_OFF -> { if (Aod.redrawSleep()) return; Light.screenOff(); syncLightSensor(); AutoOff.arm(c); Aod.onScreenOff(c) }
                 Intent.ACTION_SCREEN_ON -> { if (Aod.redrawWake()) return; Light.apply(c); syncLightSensor(); AutoOff.cancel(c); Aod.onScreenOn(c) }
                 Intent.ACTION_TIME_TICK, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> Aod.tick(c)
-                Intent.ACTION_POWER_CONNECTED -> AutoOff.cancel(c)
+                // Plugged in while asleep: Live updates start again if the battery had stopped them.
+                Intent.ACTION_POWER_CONNECTED -> { AutoOff.cancel(c); if (!c.getSystemService(android.os.PowerManager::class.java).isInteractive) Aod.schedule(c) }
                 Intent.ACTION_POWER_DISCONNECTED -> AutoOff.arm(c)
             }
         }

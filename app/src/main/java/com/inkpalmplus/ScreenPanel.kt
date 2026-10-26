@@ -216,7 +216,7 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
             Light.set(ctx, lastLevel, warmth, level > 0)
         }
         val pills = mutableListOf<() -> Unit>()
-        fun slider(label: () -> String, get: () -> Int, put: (Int) -> Unit, extra: View? = null) = addView(ctx.hbox().apply {
+        fun slider(label: () -> String, get: () -> Int, put: (Int) -> Unit, extra: View? = null, reserve: Boolean = false) = addView(ctx.hbox().apply {
             gravity = Gravity.CENTER_VERTICAL
             val text = ctx.text(label(), 13f, bold = true).apply {
                 gravity = Gravity.CENTER; maxLines = 1
@@ -238,14 +238,13 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
             fun step(d: Int) { put((get() + d).coerceIn(0, 100)); bar.progress = get(); send(); text.text = label(); pills.forEach { it() } }
             addView(ctx.inkButton("−", 18f) { step(-10) }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
             addView(ctx.vbox().apply {
-                // The label line keeps one height, and the Auto pill one spot, whatever the label says.
-                addView(ctx.hbox().apply {
-                    gravity = Gravity.CENTER_VERTICAL
-                    addView(text, lp(0, WRAP, 1f))
-                    extra?.let { addView(it, lp(WRAP, WRAP).apply { marginStart = ctx.dp(4) }) }
-                }, lp(MATCH, WRAP))
+                addView(text, lp(MATCH, WRAP))
                 addView(bar, lp(MATCH, WRAP))
             }, lp(0, WRAP, 1f))
+            // Auto sits between the slider and +, a 48 dp box like them, one 6 dp gap on each side. The Warmth row gets
+            // an empty box of the same width, so both sliders end in the same place.
+            if (extra != null) addView(extra, lp(WRAP, ctx.dp(48)).apply { marginStart = ctx.dp(6); marginEnd = ctx.dp(6) })
+            else if (reserve) addView(View(ctx), lp(ctx.dp(60), ctx.dp(48)))
             addView(ctx.inkButton("+", 18f) { step(10) }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
         }, lp(MATCH, WRAP).apply { topMargin = ctx.dp(2) })
         // Auto: only when the light follows Android's brightness. Only this pill turns it on or off; Brightness is then the maximum.
@@ -261,10 +260,10 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
         }
         val pill = if (!s.follows) null else ctx.text("Auto", 12f, bold = true).apply {
             gravity = Gravity.CENTER
-            setPadding(ctx.dp(8), ctx.dp(2), ctx.dp(8), ctx.dp(2))
+            setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
             minWidth = ctx.dp(48); minHeight = ctx.dp(48)
             fun look(on: Boolean) {
-                background = ctx.outline(2, 10, if (on) Ink.INK else Ink.PAPER)
+                background = ctx.outline(2, 6, if (on) Ink.INK else Ink.PAPER)
                 setTextColor(if (on) Ink.PAPER else Ink.INK)
                 contentDescription = if (on) "Auto brightness on" else "Auto brightness off"
             }
@@ -284,7 +283,7 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
             }
         }
         slider({ if (level == 0) "Light off" else if (Light.auto(ctx)) "Maximum $level%" else "Brightness $level%" }, { level }, { level = it }, pill)
-        slider({ "Warmth $warmth%" }, { warmth }, { warmth = it })
+        slider({ "Warmth $warmth%" }, { warmth }, { warmth = it }, reserve = pill != null)
         if (pill != null) {
             sens.apply {
                 gravity = Gravity.CENTER_VERTICAL

@@ -792,7 +792,7 @@ boox_board = board("Auto brightness, Boox-style", """<div class="notes"><h2>22 �
 <li><b>Sensitivity − / +</b> (−2 to +2), shown only with Auto on: each step doubles (or halves) the lux the curve sees, so + is brighter in the same room.</li>
 <li>Under it, what the sensor sees and what it does: <b>120 lux · 63%</b> (63% of the maximum).</li>
 <li>Calm on e-ink: the light follows a smoothed reading, waits 2 s (brighter) or 4 s (darker) before moving, then goes there in 3 small steps. Waking keeps the last level.</li>
-<li>Targets 48 dp.</li></ul></div>""",
+<li>All targets 48 dp. Same block in landscape.</li></ul></div>""",
     [frame("Auto off", "As before: the slider is the level.", device("p", boox_side(False))),
      frame("Auto on", "Maximum, Sensitivity and the readout.", device("p", boox_side(True)))],
     frame("Landscape", "Same block, right column.",
@@ -801,10 +801,115 @@ boox_board = board("Auto brightness, Boox-style", """<div class="notes"><h2>22 �
                       f'<div class="rc">{scope(False)}<div class="src">Text · everywhere</div><div style="flex:1"></div>{light_boox(True, "+1")}</div></div></div>')))
 
 
+# ---- Boards 20-21: always-on (sleep screen) faces, Boox-style -----------------------------------------
+# Faces are drawn at half size (360x720); aod/face-*.html scale them x2 to the panel's real 720x1440.
+
+def face(inner, tag="", live=False):
+    t = f'<div class="tag">{tag}</div>' if tag else ""
+    u = '<div class="upd">Updated 10:15</div>' if live else ""
+    return f'<div class="dev p aod" style="position:relative">{t}{inner}{u}</div>'
+
+BAT = '<span class="bat"><i></i>72%</span>'
+
+def analog():
+    ticks = "".join(f'<line x1="0" y1="-118" x2="0" y2="{-98 if i % 3 == 0 else -108}" stroke="#000" stroke-width="{8 if i % 3 == 0 else 3}" transform="rotate({i * 30})"/>' for i in range(12))
+    return (f'<svg width="300" height="300" viewBox="-140 -140 280 280"><circle r="130" fill="#fff" stroke="#000" stroke-width="7"/>{ticks}'
+            '<line x1="0" y1="0" x2="0" y2="-62" stroke="#000" stroke-width="12" stroke-linecap="round" transform="rotate(312)"/>'
+            '<line x1="0" y1="0" x2="0" y2="-96" stroke="#000" stroke-width="8" stroke-linecap="round" transform="rotate(204)"/>'
+            '<circle r="9" fill="#000"/></svg>')
+
+def faces(live=False):
+    S = '<div style="flex:1"></div>'
+    return {
+     "Clock": face(f'{S}<div class="huge">10:34</div>{S}', "Clock", live),
+     "Clock + date": face(f'<div style="height:150px"></div><div class="big">10:34</div><div class="rule"></div><div class="day">Friday 24 October</div>'
+                f'<div style="height:16px"></div>{BAT}', "Clock + date + battery", live),
+     "Analog": face(f'<div style="height:140px"></div>{analog()}<div style="height:24px"></div><div class="day">Fri 24 Oct</div>'
+                f'<div style="height:10px"></div>{BAT}', "Analog", live),
+     "Agenda": face('<div style="height:60px"></div><div class="big" style="font-size:88px">10:34</div><div class="day" style="margin-top:6px">Friday 24 October</div>'
+                '<div class="rule" style="margin:14px 0"></div><div class="sub" style="font-weight:800;letter-spacing:.08em">NEXT 3</div>'
+                '<div class="ev"><b>11:30  Dentist</b><span>until 12:00</span></div><div class="ev"><b>14:00  Call with Sam</b><span>until 14:30</span></div>'
+                '<div class="ev"><b>All day  Parcel</b><span>Pick up</span></div>', "Agenda", live),
+     "Reading": face('<div style="height:80px"></div><div class="cover"><b style="font-size:24px">The Island</b><span style="font-size:14px;margin-top:8px">A. Writer</span></div>'
+                 '<div class="day" style="margin-top:22px">The Island</div><div class="prog"><i></i></div><div class="day" style="font-size:30px;margin-top:8px">42%</div>'
+                 '<div class="sub" style="margin-top:14px;font-weight:700">Chapter 3 · 10:34</div>', "Reading (Last read)", live),
+     "Photo": face('<div class="photo"></div><div class="chip"><b>10:34</b><span>Fri 24 Oct</span></div>', "Photo + clock corner", live),
+     "Minimal": face(f'{S}<div class="day" style="font-size:44px">Friday</div><div class="big" style="font-size:170px">24</div>'
+             f'<div class="day" style="font-size:36px">October</div>{S}', "Minimal (date only)", False),
+    }
+
+FACES = faces()
+aod_faces = board("Always-on faces", """<div class="notes"><h2>20 · Sleep-screen faces</h2>
+<p>Drawn by InkPalm+, handed to the panel as the picture it keeps while the phone is off. Pure black on white, 720x1440 (full size PNGs in <code>aod/</code>).</p>
+<ul><li><b>Clock</b>: huge digital time.</li>
+<li><b>Clock + date + battery</b>.</li>
+<li><b>Analog</b>: hands, date, battery.</li>
+<li><b>Agenda</b>: time + next 3 events.</li>
+<li><b>Reading</b>: cover, title, % from Last read.</li>
+<li><b>Photo</b>: your picture, small clock corner.</li>
+<li><b>Minimal</b>: date only, so it is never stale.</li></ul>
+<p>No seconds, ever. Shown here as <b>Frozen</b>: the time the phone went to sleep. Live versions add a small "Updated" stamp (board 21).</p></div>""",
+    [frame(k, "", FACES[k]) for k in ("Clock", "Clock + date", "Analog", "Agenda")],
+    "".join(frame(k, "", FACES[k]) for k in ("Reading", "Photo", "Minimal")))
+
+# ---- Board 21: settings screen -------------------------------------------------------------------------
+
+def thumb(name, sel):
+    f = FACES[name].replace('<div class="tag">', '<div class="tag" style="display:none">')
+    chk = '<div class="ck">&#10003;</div>' if sel else ""
+    return (f'<div class="th{" on" if sel else ""}"><div class="thin">{f}</div>{chk}<span>{name}</span></div>')
+
+def aod_settings(sel, mode, mins=None):
+    names = ["Clock", "Clock + date", "Analog", "Agenda", "Reading", "Photo", "Minimal"]
+    ths = "".join(thumb(n, n == sel) for n in names) + '<div class="th"><div class="thin moaan">Moaan</div><span>Default</span></div>'
+    modes = [("Frozen", "free"), ("15 min", ""), ("30 min", ""), ("60 min", "")]
+    seg = "".join(f'<div class="{"on" if m == mode else ""}">{m}</div>' for m, _ in modes)
+    cost = {"Frozen": ("Free.", "Drawn once, just before the screen goes off. The time shown is when you put the phone to sleep. No battery cost."),
+            "15 min": ("About 1.3% of battery a day.", "96 wakes a day. Each wakes the phone for about 3 s, flashes the screen once, and re-sleeps."),
+            "30 min": ("About 0.7% of battery a day.", "48 wakes a day, each about 3 s awake plus one screen flash."),
+            "60 min": ("About 0.3% of battery a day.", "24 wakes a day, each about 3 s awake plus one screen flash.")}[mode]
+    return f"""<div class="dev p set"><div class="hd"><div class="btn sq">&#9664;</div><div class="t"><b>Sleep screen</b><span>What the screen shows while the phone is off</span></div></div>
+<div class="lbl">FACE</div><div class="thgrid">{ths}</div>
+<div class="lbl" style="margin-top:6px">UPDATE</div><div class="segrow"><div class="seg">{seg}</div></div>
+<div class="costbox"><b>{cost[0]}</b><span>{cost[1]}</span>{'<span>Estimate: ~3 s awake per update at ~400 mA, 2500 mAh battery. Measure before trusting.</span>' if mode != "Frozen" else ''}</div>
+<div class="srow2"><div><b>Show seconds</b><span>Never. A panel refresh every second would drain the battery.</span></div><div class="btn" style="opacity:.5">Never</div></div>
+<div class="srow2"><div><b>Frontlight</b><span>Always off during an update, so nothing glows in your pocket.</span></div><div class="btn on">Off</div></div>
+</div>"""
+
+aod_settings_board = page("Sleep screen settings", f"""
+<div class="row">{frame("Frozen at sleep (default)", "", aod_settings("Clock + date", "Frozen"))}{frame("Every 30 min", "", aod_settings("Agenda", "30 min"))}
+<div class="notes aod-note" style="width:330px"><h2>21 · Sleep screen settings</h2>
+<ul><li><b>Face</b>: tap a thumbnail. The tick marks the one in use. "Default" is Moaan's own picture.</li>
+<li><b>Update</b>: <b>Frozen</b> is free. The others wake the phone to redraw (about 3 s, one flash).</li>
+<li><b>Battery cost</b> is an estimate: ~0.33 mAh per update (3 s at ~400 mA) on a ~2500 mAh cell gives 1.3% / 0.7% / 0.3% a day for 15 / 30 / 60 min. Real numbers need a device measurement; the idle alarm wake adds a little.</li>
+<li><b>Show seconds</b>: fixed at Never, shown so the answer is visible.</li>
+<li><b>Frontlight</b>: the update forces it off; it is not a setting you can change here.</li>
+<li>Agenda would need calendar access; the picker asks the first time it is chosen.</li></ul></div></div>
+""")
+
+# ---- Board 21b: Frozen vs Live ---------------------------------------------------------------------------
+
+_cf = faces(False)["Clock + date"]; _cl = faces(True)["Clock + date"]
+_lowbat = face('<div style="flex:1"></div><div class="huge">10:34</div><div style="height:20px"></div>'
+               '<div class="lowbat">BATTERY 9%<br><small>Charge soon</small></div><div style="flex:1"></div>', "Low battery", False)
+aod_note_board = board("Frozen vs live", """<div class="notes"><h2>21 · Frozen vs Live</h2>
+<p><b>Frozen</b>: the screen shows the time you pressed the power button. Nothing runs while it sleeps, so after 3 hours it is 3 hours old, and that is normal.</p>
+<p><b>Live</b>: the phone wakes every 15 / 30 / 60 min, redraws, and sleeps again. The face carries a small <b>Updated 10:15</b> stamp, so a stale time is obvious (it can only be as old as the interval, or older if the phone is off or the battery is flat).</p>
+<p>Low battery (idea): below 10% the face swaps to a black box, and Live updates stop to save what is left.</p></div>""",
+    [frame("Frozen", "Time of going to sleep. No stamp.", _cf), frame("Live (30 min)", "Same face, with the stamp at the bottom.", _cl),
+     frame("Low battery", "Updates stop; the box says so.", _lowbat)],
+    '''<div class="notes aod-note" style="width:640px"><h3>Timeline, Live 30 min</h3><pre style="font-size:13px;line-height:1.5">10:00  screen off     draws face, panel holds it, 0 power
+10:30  alarm wakes    redraw, install image, display on/off (~3 s, flash, light off)
+11:00  alarm wakes    same
+...    unplug / power on, or "Frozen": the updates stop</pre></div>''')
+
+for _n in ("aod_faces", "aod_settings_board", "aod_note_board"):
+    globals()[_n] = globals()[_n].replace('<div class="board">', '<div class="board" style="zoom:.6">')
+
 for name, html in [("01-today", today), ("02-arrows", arrows), ("03-tabs", tabs), ("04-panel-pages", panel_pages),
                    ("05-scrolling", scroll_board), ("06-bleach-invert", bleach_board), ("07-more", more_board),
                    ("08-presets", presets_board), ("09-font", font_board),
                    ("10-touch-button", touch_board), ("11-side-panel", side_board), ("12-home", home_board),
-                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board), ("17-books-landscape", books_land), ("18-auto-brightness", auto_board), ("19-eink-panel", eink_board), ("22-boox-auto", boox_board)]:
+                   ("13-last-read", lastread_board), ("14-reader-app", reader_board), ("15-newest-bottom", order_board), ("16-front-light", light_board), ("17-books-landscape", books_land), ("18-auto-brightness", auto_board), ("19-eink-panel", eink_board), ("20-aod-faces", aod_faces), ("21-aod-settings", aod_settings_board), ("21-aod-frozen-vs-live", aod_note_board), ("22-boox-auto", boox_board)]:
     (HERE / f"{name}.html").write_text(html)
     print(HERE / f"{name}.html")

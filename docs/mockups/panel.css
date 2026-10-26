@@ -198,7 +198,52 @@ body { margin: 0; background: #e6e6e6; font-family: -apple-system, "Helvetica Ne
 .acts { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-top: 2px solid #000; }
 .acts .ct { flex: 1; text-align: center; font-size: 11px; font-weight: 700; }
 
+/* Boards 20–21: always-on (sleep screen) faces. Asleep: no status bar, no light, pure black on white. */
+.aod { background: #fff; display: flex; flex-direction: column; align-items: center; font-family: -apple-system, "Helvetica Neue", sans-serif; }
+.aod .big { font-size: 112px; font-weight: 800; letter-spacing: -4px; line-height: 1; }
+.aod .huge { font-size: 118px; font-weight: 800; letter-spacing: -6px; line-height: .9; }
+.aod .day { font-size: 26px; font-weight: 700; } .aod .sub { font-size: 16px; color: #222; }
+.aod .rule { width: 70%; height: 3px; background: #000; margin: 18px 0; }
+.aod .bat { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 700; }
+.aod .bat i { width: 34px; height: 16px; border: 2.5px solid #000; border-radius: 3px; position: relative; display: inline-block; }
+.aod .bat i::after { content: ""; position: absolute; left: 2px; top: 2px; bottom: 2px; width: 70%; background: #000; }
+.aod .foot { margin-top: auto; padding-bottom: 26px; font-size: 13px; color: #222; text-align: center; }
+.aod .ev { width: 82%; border: 2.5px solid #000; border-radius: 12px; padding: 10px 14px; margin: 6px 0; }
+.aod .ev b { display: block; font-size: 18px; } .aod .ev span { font-size: 13px; }
+.aod .cover { width: 190px; height: 270px; border: 3px solid #000; border-radius: 4px 10px 10px 4px; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; text-align: center; font-family: Georgia, serif; position: relative; }
+.aod .cover::before { content: ""; position: absolute; left: 10px; top: 0; bottom: 0; border-left: 2.5px solid #000; }
+.aod .prog { width: 70%; height: 10px; border: 2.5px solid #000; border-radius: 6px; position: relative; margin-top: 10px; }
+.aod .prog i { position: absolute; left: 0; top: 0; bottom: 0; width: 42%; background: #000; }
+.aod .photo { width: 100%; height: 100%; position: absolute; inset: 0;
+  background: radial-gradient(circle at 30% 35%, #fff 0 8%, #bbb 9% 20%, #666 21% 32%, #222 33% 45%, transparent 46%),
+              linear-gradient(160deg, #eee 0%, #999 45%, #333 100%); }
+.aod .chip { position: absolute; right: 18px; bottom: 22px; background: #fff; border: 3px solid #000; border-radius: 14px; padding: 8px 14px; text-align: right; }
+.aod .chip b { font-size: 40px; font-weight: 800; display: block; line-height: 1; } .aod .chip span { font-size: 13px; font-weight: 700; }
+.aod .tag { color: #000; position: absolute; left: 8px; top: 8px; font-size: 10px; font-weight: 700; border: 1.5px solid #000; border-radius: 4px; padding: 1px 5px; background: #fff; }
+.aod-note { font-size: 13px; line-height: 1.45; }
+
 /* Board 22: Boox-style Auto. */
 .pill.big { padding: 9px 9px; font-size: 10px; line-height: 14px; }
 .lt2.sens .sl { flex: 1; font-size: 10px; } .lt2.sens .sl b { display: block; margin: 0; } .lt2.sens .sl span { color: #333; font-size: 9px; }
 .lt2.sens .sv { font-size: 11px; min-width: 22px; text-align: center; }
+
+/* Boards 20-21 additions */
+.aod .upd { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; font-size: 13px; font-weight: 700; }
+.aod .lowbat { border: 4px solid #000; background: #000; color: #fff; padding: 14px 26px; font-size: 26px; font-weight: 800; text-align: center; line-height: 1.2; }
+.aod .lowbat small { font-size: 15px; font-weight: 600; }
+.dev.set { padding: 0; }
+.dev.set .lbl { padding: 6px 12px 3px; }
+.thgrid { display: flex; flex-wrap: wrap; gap: 8px 6px; padding: 2px 12px; }
+.th { width: 76px; text-align: center; font-size: 9.5px; font-weight: 700; position: relative; }
+.th .thin { width: 72px; height: 144px; border: 2px solid #000; border-radius: 4px; overflow: hidden; position: relative; background: #fff; }
+.th.on .thin { border-width: 4px; }
+.th .thin > .dev { transform: scale(.205); transform-origin: 0 0; border: 0; position: absolute; left: 0; top: 0; }
+.th .thin.moaan { display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
+.th .ck { position: absolute; right: -2px; top: -2px; background: #000; color: #fff; width: 16px; height: 16px; border-radius: 50%; font-size: 11px; line-height: 16px; }
+.th span { display: block; margin-top: 2px; }
+.costbox { margin: 6px 12px; border: 3px solid #000; border-radius: 8px; padding: 7px 10px; }
+.costbox b { display: block; font-size: 14px; } .costbox span { display: block; font-size: 10.5px; color: #222; margin-top: 2px; }
+.srow2 { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1.5px solid #000; }
+.srow2 > div:first-child { flex: 1; } .srow2 b { display: block; font-size: 12.5px; } .srow2 span { font-size: 10px; color: #333; }
+.dev.set { height: auto; min-height: 720px; padding-bottom: 8px; }

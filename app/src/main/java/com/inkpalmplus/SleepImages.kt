@@ -29,22 +29,21 @@ object SleepImages {
 
     fun supported(): Boolean = Eink.bridgeAvailable()
 
-    /** A picture of the user's is the sleep screen (else Moaan's). */
+    /** Not Moaan's sleep screen (a picture or a face, see [Aod.face]). */
     fun customSleep(c: Context) = Prefs(c).sp.getBoolean(K_SLEEP, false)
     fun powerOff(c: Context): PowerOff = runCatching { PowerOff.valueOf(Prefs(c).sp.getString(K_POWEROFF, null) ?: "OFF") }.getOrDefault(PowerOff.OFF)
 
     // ---- Sleep screen -------------------------------------------------------------------------------
 
-    /** Null when done, else what went wrong. Blocking (decodes and writes a PNG). */
+    /** The user's picture ([Aod.picture]): the Photo face draws a clock on it, else it becomes the Picture face.
+     *  Null when done, else what went wrong. Blocking (decodes and writes a PNG). */
     fun setSleep(c: Context, uri: Uri): String? {
-        val err = writePicked(c, uri, "standby.png") ?: if (Eink.bridgeWrite("standby.req", "apply=1\n")) null else "the bridge isn't there"
-        if (err == null) Prefs(c).sp.edit().putBoolean(K_SLEEP, true).apply()
-        return err
+        writePicked(c, uri, Aod.picture(c).name)?.let { return it }
+        return Aod.setFace(c, if (Aod.face(c) == Aod.Face.PHOTO) Aod.Face.PHOTO else Aod.Face.PICTURE)
     }
 
-    fun resetSleep(c: Context): Boolean = Eink.bridgeWrite("standby.req", "reset=1\n").also {
-        if (it) Prefs(c).sp.edit().putBoolean(K_SLEEP, false).apply()
-    }
+    /** Back to Moaan's sleep screen. Blocking. */
+    fun resetSleep(c: Context): Boolean = Aod.setFace(c, Aod.Face.DEFAULT) == null
 
     // ---- Power-off screen ---------------------------------------------------------------------------
 

@@ -28,6 +28,11 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 
+    <!-- Always-on sleep screen (KompaktOS): the Agenda face's next 3 events, asked for when Agenda is picked. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- Always-on sleep screen: stays awake while the bridge wakes and sleeps the screen for a Live update. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- KompaktOS: the "Uninstall InkControl" button (InkPalm+ replaces it). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
@@ -111,6 +116,11 @@
         <!-- Auto power-off timer (AutoOff); only InkPalm+'s own PendingIntent reaches it. -->
         <receiver
             android:name=".AutoOff$Alarm"
+            android:exported="false" />
+
+        <!-- Always-on sleep screen's Live updates (Aod); only InkPalm+'s own PendingIntent reaches it. -->
+        <receiver
+            android:name=".Aod$Alarm"
             android:exported="false" />
 
         <!-- Quick Settings tiles (KompaktOS; from InkControl). Their icons are drawn as words at runtime. -->

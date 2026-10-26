@@ -61,8 +61,11 @@ class QuickPanelService : AccessibilityService() {
     private val power = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             when (i.action) {
-                Intent.ACTION_SCREEN_OFF -> { Light.screenOff(); syncLightSensor(); AutoOff.arm(c) }
-                Intent.ACTION_SCREEN_ON -> { Light.apply(c); syncLightSensor(); AutoOff.cancel(c) }
+                // The always-on display's redraw wakes and sleeps the screen: not the user's, so the light stays
+                // off and auto power-off keeps counting.
+                Intent.ACTION_SCREEN_OFF -> { if (Aod.redrawSleep()) return; Light.screenOff(); syncLightSensor(); AutoOff.arm(c); Aod.onScreenOff(c) }
+                Intent.ACTION_SCREEN_ON -> { if (Aod.redrawWake()) return; Light.apply(c); syncLightSensor(); AutoOff.cancel(c); Aod.onScreenOn(c) }
+                Intent.ACTION_TIME_TICK, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> Aod.tick(c)
                 Intent.ACTION_POWER_CONNECTED -> AutoOff.cancel(c)
                 Intent.ACTION_POWER_DISCONNECTED -> AutoOff.arm(c)
             }
@@ -100,6 +103,7 @@ class QuickPanelService : AccessibilityService() {
         registerReceiver(power, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_POWER_CONNECTED); addAction(Intent.ACTION_POWER_DISCONNECTED)
+            addAction(Intent.ACTION_TIME_TICK); addAction(Intent.ACTION_TIME_CHANGED); addAction(Intent.ACTION_TIMEZONE_CHANGED)
         }, notExported)
         if (Light.supported()) {
             for (k in listOf(android.provider.Settings.System.SCREEN_BRIGHTNESS, android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE))
@@ -110,6 +114,7 @@ class QuickPanelService : AccessibilityService() {
         Light.apply(this)
         syncLightSensor()
         syncKeyFilter()
+        Aod.prepare(this)
         recents.warm()
         showStrip()
         // The app in front isn't known until the next window change: the service doesn't read window
@@ -209,6 +214,7 @@ class QuickPanelService : AccessibilityService() {
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         if (!::wm.isInitialized) return
+        Aod.prepare(this)   // a landscape face if the screen turned
         showStrip()
         panel?.let { old ->
             old.dismiss(wm)
@@ -409,6 +415,15 @@ class QuickPanelService : AccessibilityService() {
             "hold_refresh" -> { Prefs(this).holdRefresh = value == "on"; syncKeyFilter(); true }
             // "off", "panda": the power-off screen (blocking work on Eink's worker; the result is logged).
             "poweroff" -> { val c = SleepImages.PowerOff.valueOf(value.uppercase()); Eink.post { Log.i(TAG, "poweroff ${c.name}: ${SleepImages.setPowerOff(this, c) ?: "ok"}") }; true }
+            // Always-on display: "aod_face CLOCK", "aod_interval 5", "aod_render" (draw and install now),
+            // "aod_soon 20" (the Live alarm in 20 s), "aod_fire" (one Live update now), "aod_arrow" / "aod_arrow 1".
+            "aod_face" -> { val f = Aod.Face.valueOf(value.uppercase()); Eink.post { Log.i(TAG, "aod_face ${f.name}: ${Aod.setFace(this, f) ?: "ok"}") }; true }
+            "aod_interval" -> { Aod.setInterval(this, value.toInt()); true }
+            "aod_render" -> { Aod.prepare(this, force = true); true }
+            "aod_soon" -> { Aod.schedule(this, value.toLong() * 1000); true }
+            "aod_fire" -> { Eink.post { Aod.update(this) }; true }
+            "aod_arrow" -> { val r = value.toIntOrNull(); Eink.post { Aod.installArrow(this, r) }; true }
+            "aod_state" -> { Log.i(TAG, "aod: face=${Aod.face(this)} interval=${Aod.interval(this)} rotation=${Aod.displayRotation(this)} redrawing=${Aod.redrawing()}"); true }
             "books_state" -> { Log.i(TAG, "books: ${side?.describeBooks() ?: "closed"}"); true }
             "side_state" -> { Log.i(TAG, "side: ${side?.describe() ?: "closed"}"); true }
             "remember" -> { recents.record(value); true }

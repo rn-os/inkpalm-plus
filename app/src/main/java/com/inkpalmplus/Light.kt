@@ -231,6 +231,8 @@ object Light {
             queued.set(false)
             // Asleep: the LEDs stay off (a brightness change can arrive then); the screen-on apply restores them.
             if (!c.getSystemService(android.os.PowerManager::class.java).isInteractive) return@post
+            // The always-on display's redraw wakes the screen for a few seconds with the light held off ([Aod]).
+            if (Aod.redrawing()) return@post
             importOnce(c)
             val s = sp(c)
             val (cold, warm) = if (s.getBoolean(K_ON, true)) mix(s.getInt(K_LEVEL, 50), s.getInt(K_WARMTH, 50)) else 0 to 0

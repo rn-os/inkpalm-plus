@@ -29,12 +29,14 @@ object NeoReader {
     /** Every book NeoReader has opened, newest first. Call off the main thread when you can (a cross-app query). */
     fun books(context: Context): List<Readers.Book> = runCatching {
         val out = ArrayList<Readers.Book>()
-        context.contentResolver.query(METADATA, arrayOf("title", "name", "nativeAbsolutePath", "lastAccess"),
+        context.contentResolver.query(METADATA, arrayOf("title", "name", "nativeAbsolutePath", "lastAccess", "authors", "progress"),
             null, null, null)?.use { c ->
             val iTitle = c.getColumnIndex("title")
             val iName = c.getColumnIndex("name")
             val iPath = c.getColumnIndex("nativeAbsolutePath")
             val iAt = c.getColumnIndex("lastAccess")
+            val iAuthors = c.getColumnIndex("authors")
+            val iProgress = c.getColumnIndex("progress")
             while (c.moveToNext()) {
                 val path = if (iPath >= 0) c.getString(iPath) else null
                 if (path.isNullOrBlank()) continue
@@ -43,7 +45,9 @@ object NeoReader {
                 val title = (if (iTitle >= 0) c.getString(iTitle) else null)?.takeIf { it.isNotBlank() }
                     ?: (if (iName >= 0) c.getString(iName) else null)?.takeIf { it.isNotBlank() }
                     ?: File(path).nameWithoutExtension
-                out += Readers.Book(title, path, at)
+                val author = (if (iAuthors >= 0) c.getString(iAuthors) else null)?.takeIf { it.isNotBlank() }
+                val progress = if (iProgress >= 0) c.getString(iProgress) else null
+                out += Readers.Book(title, path, at, author, Aod.progressOf(progress), progress?.takeIf { Aod.progressOf(it) != null }?.replace("/", " / "))
             }
         }
         out.sortedByDescending { it.at }

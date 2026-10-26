@@ -27,7 +27,9 @@ object Readers {
         }
     }
 
-    class Book(val title: String, val path: String, val at: Long) {
+    /** [author] and [progress] (0..1) when the reader keeps them (NeoReader's `authors` and `progress` "page/total",
+     *  KOReader's `percent_finished`); [page] is "417 / 1367" for NeoReader. */
+    class Book(val title: String, val path: String, val at: Long, val author: String? = null, val progress: Float? = null, val page: String? = null) {
         val format: String get() = File(path).extension.uppercase()
     }
 
@@ -117,6 +119,8 @@ object KOReader {
     private val TIME = Regex("""\["time"]\s*=\s*(\d+)""")
     private val FILE = Regex("""\["file"]\s*=\s*"((?:[^"\\]|\\.)*)"""")
     private val TITLE = Regex("""\["title"]\s*=\s*"((?:[^"\\]|\\.)*)"""")
+    private val AUTHORS = Regex("""\["authors"]\s*=\s*"((?:[^"\\]|\\.)*)"""")
+    private val PERCENT = Regex("""\["percent_finished"]\s*=\s*([0-9.eE+-]+)""")
 
     fun packageName(context: Context): String? =
         PACKAGES.firstOrNull { runCatching { context.packageManager.getPackageInfo(it, 0) }.isSuccess }
@@ -130,15 +134,17 @@ object KOReader {
             val path = FILE.find(entry)?.groupValues?.get(1)?.let(::unescape) ?: return@mapNotNull null
             if (!File(path).exists()) null else path to time * 1000
         }.sortedByDescending { it.second }.mapIndexed { i, (path, at) ->
-            Readers.Book(if (i < titles) title(path) else File(path).nameWithoutExtension, path, at)
+            if (i < titles) meta(path, at) else Readers.Book(File(path).nameWithoutExtension, path, at)
         }
     }.onFailure { Log.w("InkPalmPlus", "KOReader's history isn't readable: $it") }.getOrDefault(emptyList())
 
-    private fun title(path: String): String {
+    /** The book's title, author and how far in, from `<name>.sdr/metadata.<ext>.lua`. */
+    private fun meta(path: String, at: Long): Readers.Book {
         val f = File(path)
-        val meta = File(f.parentFile, "${f.nameWithoutExtension}.sdr/metadata.${f.extension.lowercase()}.lua")
-        return runCatching { TITLE.find(meta.readText())?.groupValues?.get(1)?.let(::unescape) }.getOrNull()
-            ?.takeIf { it.isNotBlank() } ?: f.nameWithoutExtension
+        val text = runCatching { File(f.parentFile, "${f.nameWithoutExtension}.sdr/metadata.${f.extension.lowercase()}.lua").readText() }.getOrNull()
+        fun str(r: Regex) = text?.let { r.find(it)?.groupValues?.get(1)?.let(::unescape) }?.takeIf { it.isNotBlank() }
+        val pct = text?.let { PERCENT.find(it)?.groupValues?.get(1)?.toFloatOrNull() }?.coerceIn(0f, 1f)
+        return Readers.Book(str(TITLE) ?: f.nameWithoutExtension, path, at, str(AUTHORS), pct)
     }
 
     private fun unescape(s: String) = s.replace("\\\"", "\"").replace("\\n", " ").replace("\\\\", "\\")

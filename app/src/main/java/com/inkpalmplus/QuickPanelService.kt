@@ -579,8 +579,8 @@ class QuickPanelService : AccessibilityService() {
         const val BACK_STRIP_DP = 10
         /** The firmware's own long press (PhoneWindowManager$18). */
         const val HOLD_MS = 800L
-        /** A redraw wake still on after this long wasn't the bridge's (it sleeps again after ~5 s). */
-        const val REDRAW_STUCK_MS = 10_000L
+        /** A redraw wake still on after this long wasn't the bridge's (it sleeps again 2.5-3.5 s after waking). */
+        const val REDRAW_STUCK_MS = 6_000L
 
         @Volatile var instance: QuickPanelService? = null
             private set

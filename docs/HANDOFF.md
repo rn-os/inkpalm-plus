@@ -133,6 +133,19 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   (no calendar on the device); the battery cost estimates.
 - Backburner: a focal point (top / centre / bottom) for portrait photos shown in landscape.
 
+## Invisible Live updates (branch `aod-invisible-update`, 2026-10-26)
+- `WakeCover`: during the bridge's redraw wake (and auto power-off's predraw wake) a full-screen accessibility
+  overlay shows the picture the HWC is about to draw (the new face / files/poweroff.png), added while still asleep,
+  turned for the display's rotation (`turnFor`), holding the orientation of the user's sleep (`orientationFor`) so the
+  display turns while asleep, not during the wake (Android hides overlays mid-turn). Removed 1 s after the wake's
+  SCREEN_OFF, at once on a user wake, after 15 s in any case. A redraw wake still on after 6 s is taken as the user's.
+- Auto power-off: `Aod.poweringOff` (predraw wake is InkPalm+'s, Live alarm cancelled and not re-armed).
+- Release builds have no test hooks: as root, `am broadcast -n com.inkpalmplus/.Aod\$Alarm` is one Live update now;
+  `--es cover poweroff` is the power-off cover and wake bookkeeping without the power-off (then run
+  `inkpalm-poweroff.sh predraw` and clear `persist.sys.mogu.wallpaper`).
+- Verified on the device (release-signed branch build): portrait and landscape updates and the power-off dry run,
+  LEDs 0 in every sample, screenshots during the wake pixel-identical to /data/misc/standby.png (poweroff.png).
+
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown
   landed; the release APK itself was checked: signed with the release key, not debuggable, SectionActivity not

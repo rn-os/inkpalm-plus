@@ -70,7 +70,7 @@ object AutoOff {
         val f = File(c.filesDir, "poweroff.png")
         if (!f.isFile) return false
         val bmp = BitmapFactory.decodeFile(f.path) ?: return false
-        return WakeCover.show(bmp, "power-off")
+        return WakeCover.show(bmp, "power-off", Aod.heldRotation(c))
     }
 
     /** Timer ran out: shut down if still asleep on battery (the bridge checks again). The bridge first wakes and

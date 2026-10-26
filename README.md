@@ -21,7 +21,7 @@ No internet permission. Not affiliated with Moaan.
 
 1. **Install.** Install [Obtainium](https://github.com/ImranR98/Obtainium) on the InkPalm. In Obtainium, tap **Add App**, paste `https://github.com/rn-os/inkpalm-plus`, then tap **Add** and **Install**. Obtainium will let you know when there's a new build.
    You can also download the latest `inkpalm-plus-….apk` from [Releases](https://github.com/rn-os/inkpalm-plus/releases) and open it on the phone.
-2. **Open InkPalm+.** On the home screen, tap **Side panel**. It opens Android's Accessibility settings. Turn on **InkPalm+ quick panel**. This is the only required step.
+2. **Open InkPalm+.** On the home screen, tap **Side panel**, then the **Side panel** switch. It opens Android's Accessibility settings. Turn on **InkPalm+ quick panel**. This is the only required step.
 3. **Swipe** up or down along the right edge of the screen.
 
 The service only learns which app is in front, and that a page scrolled, text was typed or the screen changed. It doesn't read what's on screen or what you type.
@@ -77,10 +77,40 @@ Also on KompaktOS:
 - **Edge Back:** swipe in from either edge to go back (KompaktOS has no navigation bar, so no back gesture). On by default; a switch under Side panel.
 - **Touch button:** a short touch is Home; holding it is a full refresh, as on the stock firmware.
 - **Quick Settings tiles:** one per screen mode, **E-ink mode** (steps through them), **Full refresh** and **Front light**. Add them with the pencil in Quick Settings.
-- **Screen & light settings** (home screen): whether the light follows Android's brightness, your own **sleep screen** picture, the **power-off screen** (Moaan's, Moaan's panda in English, or your picture), and **auto power-off** after 4 to 24 hours asleep on battery.
+- **Settings** (home screen): **Front light** (whether the light follows Android's brightness) and **Sleep & power**: the **sleep screen** (see below), the **power-off screen** (Moaan's, Moaan's panda in English, or your picture), and **auto power-off** after 4 to 24 hours asleep on battery.
 - The light goes off with the screen and comes back with it.
 
 On the stock firmware none of this changes anything: the e-ink panel below stays as it is.
+
+## Sleep screen (KompaktOS)
+
+The InkPalm keeps a picture on the screen while it sleeps, at no cost: e-ink holds an image without power. InkPalm+ can draw that picture for you. On the home screen, tap **Sleep & power**, then **Sleep screen**, and pick a face:
+
+| Face | What it shows |
+|---|---|
+| **Clock** | The time, huge |
+| **Clock + date** | The time, the date and the battery |
+| **Analog** | A clock face with hands, the date and the battery |
+| **Agenda** | The time and your next 3 events (asks for calendar access the first time; without it the face says "Calendar access needed") |
+| **Reading** | The cover, title and how far you are in the last book of your reader app (covers come from EPUB files, with All files access) |
+| **Photo** | Your picture, with a small clock in the corner (**Choose picture…**; without one it shows Clock + date) |
+| **Minimal** | Just the day and date, so it's never out of date |
+| **Picture** | Your picture as it is |
+| **Default** | Moaan's own picture |
+
+**Update** sets how the drawn faces keep up while the phone sleeps:
+
+| Update | Battery cost (estimate) |
+|---|---|
+| **Frozen** | None. The face shows the moment you pressed the power button |
+| **Every 5 min** (default) | About 4% a day |
+| **Every 15 min** | About 1.3% a day |
+| **Every 30 min** | About 0.7% a day |
+| **Every 60 min** | About 0.3% a day |
+
+Each update wakes the phone for about 3 seconds, redraws the face and sleeps again, with one screen flash. The front light stays off, and auto power-off keeps counting. A Live face carries a small **Updated 10:15** stamp, so you can tell how fresh it is. Updates land on the clock (10:15, 10:20, …), carry on while charging, and stop below 10% battery: the face then shows a black **BATTERY 9%** box. The costs are estimates (about 3 s awake at about 400 mA per update, on a 2500 mAh battery), not measurements. KompaktOS exempts InkPalm+ from Doze, so the updates come on time.
+
+While the screen is on, the face is redrawn whenever what it shows changes (the minute, the battery, your events), so it's ready the moment you press the power button. If the phone is in landscape when it sleeps, the face is laid out for landscape; a photo is cropped from the whole picture you picked (pictures picked before this version: pick them again for the best landscape crop).
 
 ## E-ink panel and settings
 
@@ -115,7 +145,7 @@ A preset only changes refresh and the helpers. It never touches Size, Contrast o
 
 ### E-ink settings screen
 
-On the home screen, tap **E-ink settings**.
+On the home screen, tap **Screen & e-ink** (stock firmware).
 
 <img src="docs/screenshots/6-eink-settings.png" width="300" alt="The E-ink settings screen">
 
@@ -144,7 +174,7 @@ Use **Save** to keep your changes, or **Save + reopen** to also close the app so
 
 ### Touch button
 
-The button below the screen. On the home screen, tap **Touch button**.
+The button below the screen. On the home screen, tap **Buttons**.
 
 - **Tap:** Back, Home, Page down, Volume down
 - **Hold:** Full refresh, Screenshot, Page up, Volume up, Front light on/off, Home
@@ -153,22 +183,30 @@ These are the actions already built into the device. Changes apply on the next t
 
 ## Home screen
 
-<img src="docs/launch/5-home.png" width="720" alt="The home screen: side panel settings, touch button, e-ink settings">
+The home screen is a short list of categories; each opens its own screen (◀ goes back). Each row says what's set there.
 
-- **Side panel.** Opens Accessibility so you can turn the service on or off.
-- **Reader app.** NeoReader, KOReader or None. You're asked once, the first time you open InkPalm+.
-- **Newest app.** Bottom (the default) or Top of the list.
-- **Strip side.** Left or Right.
-- **Strip width.** 6 to 40 dp.
-- **Show strip.** Draws a thin black line where you swipe.
-- **Panel width.** 66, 78 or 90% of the screen, in portrait.
-- **Apps kept.** 9, 18 or 27.
-- **Clear recent apps.** Starts the list again.
-- Rows that open **Touch button**, **E-ink settings** and **Keeping the panel on**.
+- **Side panel:**
+  - **Side panel.** Opens Accessibility so you can turn the service on or off.
+  - **Newest app.** Bottom (the default) or Top of the list.
+  - **Strip side.** Left or Right.
+  - **Screen & light panel** (KompaktOS). The other edge's strip.
+  - **Edge Back.** Swipe in from either edge to go back.
+  - **Strip width.** 6 to 40 dp.
+  - **Show strip.** Draws a thin black line where you swipe.
+  - **Panel width.** 66, 78 or 90% of the screen, in portrait.
+  - **Apps kept.** 9, 18 or 27.
+  - **Clear recent apps.** Starts the list again.
+  - **Keeping the panel on** (see below).
+- **Screen & e-ink:** on KompaktOS, the e-ink control status and the screen-mode switches; on the stock firmware, the [E-ink settings](#e-ink-settings-screen) and your apps.
+- **Front light** (KompaktOS): whether the light follows Android's brightness.
+- **Sleep & power** (KompaktOS): the [sleep screen](#sleep-screen-kompaktos), the power-off screen and auto power-off.
+- **Reading:** your reader app, NeoReader, KOReader or None. You're asked once, the first time you open InkPalm+.
+- **Buttons:** the [touch button](#touch-button).
+- **About:** the version, and what InkPalm+ can see.
 
 ## Keeping the panel on
 
-On the home screen, tap **Keeping the panel on**. Both switches here are optional, and both need Shizuku or a one-time adb command.
+On the home screen, tap **Side panel**; the switches are at the bottom. Both are optional, and both need Shizuku or a one-time adb command.
 
 - **Survives Clear Memory.** Moaan's Clear Memory force-stops every app that isn't on its whitelist, and Android then switches the panel off. This adds InkPalm+ to the whitelist. The screen shows the exact `adb shell "settings put system ..."` command if Shizuku isn't running.
 - **Turns itself back on.** If the panel gets switched off by mistake, InkPalm+ switches it back on, when it opens and after a restart. This needs the `WRITE_SECURE_SETTINGS` permission, which the touch button settings also use. Tap the switch with Shizuku running, or run this once from a computer (it survives restarts and updates):
@@ -188,7 +226,8 @@ Per-app settings work without Shizuku. If InkPalm+ can't reach them on your firm
   - **`WRITE_SECURE_SETTINGS`:** turning the panel back on, and the touch button. Granted once with Shizuku or adb.
   - **Shizuku:** the Clear Memory whitelist, and a fallback for Animations off and for reaching Moaan's settings.
   - **Kill background processes:** used by ✕, **Clear all** and **Save + reopen**.
-  - **Exact alarms** (KompaktOS): auto power-off at the time you chose, even in Doze.
+  - **Exact alarms** (KompaktOS): auto power-off at the time you chose, and the sleep screen's updates, even in Doze.
+  - **Calendar** (only if you pick the Agenda sleep screen): your next 3 events, read on the phone.
   - **Key events** (KompaktOS, only while "Hold for a full refresh" is on): the service sees the Home key to tell a hold from a touch. Other keys pass straight through.
   - **Run at startup:** checks after a restart that the panel is back on.
 - The recent-apps list and your choices stay on the phone. **Clear recent apps** empties the list.

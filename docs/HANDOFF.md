@@ -104,6 +104,35 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - User (2026-10-23): the white repaint flash after a mode change shows. E-ink QS tiles not checked: the user
   uses the side panels instead (tiles stay, unverified). InkControl to be uninstalled.
 
+## Always-on sleep screen and settings categories (branch `aod-mockups`, 2026-10-26)
+- Mockups 20 and 21 approved and built. `Aod` (settings, install, Live alarm, redraw bookkeeping) and `AodFaces`
+  (drawing). Faces: Clock, Clock + date, Analog, Agenda, Reading, Photo, Minimal, plus Picture (the picked picture
+  as it is) and Default (Moaan's). Update: Frozen or Live every 5 (default) / 15 / 30 / 60 min, with the estimated
+  cost on the settings screen (4 / 1.3 / 0.7 / 0.3 % a day; estimates, not measured).
+- How it works: the HWC takes /data/misc/standby.png AT the power-off transition, so the face is installed ahead:
+  redrawn once a minute while the screen is on (only when the minute, battery, events or book changed), and when the
+  screen turns. Live: exact allow-while-idle ELAPSED_REALTIME_WAKEUP alarm on the wall-clock boundary (KompaktOS
+  defaults v4 exempt InkPalm+ from Doze) → draw → `standby.req apply=1 redraw=1`; the bridge wakes with the LEDs held
+  at 0 and sleeps again (~5 s). That wake's SCREEN_ON/OFF are swallowed (`Aod.redrawWake/redrawSleep`; `Light.apply`
+  also holds off while `Aod.redrawing()`), so no LED flash and auto power-off keeps counting. Updates continue while
+  charging (plugging in while asleep restarts them); below 10% on battery the face becomes the BATTERY box, drawn
+  once, and updates stop.
+- Landscape: the HWC logs `mogu_rotation :0` and draws the 720x1440 PNG into its 1440x720 panel itself, so faces
+  are laid out at 1440x720 and pre-rotated (ROTATION_90 → +90° clockwise, Android's definition). The picked picture
+  is also kept whole (`files/sleep_picture_src.png`, long side ≤ 1440) so the landscape Photo face crops it to its
+  own shape; `files/sleep_picture.png` is the portrait crop (Picture face).
+- Settings: home is now categories (Side panel incl. Keeping the panel on, Screen & e-ink, Front light, Sleep &
+  power → Sleep screen, Reading, Buttons, About); old section names still open. Uses Ui.kt's Radius/Type/Space.
+- Debug hooks: `aod_face`, `aod_interval`, `aod_render`, `aod_soon <s>`, `aod_fire`, `aod_arrow [rotation]`,
+  `aod_pick <file>`, `aod_state`.
+- **Verified on the device:** every face renders (portrait and landscape); a real Live alarm redrew the panel while
+  asleep with the LEDs at 0 throughout, ebc_thread alive, system_server unchanged; low-battery face (faked level);
+  landscape Photo crop from the whole picture; all categories open.
+- **Unverified:** the landscape face's direction by eye (check with `aod_arrow`: the arrow should point up); real
+  Doze timing (deep idle can't be forced on this build; device was on USB); Agenda event cards with real events
+  (no calendar on the device); the battery cost estimates.
+- Backburner: a focal point (top / centre / bottom) for portrait photos shown in landscape.
+
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown
   landed; the release APK itself was checked: signed with the release key, not debuggable, SectionActivity not

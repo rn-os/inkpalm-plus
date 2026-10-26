@@ -59,11 +59,11 @@ open class MainActivity : Activity() {
         }
         root.addView(hbox().apply {
             setPadding(dp(8), dp(12), dp(16), dp(4))
-            if (section != null) addView(inkIconButton(R.drawable.ic_back, "Back", 44) { finish() }, lp(dp(44), dp(44)).apply { marginEnd = dp(10) })
+            if (section != null) addView(inkIconButton(R.drawable.ic_back, "Back", 48) { finish() }, lp(dp(48), dp(48)).apply { marginEnd = dp(10) })
             else setPadding(dp(16), dp(16), dp(16), dp(4))
             addView(text(title, 26f, bold = true), lp(0, WRAP, 1f))
         })
-        root.addView(text(sub, 14f, color = Ink.MUTED).apply { setPadding(dp(16), 0, dp(16), dp(8)) })
+        root.addView(text(sub, 14f, color = Ink.MUTED).apply { setPadding(dp(16), dp(4), dp(16), dp(8)) })
         when (section) {
             SECTION_EINK -> {
                 root.addView(accessBox)
@@ -612,7 +612,7 @@ open class MainActivity : Activity() {
         addView(vbox().apply {
             addView(text(title, 17f, medium = true))
             addView(text(detail, 13f, color = Ink.MUTED))
-        }, lp(0, WRAP, 1f))
+        }, lp(0, WRAP, 1f).apply { marginEnd = dp(12) })
         addView(chip(if (on) "On" else "Off", on) { onChange(!on) })
         setOnClickListener { onChange(!on) }
     }

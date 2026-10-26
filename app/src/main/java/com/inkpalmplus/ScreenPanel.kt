@@ -98,7 +98,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
         content.addView(header)
         content.addView(View(ctx).apply { setBackgroundColor(Ink.INK) }, lp(MATCH, ctx.dp(2)))
 
-        val label = ctx.text("SCREEN MODE", 10.5f, bold = true).apply { letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(8), ctx.dp(12), ctx.dp(4)) }
+        val label = ctx.text("SCREEN MODE", 11f, bold = true).apply { letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(8), ctx.dp(12), ctx.dp(4)) }
         val modes = ctx.vbox().apply { setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
         if (landscape) ScreenMode.entries.chunked(2).forEach { pair ->
             modes.addView(ctx.hbox().apply {
@@ -130,6 +130,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             // Two short lines, so the value never gets cut off between − and +.
             addView(ctx.text(ScreenModes.contrastLabel(level).replaceFirst(" ", "\n").replace("normal", "Normal"), 13f, bold = true).apply {
                 gravity = Gravity.CENTER; maxLines = 2
+                setAutoSizeTextTypeUniformWithConfiguration(10, 13, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
             }, lp(0, WRAP, 1f))
             addView(ctx.inkButton("+", 18f) { ScreenModes.setContrast(ctx, level + ScreenModes.CONTRAST_STEP); render() }.apply {
                 contentDescription = "More contrast"; isEnabled = level < ScreenModes.CONTRAST_MAX
@@ -178,7 +179,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
         }
         setPadding(ctx.dp(12), ctx.dp(4), ctx.dp(12), ctx.dp(4))
         addView(ctx.text(m.title, if (compact) 15f else 17f, bold = true, color = fg))
-        addView(ctx.text(m.detail, if (compact) 11f else 12.5f, color = if (on) Ink.PAPER else Ink.MUTED).apply {
+        addView(ctx.text(m.detail, if (compact) 11f else 12f, color = if (on) Ink.PAPER else Ink.MUTED).apply {
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
         })
         contentDescription = "${m.title}: ${m.detail}${if (on) ", in use" else ""}"

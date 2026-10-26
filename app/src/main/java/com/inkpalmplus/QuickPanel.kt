@@ -340,7 +340,7 @@ class QuickPanel(
                     addView(ctx.text(if (ch.selected) "●" else "○", 15f, bold = true), lp(ctx.dp(24), WRAP))
                     addView(ctx.vbox().apply {
                         addView(ctx.text(ch.title, 14f, bold = ch.selected, medium = !ch.selected))
-                        if (ch.detail != null && cols == 1) addView(ctx.text(ch.detail, 10.5f, color = Ink.MUTED))
+                        if (ch.detail != null && cols == 1) addView(ctx.text(ch.detail, 11f, color = Ink.MUTED))
                     }, lp(0, WRAP, 1f))
                     setOnClickListener { listing = null; ch.pick(); render() }
                 })

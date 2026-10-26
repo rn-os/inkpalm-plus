@@ -126,7 +126,7 @@ private fun Context.outlinedStates(radiusDp: Int): StateListDrawable = StateList
 fun Context.inkButton(label: String, sizeSp: Float = 15f, onClick: () -> Unit): TextView =
     text(label, sizeSp, bold = true).apply {
         gravity = Gravity.CENTER
-        minHeight = dp(44)
+        minHeight = dp(48)
         setPadding(dp(12), dp(8), dp(12), dp(8))
         background = outlinedStates(6)
         isClickable = true
@@ -135,7 +135,7 @@ fun Context.inkButton(label: String, sizeSp: Float = 15f, onClick: () -> Unit): 
     }
 
 /** Square outlined icon button, e.g. the ↑ ↓ 🗑 controls in edit mode. */
-fun Context.inkIconButton(iconRes: Int, label: String, sizeDp: Int = 44, enabled: Boolean = true, onClick: () -> Unit): View =
+fun Context.inkIconButton(iconRes: Int, label: String, sizeDp: Int = 48, enabled: Boolean = true, onClick: () -> Unit): View =
     android.widget.FrameLayout(this).apply {
         contentDescription = label
         background = outlinedStates(6)

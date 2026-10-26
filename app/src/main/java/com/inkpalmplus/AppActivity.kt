@@ -30,7 +30,7 @@ class AppActivity : Activity() {
         val root = vbox()
         root.addView(hbox().apply {
             setPadding(dp(8), dp(8), dp(16), dp(8))
-            addView(inkIconButton(android.R.drawable.ic_media_rew, "Back", 44) { finish() })
+            addView(inkIconButton(R.drawable.ic_back, "Back", 48) { finish() })
             addView(icon(runCatching { packageManager.getApplicationIcon(pkg) }.getOrNull(), 40, tint = false).apply {
                 (layoutParams as LinearLayout.LayoutParams).marginStart = dp(12)
             })

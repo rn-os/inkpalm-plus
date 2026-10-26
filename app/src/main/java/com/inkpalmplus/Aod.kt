@@ -381,11 +381,17 @@ object Aod {
         redrawUntil = SystemClock.elapsedRealtime() + ms
     }
 
-    /** Auto power-off fired ([AutoOff]): its predraw wake is ours, and the Live updates stop. */
-    fun poweringOff(c: Context) {
-        poweringOffUntil = SystemClock.elapsedRealtime() + 120_000L
+    /** Auto power-off fired ([AutoOff]): its predraw wake is ours, and the Live updates stop for [holdMs]. */
+    fun poweringOff(c: Context, holdMs: Long = 120_000L) {
+        poweringOffUntil = SystemClock.elapsedRealtime() + holdMs
         cancel(c)
         expectWake(30_000L)
+    }
+
+    /** The power-off request didn't go out: Live updates go on. */
+    fun notPoweringOff(c: Context) {
+        poweringOffUntil = 0; redrawUntil = 0; redrawWoke = false
+        if (!interactive(c)) schedule(c)
     }
 
     private fun poweringOff(): Boolean = SystemClock.elapsedRealtime() < poweringOffUntil
@@ -464,8 +470,8 @@ object Aod {
 
     /** The Live update alarm. Holds a wake lock while the bridge wakes and sleeps the screen. Not exported: only
      *  InkPalm+'s own PendingIntent reaches it (and root: `am broadcast -n com.inkpalmplus/.Aod\$Alarm` is one
-     *  update now, for checks on release builds, which have no test hooks; with `--es cover poweroff`, only the auto
-     *  power-off cover for [WakeCover.TIMEOUT_MS], no power-off). */
+     *  update now, for checks on release builds, which have no test hooks; with `--es cover poweroff`, auto power-off's
+     *  cover and wake bookkeeping for 30 s without the power-off itself, for a dry run of the bridge's predraw). */
     class Alarm : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             val app = c.applicationContext
@@ -476,7 +482,9 @@ object Aod {
             val done = goAsync()
             Eink.post {
                 try {
-                    if (i.getStringExtra("cover") == "poweroff") AutoOff.showCover(app) else update(app)
+                    // The dry run: as auto power-off does it (the bridge's predraw wake is ours), minus power.req.
+                    if (i.getStringExtra("cover") == "poweroff") { Aod.poweringOff(app, holdMs = 30_000L); AutoOff.showCover(app) }
+                    else update(app)
                 } finally { done.finish() }
             }
         }

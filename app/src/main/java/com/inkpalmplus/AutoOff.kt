@@ -87,7 +87,7 @@ object AutoOff {
                 try {
                     Aod.poweringOff(app)
                     showCover(app)
-                    Eink.bridgeWrite("power.req", "off=1\n")
+                    if (!Eink.bridgeWrite("power.req", "off=1\n")) { WakeCover.hide("power-off request failed"); Aod.notPoweringOff(app) }
                 } finally { done.finish() }
             }
         }

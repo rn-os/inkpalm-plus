@@ -450,7 +450,7 @@ class QuickPanelService : AccessibilityService() {
             "aod_soon" -> { Aod.schedule(this, value.toLong() * 1000); true }
             "aod_fire" -> { Eink.post { Aod.update(this) }; true }
             // The auto power-off cover alone (no power-off), for WakeCover.TIMEOUT_MS: "cover_poweroff"; "cover_hide".
-            "cover_poweroff" -> { Eink.post { Log.i(TAG, "cover_poweroff: ${AutoOff.showCover(this)}") }; true }
+            "cover_poweroff" -> { Eink.post { Aod.poweringOff(this, holdMs = 30_000L); Log.i(TAG, "cover_poweroff: ${AutoOff.showCover(this)}") }; true }
             "cover_hide" -> { WakeCover.hide("test"); true }
             "aod_arrow" -> { val r = value.toIntOrNull(); Eink.post { Aod.installArrow(this, r) }; true }
             // A picture file as the sleep-screen picture, as if picked: "aod_pick /sdcard/Download/x.png".

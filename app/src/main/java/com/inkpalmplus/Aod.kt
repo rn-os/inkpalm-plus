@@ -194,7 +194,7 @@ object Aod {
         if (!ok) { bmp.recycle(); Log.w(TAG, "aod: couldn't write the face"); return false }
         // The redraw's wake shows the new face at once (not the home screen) until the HWC draws it at the sleep.
         // The cover owns the bitmap from then on.
-        val covered = redraw && WakeCover.show(bmp, "aod")
+        val covered = redraw && WakeCover.show(bmp, "aod", data.rotation)
         if (!redraw) bmp.recycle()
         val sent = Eink.bridgeWrite("standby.req", if (redraw) "apply=1\nredraw=1\n" else "apply=1\n")
         if (covered && !sent) WakeCover.hide("request failed")
@@ -246,6 +246,9 @@ object Aod {
 
     /** The orientation the face is drawn in; see [Orientation]. */
     private val rotations = Orientation()
+
+    /** The rotation the faces are drawn for now (the one held at the user's sleep while asleep). */
+    fun heldRotation(c: Context): Int = rotations.current(c)
 
     /** The screen turned while awake (or the strip was rebuilt): remembered as the held orientation. */
     fun noteRotation(c: Context) { if (!redrawing()) rotations.awake(displayRotation(c)) }

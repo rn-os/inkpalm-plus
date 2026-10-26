@@ -1,6 +1,7 @@
 package com.inkpalmplus
 
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -34,6 +35,11 @@ import java.util.concurrent.TimeUnit
  * The picture is the panel's portrait buffer (720x1440, landscape faces already turned into it, see [Aod.degreesFor]).
  * The display turns a window's content by its rotation onto the panel, so the cover turns the buffer back by as much
  * ([turnFor]) for the rotation at the moment it draws, and draws again whenever the display turns.
+ *
+ * Asleep the display is at rotation 0, and an app held in landscape turns it back at the wake, 1-3 s in; Android hides
+ * overlays during a turn until they have drawn again, which showed the app for a moment. So the cover asks for the
+ * orientation held at the user's sleep ([orientationFor]): the display turns while still asleep, under the cover, and
+ * the wake itself doesn't turn.
  */
 object WakeCover {
     private const val TAG = "InkPalmPlus"
@@ -57,6 +63,14 @@ object WakeCover {
         else -> floatArrayOf(1f, 0f, 0f, 1f, 0f, 0f)
     }
 
+    /** The orientation that keeps the display at [rotation] (a naturally portrait panel). */
+    fun orientationFor(rotation: Int): Int = when (rotation) {
+        Surface.ROTATION_90 -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        Surface.ROTATION_180 -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+        Surface.ROTATION_270 -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+        else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+
     // ---- The window ----------------------------------------------------------------------------------
 
     private var view: Cover? = null
@@ -67,15 +81,16 @@ object WakeCover {
     val showing: Boolean get() = view != null
 
     /**
-     * Shows [bmp] (a 720x1440 panel buffer; the cover owns it from now on) over everything. Any thread; off the main
-     * thread it waits until the window is added and, up to 1 s, drawn. False without the accessibility service.
+     * Shows [bmp] (a 720x1440 panel buffer; the cover owns it from now on) over everything, holding the display at
+     * [rotation] (the one held at the user's sleep; null: as it is). Any thread; off the main thread it waits until the
+     * window is added and, up to 1 s, drawn. False without the accessibility service.
      */
-    fun show(bmp: Bitmap, why: String): Boolean {
-        if (Looper.myLooper() == Looper.getMainLooper()) return add(bmp, why, null)
+    fun show(bmp: Bitmap, why: String, rotation: Int?): Boolean {
+        if (Looper.myLooper() == Looper.getMainLooper()) return add(bmp, why, rotation, null)
         val added = CountDownLatch(1)
         val drawn = CountDownLatch(1)
         var ok = false
-        Shell.main.post { ok = add(bmp, why) { drawn.countDown() }; added.countDown(); if (!ok) drawn.countDown() }
+        Shell.main.post { ok = add(bmp, why, rotation) { drawn.countDown() }; added.countDown(); if (!ok) drawn.countDown() }
         added.await(2, TimeUnit.SECONDS)
         val t0 = SystemClock.uptimeMillis()
         val inTime = drawn.await(1, TimeUnit.SECONDS)
@@ -83,7 +98,7 @@ object WakeCover {
         return ok
     }
 
-    private fun add(bmp: Bitmap, why: String, onDrawn: (() -> Unit)?): Boolean {
+    private fun add(bmp: Bitmap, why: String, rotation: Int?, onDrawn: (() -> Unit)?): Boolean {
         val svc = QuickPanelService.instance
         if (svc == null) { Log.w(TAG, "cover: $why: no accessibility service"); bmp.recycle(); return false }
         removeView()
@@ -99,6 +114,7 @@ object WakeCover {
             windowAnimations = 0
             rotationAnimation = WindowManager.LayoutParams.ROTATION_ANIMATION_JUMPCUT
             title = "InkPalmPlus:cover"
+            if (rotation != null) screenOrientation = orientationFor(rotation)
             if (Build.VERSION.SDK_INT >= 28) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             if (Build.VERSION.SDK_INT >= 30) setFitInsetsTypes(0)
             if (Build.VERSION.SDK_INT >= 31) setCanPlayMoveAnimation(false)
@@ -108,7 +124,7 @@ object WakeCover {
             shownAt = SystemClock.uptimeMillis()
             Shell.main.removeCallbacks(timeout)
             Shell.main.postDelayed(timeout, TIMEOUT_MS)
-            Log.i(TAG, "cover: $why shown")
+            Log.i(TAG, "cover: $why shown (held rotation $rotation)")
         }.onFailure { Log.w(TAG, "cover: $why: $it"); bmp.recycle() }.isSuccess
     }
 

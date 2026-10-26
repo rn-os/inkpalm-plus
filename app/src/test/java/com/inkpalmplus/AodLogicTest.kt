@@ -73,6 +73,11 @@ class AodLogicTest {
         assertEquals(0f to w, apply(WakeCover.turn(WakeCover.turnFor(1), w, h), 0f, 0f))
     }
 
+    @Test fun coverHoldsTheSleepOrientation() {
+        // ActivityInfo: PORTRAIT 1, LANDSCAPE 0, REVERSE_LANDSCAPE 8, REVERSE_PORTRAIT 9.
+        assertEquals(listOf(1, 0, 9, 8), (0..3).map { WakeCover.orientationFor(it) })
+    }
+
     @Test fun landscapeTurnsMatchAndroidRotation() {
         assertEquals(listOf(0, 90, 180, 270), (0..3).map { Aod.degreesFor(it) })
     }

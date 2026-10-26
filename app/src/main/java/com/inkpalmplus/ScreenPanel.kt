@@ -35,7 +35,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
 
     @SuppressLint("ClickableViewAccessibility")
     fun show(wm: WindowManager) {
-        val r = ctx.dp(18).toFloat()
+        val r = ctx.dp(Radius.LARGE).toFloat()
         root = FrameLayout(ctx).apply {
             background = GradientDrawable().apply {
                 setColor(Ink.PAPER)
@@ -84,21 +84,21 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
         val (now, source) = ScreenModes.resolve(ctx, pkg)
         val header = ctx.hbox().apply {
             setPadding(ctx.dp(14), ctx.dp(if (landscape) 6 else 10), ctx.dp(10), ctx.dp(if (landscape) 4 else 8))
-            addView(ctx.text("Screen & light", 19f, bold = true).apply {
+            addView(ctx.text("Screen & light", Type.XL, bold = true).apply {
                 maxLines = 1
                 setAutoSizeTextTypeUniformWithConfiguration(15, 19, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
             }, lp(0, WRAP, 1f))
-            addView(ctx.inkButton("⚙", 21f) {
+            addView(ctx.inkButton("⚙", Type.XL) {
                 ctx.startActivity(Intent(ctx, SectionActivity::class.java).putExtra(MainActivity.EXTRA_SECTION, MainActivity.SECTION_SCREEN)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                 onClose()
             }.apply { contentDescription = "Screen and light settings" }, lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(6) })
-            addView(ctx.inkButton("✕", 16f) { onClose() }, lp(ctx.dp(48), WRAP))
+            addView(ctx.inkButton("✕", Type.L) { onClose() }, lp(ctx.dp(48), WRAP))
         }
         content.addView(header)
         content.addView(View(ctx).apply { setBackgroundColor(Ink.INK) }, lp(MATCH, ctx.dp(2)))
 
-        val label = ctx.text("SCREEN MODE", 11f, bold = true).apply { letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(8), ctx.dp(12), ctx.dp(4)) }
+        val label = ctx.text("SCREEN MODE", Type.XS, bold = true).apply { letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(8), ctx.dp(12), ctx.dp(4)) }
         val modes = ctx.vbox().apply { setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
         if (landscape) ScreenMode.entries.chunked(2).forEach { pair ->
             modes.addView(ctx.hbox().apply {
@@ -118,21 +118,21 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             source == ScreenModes.Source.APP -> " · Use everywhere clears it"
             else -> ""
         }
-        val sourceLine = ctx.text("${now.title} · ${if (source == ScreenModes.Source.APP) "$appLabel's own" else source.label}$hint", 12f, color = Ink.MUTED)
+        val sourceLine = ctx.text("${now.title} · ${if (source == ScreenModes.Source.APP) "$appLabel's own" else source.label}$hint", Type.S, color = Ink.MUTED)
             .apply { setPadding(ctx.dp(12), ctx.dp(4), ctx.dp(12), ctx.dp(6)) }
         val actions = ctx.hbox().apply {
             setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
-            addView(ctx.inkButton("Full refresh", 14f) { ScreenModes.fullRefresh() }.oneLine(), lp(WRAP, WRAP).apply { marginEnd = ctx.dp(6) })
+            addView(ctx.inkButton("Full refresh", Type.M) { ScreenModes.fullRefresh() }.oneLine(), lp(WRAP, WRAP).apply { marginEnd = ctx.dp(6) })
             val level = ScreenModes.contrast(ctx)
-            addView(ctx.inkButton("−", 18f) { ScreenModes.setContrast(ctx, level - ScreenModes.CONTRAST_STEP); render() }.apply {
+            addView(ctx.inkButton("−", Type.XL) { ScreenModes.setContrast(ctx, level - ScreenModes.CONTRAST_STEP); render() }.apply {
                 contentDescription = "Less contrast"; isEnabled = level > 0
             }, lp(ctx.dp(44), WRAP))
             // Two short lines, so the value never gets cut off between − and +.
-            addView(ctx.text(ScreenModes.contrastLabel(level).replaceFirst(" ", "\n").replace("normal", "Normal"), 13f, bold = true).apply {
+            addView(ctx.text(ScreenModes.contrastLabel(level).replaceFirst(" ", "\n").replace("normal", "Normal"), Type.S, bold = true).apply {
                 gravity = Gravity.CENTER; maxLines = 2
                 setAutoSizeTextTypeUniformWithConfiguration(10, 13, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
             }, lp(0, WRAP, 1f))
-            addView(ctx.inkButton("+", 18f) { ScreenModes.setContrast(ctx, level + ScreenModes.CONTRAST_STEP); render() }.apply {
+            addView(ctx.inkButton("+", Type.XL) { ScreenModes.setContrast(ctx, level + ScreenModes.CONTRAST_STEP); render() }.apply {
                 contentDescription = "More contrast"; isEnabled = level < ScreenModes.CONTRAST_MAX
             }, lp(ctx.dp(44), WRAP))
         }
@@ -174,12 +174,12 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
     private fun modeButton(m: ScreenMode, on: Boolean, compact: Boolean): View = ctx.vbox().apply {
         val fg = if (on) Ink.PAPER else Ink.INK
         background = StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(if (on) 3 else 2, 12, Ink.PRESSED))
-            addState(intArrayOf(), ctx.outline(if (on) 3 else 2, 12, if (on) Ink.INK else Ink.PAPER))
+            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(if (on) 3 else 2, Radius.MEDIUM, Ink.PRESSED))
+            addState(intArrayOf(), ctx.outline(if (on) 3 else 2, Radius.MEDIUM, if (on) Ink.INK else Ink.PAPER))
         }
         setPadding(ctx.dp(12), ctx.dp(4), ctx.dp(12), ctx.dp(4))
-        addView(ctx.text(m.title, if (compact) 15f else 17f, bold = true, color = fg))
-        addView(ctx.text(m.detail, if (compact) 11f else 12f, color = if (on) Ink.PAPER else Ink.MUTED).apply {
+        addView(ctx.text(m.title, if (compact) Type.M else Type.L, bold = true, color = fg))
+        addView(ctx.text(m.detail, if (compact) Type.XS else Type.S, color = if (on) Ink.PAPER else Ink.MUTED).apply {
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
         })
         contentDescription = "${m.title}: ${m.detail}${if (on) ", in use" else ""}"
@@ -219,7 +219,7 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
         val pills = mutableListOf<() -> Unit>()
         fun slider(label: () -> String, get: () -> Int, put: (Int) -> Unit, extra: View? = null, reserve: Boolean = false) = addView(ctx.hbox().apply {
             gravity = Gravity.CENTER_VERTICAL
-            val text = ctx.text(label(), 13f, bold = true).apply {
+            val text = ctx.text(label(), Type.S, bold = true).apply {
                 gravity = Gravity.CENTER; maxLines = 1
                 setAutoSizeTextTypeUniformWithConfiguration(10, 13, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
             }
@@ -237,7 +237,7 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
             }
             pills += { text.text = label() }
             fun step(d: Int) { put((get() + d).coerceIn(0, 100)); bar.progress = get(); send(); text.text = label(); pills.forEach { it() } }
-            addView(ctx.inkButton("−", 18f) { step(-10) }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
+            addView(ctx.inkButton("−", Type.XL) { step(-10) }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
             addView(ctx.vbox().apply {
                 addView(text, lp(MATCH, WRAP))
                 addView(bar, lp(MATCH, WRAP))
@@ -246,12 +246,12 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
             // an empty box of the same width, so both sliders end in the same place.
             if (extra != null) addView(extra, lp(WRAP, ctx.dp(48)).apply { marginStart = ctx.dp(6); marginEnd = ctx.dp(6) })
             else if (reserve) addView(View(ctx), lp(ctx.dp(60), ctx.dp(48)))
-            addView(ctx.inkButton("+", 18f) { step(10) }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
+            addView(ctx.inkButton("+", Type.XL) { step(10) }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
         }, lp(MATCH, WRAP).apply { topMargin = ctx.dp(2) })
         // Auto: only when the light follows Android's brightness. Only this pill turns it on or off; Brightness is then the maximum.
-        val readout = ctx.text("", 12f, color = Ink.MUTED).apply { gravity = Gravity.CENTER_VERTICAL; maxLines = 1 }
+        val readout = ctx.text("", Type.S, color = Ink.MUTED).apply { gravity = Gravity.CENTER_VERTICAL; maxLines = 1 }
         val sens = ctx.hbox()
-        val sensValue = ctx.text("", 13f, bold = true).apply { gravity = Gravity.CENTER; minWidth = ctx.dp(48) }
+        val sensValue = ctx.text("", Type.S, bold = true).apply { gravity = Gravity.CENTER; minWidth = ctx.dp(48) }
         fun refresh() {
             val on = Light.auto(ctx)
             readout.text = if (on) Light.readout().orEmpty() else ""
@@ -259,12 +259,12 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
             val v = Light.sensitivity(ctx)
             sensValue.text = if (v > 0) "+$v" else "$v"
         }
-        val pill = if (!s.follows) null else ctx.text("Auto", 12f, bold = true).apply {
+        val pill = if (!s.follows) null else ctx.text("Auto", Type.S, bold = true).apply {
             gravity = Gravity.CENTER
             setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
             minWidth = ctx.dp(48); minHeight = ctx.dp(48)
             fun look(on: Boolean) {
-                background = ctx.outline(2, 6, if (on) Ink.INK else Ink.PAPER)
+                background = ctx.outline(2, Radius.SMALL, if (on) Ink.INK else Ink.PAPER)
                 setTextColor(if (on) Ink.PAPER else Ink.INK)
                 contentDescription = if (on) "Auto brightness on" else "Auto brightness off"
             }
@@ -290,12 +290,12 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
                 gravity = Gravity.CENTER_VERTICAL
                 // The lux readout sits under the label (the Brightness line has no room for it beside the pill).
                 addView(ctx.vbox().apply {
-                    addView(ctx.text("Sensitivity", 13f, bold = true))
+                    addView(ctx.text("Sensitivity", Type.S, bold = true))
                     addView(readout)
                 }, lp(0, WRAP, 1f))
-                addView(ctx.inkButton("−", 18f) { Light.setSensitivity(ctx, Light.sensitivity(ctx) - 1); refresh() }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
+                addView(ctx.inkButton("−", Type.XL) { Light.setSensitivity(ctx, Light.sensitivity(ctx) - 1); refresh() }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
                 addView(sensValue, lp(WRAP, WRAP))
-                addView(ctx.inkButton("+", 18f) { Light.setSensitivity(ctx, Light.sensitivity(ctx) + 1); refresh() }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
+                addView(ctx.inkButton("+", Type.XL) { Light.setSensitivity(ctx, Light.sensitivity(ctx) + 1); refresh() }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
             }
             addView(sens, lp(MATCH, WRAP).apply { topMargin = ctx.dp(2) })
             refresh()

@@ -96,7 +96,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     @SuppressLint("ClickableViewAccessibility")
     fun prepare(): SidePanel {
         onRight = Prefs(ctx).edgeRight
-        val r = ctx.dp(18).toFloat()
+        val r = ctx.dp(Radius.LARGE).toFloat()
         root = FrameLayout(ctx).apply {
             // Rounded on the inner side only, like a card slid in from the edge.
             background = GradientDrawable().apply {
@@ -249,16 +249,16 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         val header = ctx.hbox().apply {
             setPadding(ctx.dp(14), ctx.dp(if (landscape) 6 else 10), ctx.dp(10), ctx.dp(if (landscape) 4 else 8))
             // One line, shrinking to fit when Display size or the font runs large.
-            addView(ctx.text("Recents", 19f, bold = true).apply {
+            addView(ctx.text("Recents", Type.XL, bold = true).apply {
                 maxLines = 1
                 setAutoSizeTextTypeUniformWithConfiguration(15, 19, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
             }, lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
-            if (all().any { it.pkg != service.foreground }) addView(ctx.inkButton("Clear all", 14f) { clearAll() }, lp(WRAP, WRAP).apply { marginEnd = ctx.dp(6) })
-            addView(ctx.inkButton("⚙", 21f) {
+            if (all().any { it.pkg != service.foreground }) addView(ctx.inkButton("Clear all", Type.M) { clearAll() }, lp(WRAP, WRAP).apply { marginEnd = ctx.dp(6) })
+            addView(ctx.inkButton("⚙", Type.XL) {
                 ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                 onClose()
             }.apply { contentDescription = "InkPalm+ settings" }, lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(6) })
-            addView(ctx.inkButton("✕", 16f) { onClose() }, lp(ctx.dp(48), WRAP))
+            addView(ctx.inkButton("✕", Type.L) { onClose() }, lp(ctx.dp(48), WRAP))
         }
         // The reader card: above the apps, or below every app with newest at the bottom (mockup 15).
         val card = lastRead?.let { lastReadCard(it) } ?: if (needsAccess) accessCard() else null
@@ -269,12 +269,12 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
             // One line each, shrinking to fit when Display size or the font runs large.
             fun TextView.oneLine() = apply { maxLines = 1; setAutoSizeTextTypeUniformWithConfiguration(10, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP) }
             // KompaktOS: Moaan's per-app table isn't there; the screen panel is (mockup 19).
-            addView(ctx.inkButton(if (Eink.isKompakt) "Screen & light" else "E-ink · this app", 14f) {
+            addView(ctx.inkButton(if (Eink.isKompakt) "Screen & light" else "E-ink · this app", Type.M) {
                 val fg = service.foreground
                 onClose()
                 if (Eink.isKompakt) service.toggleScreen() else if (fg != null) service.openPanel()
             }.oneLine(), lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
-            addView(ctx.inkButton("Android recents", 14f) {
+            addView(ctx.inkButton("Android recents", Type.M) {
                 onClose()
                 service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
             }.oneLine(), lp(0, WRAP, 1f))
@@ -294,7 +294,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         // Fixed-height rows; the spare room sits above them (newest at the bottom) or below.
         if (bottom) list.addView(View(ctx), lp(MATCH, 0, 1f))
         if (apps.isEmpty()) {
-            list.addView(ctx.text("Apps you open will show up here, newest ${if (bottom) "at the bottom" else "first"}.", 15f, color = Ink.MUTED).apply {
+            list.addView(ctx.text("Apps you open will show up here, newest ${if (bottom) "at the bottom" else "first"}.", Type.M, color = Ink.MUTED).apply {
                 setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), ctx.dp(16))
             })
         } else if (landscape) {
@@ -336,7 +336,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         val left = ctx.vbox()
         if (needsAccess) left.addView(accessCard())
         else if (recentBooks.isNotEmpty()) {
-            val label = ctx.text("${reader?.label?.uppercase()} · HOLD FOR ALL", 11f, bold = true).apply {
+            val label = ctx.text("${reader?.label?.uppercase()} · HOLD FOR ALL", Type.XS, bold = true).apply {
                 letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(6), ctx.dp(12), ctx.dp(2))
             }
             left.addView(label)
@@ -352,7 +352,7 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         val list = SwipePager(ctx, onNext = { if (page < pages() - 1) { page++; render() } }, onPrev = { if (page > 0) { page--; render() } })
             .apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
         if (bottom) list.addView(View(ctx), lp(MATCH, 0, 1f))
-        if (apps.isEmpty()) list.addView(ctx.text("Apps you open will show up here.", 15f, color = Ink.MUTED).apply { setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), ctx.dp(16)) })
+        if (apps.isEmpty()) list.addView(ctx.text("Apps you open will show up here.", Type.M, color = Ink.MUTED).apply { setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), ctx.dp(16)) })
         for (e in if (bottom) apps.reversed() else apps) list.addView(row(e, compact = false), lp(MATCH, rowPx).apply { setMargins(0, ctx.dp(2), 0, ctx.dp(2)) })
         if (!bottom) list.addView(View(ctx), lp(MATCH, 0, 1f))
         val right = ctx.vbox().apply {
@@ -373,9 +373,9 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     private fun pager(): View = ctx.hbox().apply {
         gravity = Gravity.CENTER
         setPadding(0, ctx.dp(4), 0, ctx.dp(4))
-        addView(ctx.inkButton("◀", 15f) { if (page > 0) { page--; render() } }.apply { isEnabled = page > 0 }, lp(ctx.dp(56), WRAP))
-        addView(ctx.text("${page + 1} / ${pages()}", 15f, bold = true).apply { gravity = Gravity.CENTER }, lp(ctx.dp(72), WRAP))
-        addView(ctx.inkButton("▶", 15f) { if (page < pages() - 1) { page++; render() } }.apply { isEnabled = page < pages() - 1 }, lp(ctx.dp(56), WRAP))
+        addView(ctx.inkButton("◀", Type.M) { if (page > 0) { page--; render() } }.apply { isEnabled = page > 0 }, lp(ctx.dp(56), WRAP))
+        addView(ctx.text("${page + 1} / ${pages()}", Type.M, bold = true).apply { gravity = Gravity.CENTER }, lp(ctx.dp(72), WRAP))
+        addView(ctx.inkButton("▶", Type.M) { if (page < pages() - 1) { page++; render() } }.apply { isEnabled = page < pages() - 1 }, lp(ctx.dp(56), WRAP))
     }
 
     // ---- Reader app (docs/mockups/13-last-read.png, 14-reader-app.png) --------------------------------------------
@@ -383,16 +383,16 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     /** Tap: the reader opens the book at its page. Hold: "Your books". */
     private fun lastReadCard(b: Readers.Book): View = ctx.hbox().apply {
         background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(3, 12, Ink.PRESSED))
-            addState(intArrayOf(), ctx.outline(3, 12))
+            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(3, Radius.MEDIUM, Ink.PRESSED))
+            addState(intArrayOf(), ctx.outline(3, Radius.MEDIUM))
         }
         setPadding(ctx.dp(12), ctx.dp(if (landscape) 4 else 8), ctx.dp(12), ctx.dp(if (landscape) 4 else 8))
         contentDescription = "Last read in ${reader?.label}: ${b.title}. Tap to keep reading, hold for your books"
         addView(ctx.icon(ctx.getDrawable(R.drawable.ic_book), if (landscape) 28 else 34))
         addView(ctx.vbox().apply {
-            addView(ctx.text("LAST READ · ${reader?.label?.uppercase()}", 11f, bold = true).apply { letterSpacing = 0.06f })
-            addView(ctx.text(b.title, 16f, bold = true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
-            addView(ctx.text("${RecentApps.ago(b.at)} · tap to keep reading · hold for your books", 12f, color = Ink.MUTED).apply { maxLines = if (landscape) 1 else 2 })
+            addView(ctx.text("LAST READ · ${reader?.label?.uppercase()}", Type.XS, bold = true).apply { letterSpacing = 0.06f })
+            addView(ctx.text(b.title, Type.L, bold = true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+            addView(ctx.text("${RecentApps.ago(b.at)} · tap to keep reading · hold for your books", Type.S, color = Ink.MUTED).apply { maxLines = if (landscape) 1 else 2 })
         }, lp(0, WRAP, 1f).apply { marginStart = ctx.dp(12) })
         isClickable = true
         setOnClickListener { openBook(b.path) }
@@ -402,16 +402,16 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
     /** KOReader picked without All files access: tap opens Android's setting for it. */
     private fun accessCard(): View = ctx.hbox().apply {
         background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(3, 12, Ink.PRESSED))
-            addState(intArrayOf(), ctx.outline(3, 12))
+            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(3, Radius.MEDIUM, Ink.PRESSED))
+            addState(intArrayOf(), ctx.outline(3, Radius.MEDIUM))
         }
         setPadding(ctx.dp(12), ctx.dp(if (landscape) 4 else 8), ctx.dp(12), ctx.dp(if (landscape) 4 else 8))
         contentDescription = "Allow All files access so InkPalm+ can read ${reader?.label}'s history"
         addView(ctx.icon(ctx.getDrawable(R.drawable.ic_book), if (landscape) 28 else 34))
         addView(ctx.vbox().apply {
-            addView(ctx.text("${reader?.label?.uppercase()} · ONE MORE STEP", 11f, bold = true).apply { letterSpacing = 0.06f })
-            addView(ctx.text("Allow All files access", 16f, bold = true))
-            addView(ctx.text("So InkPalm+ can read ${reader?.label}'s history. Tap to open the setting.", 12f, color = Ink.MUTED).apply { maxLines = if (landscape) 1 else 2 })
+            addView(ctx.text("${reader?.label?.uppercase()} · ONE MORE STEP", Type.XS, bold = true).apply { letterSpacing = 0.06f })
+            addView(ctx.text("Allow All files access", Type.L, bold = true))
+            addView(ctx.text("So InkPalm+ can read ${reader?.label}'s history. Tap to open the setting.", Type.S, color = Ink.MUTED).apply { maxLines = if (landscape) 1 else 2 })
         }, lp(0, WRAP, 1f).apply { marginStart = ctx.dp(12) })
         isClickable = true
         setOnClickListener { runCatching { ctx.startActivity(Readers.accessIntent(ctx)) }; onClose() }
@@ -441,18 +441,18 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         bookPage = bookPage.coerceIn(0, bookPages() - 1)
         content.addView(ctx.hbox().apply {
             setPadding(ctx.dp(10), ctx.dp(10), ctx.dp(10), ctx.dp(4))
-            addView(ctx.inkButton("◀", 15f) { showingBooks = false; render() }.apply { contentDescription = "Back to recent apps" }, lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(10) })
-            addView(ctx.text("Your books", 19f, bold = true), lp(0, WRAP, 1f))
-            addView(ctx.inkButton("✕", 16f) { onClose() }, lp(ctx.dp(48), WRAP))
+            addView(ctx.inkButton("◀", Type.M) { showingBooks = false; render() }.apply { contentDescription = "Back to recent apps" }, lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(10) })
+            addView(ctx.text("Your books", Type.XL, bold = true), lp(0, WRAP, 1f))
+            addView(ctx.inkButton("✕", Type.L) { onClose() }, lp(ctx.dp(48), WRAP))
         })
-        content.addView(ctx.text("${reader?.label?.uppercase()} · NEWEST FIRST · TAP TO OPEN", 11f, bold = true).apply {
+        content.addView(ctx.text("${reader?.label?.uppercase()} · NEWEST FIRST · TAP TO OPEN", Type.XS, bold = true).apply {
             letterSpacing = 0.06f; setPadding(ctx.dp(14), 0, ctx.dp(14), ctx.dp(6))
         })
         val shown = books.drop(bookPage * booksPerPage).take(booksPerPage)
         val list = SwipePager(ctx, onNext = { if (bookPage < bookPages() - 1) { bookPage++; render() } }, onPrev = { if (bookPage > 0) { bookPage--; render() } })
             .apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
         if (shown.isEmpty()) {
-            list.addView(ctx.text(if (books.isEmpty()) "Loading…" else "", 15f, color = Ink.MUTED).apply { setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), 0) })
+            list.addView(ctx.text(if (books.isEmpty()) "Loading…" else "", Type.M, color = Ink.MUTED).apply { setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), 0) })
         } else if (landscape) {
             shown.chunked(2).forEach { pair ->
                 list.addView(ctx.hbox().apply {
@@ -469,29 +469,29 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         if (bookPages() > 1) content.addView(ctx.hbox().apply {
             gravity = Gravity.CENTER
             setPadding(0, ctx.dp(4), 0, ctx.dp(4))
-            addView(ctx.inkButton("◀", 15f) { if (bookPage > 0) { bookPage--; render() } }.apply { isEnabled = bookPage > 0 }, lp(ctx.dp(56), WRAP))
-            addView(ctx.text("${bookPage + 1} / ${bookPages()}", 15f, bold = true).apply { gravity = Gravity.CENTER }, lp(ctx.dp(72), WRAP))
-            addView(ctx.inkButton("▶", 15f) { if (bookPage < bookPages() - 1) { bookPage++; render() } }.apply { isEnabled = bookPage < bookPages() - 1 }, lp(ctx.dp(56), WRAP))
+            addView(ctx.inkButton("◀", Type.M) { if (bookPage > 0) { bookPage--; render() } }.apply { isEnabled = bookPage > 0 }, lp(ctx.dp(56), WRAP))
+            addView(ctx.text("${bookPage + 1} / ${bookPages()}", Type.M, bold = true).apply { gravity = Gravity.CENTER }, lp(ctx.dp(72), WRAP))
+            addView(ctx.inkButton("▶", Type.M) { if (bookPage < bookPages() - 1) { bookPage++; render() } }.apply { isEnabled = bookPage < bookPages() - 1 }, lp(ctx.dp(56), WRAP))
         })
         // Browse files…: Android's file picker, for books the reader hasn't opened yet.
         content.addView(ctx.hbox().apply {
             setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(8))
-            addView(ctx.inkButton("Browse files…", 14f) { browse() }, lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
-            addView(ctx.inkButton("Recent apps", 14f) { showingBooks = false; render() }, lp(0, WRAP, 1f))
+            addView(ctx.inkButton("Browse files…", Type.M) { browse() }, lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
+            addView(ctx.inkButton("Recent apps", Type.M) { showingBooks = false; render() }, lp(0, WRAP, 1f))
         })
     }
 
     private fun bookRow(b: Readers.Book, compact: Boolean): View = ctx.hbox().apply {
         background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(2, 12, Ink.PRESSED))
-            addState(intArrayOf(), ctx.outline(2, 12))
+            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(2, Radius.MEDIUM, Ink.PRESSED))
+            addState(intArrayOf(), ctx.outline(2, Radius.MEDIUM))
         }
         setPadding(ctx.dp(10), ctx.dp(4), ctx.dp(10), ctx.dp(4))
         contentDescription = b.title
         addView(ctx.icon(ctx.getDrawable(R.drawable.ic_book), if (compact) 26 else 32))
         addView(ctx.vbox().apply {
-            addView(ctx.text(b.title, if (compact) 14f else 16f, bold = true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
-            addView(ctx.text(listOf(b.format, RecentApps.ago(b.at)).filter { it.isNotEmpty() }.joinToString(" · "), 12f, color = Ink.MUTED).apply { maxLines = 1 })
+            addView(ctx.text(b.title, if (compact) Type.M else Type.L, bold = true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+            addView(ctx.text(listOf(b.format, RecentApps.ago(b.at)).filter { it.isNotEmpty() }.joinToString(" · "), Type.S, color = Ink.MUTED).apply { maxLines = 1 })
         }, lp(0, WRAP, 1f).apply { marginStart = ctx.dp(12) })
         isClickable = true
         setOnClickListener { openBook(b.path) }
@@ -519,24 +519,25 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         val label = RecentApps.Info.label(ctx, e.pkg)
         val now = e.pkg == service.foreground
         val previous = !now && e.pkg == previousPkg
-        background = ctx.outline(if (now || previous) 3 else 2, 12)
+        background = ctx.outline(if (now || previous) 3 else 2, Radius.MEDIUM)
         setPadding(ctx.dp(10), ctx.dp(4), ctx.dp(10), ctx.dp(4))
         contentDescription = label
         val iconSize = if (compact) 32 else 40
         val appIcon = ctx.icon(RecentApps.Info.icon(ctx, e.pkg), iconSize, tint = false)
         if (previous) {
             // As in SuperBoox's "Previous app": the icon with a small round ← badge on its corner.
+            // The frame is exactly the icon's size, so the label lines up with the other rows; the badge sits on its top-left corner.
             addView(FrameLayout(ctx).apply {
-                addView(appIcon, FrameLayout.LayoutParams(ctx.dp(iconSize), ctx.dp(iconSize), Gravity.BOTTOM or Gravity.END))
+                addView(appIcon, FrameLayout.LayoutParams(ctx.dp(iconSize), ctx.dp(iconSize)))
                 addView(FrameLayout(ctx).apply {
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
                         setColor(Ink.PAPER)
                         setStroke(ctx.dp(2), Ink.INK)
                     }
-                    addView(ctx.icon(ctx.getDrawable(R.drawable.ic_back), 14), FrameLayout.LayoutParams(WRAP, WRAP, Gravity.CENTER))
-                }, FrameLayout.LayoutParams(ctx.dp(22), ctx.dp(22), Gravity.TOP or Gravity.START))
-            }, lp(ctx.dp(iconSize + 8), ctx.dp(iconSize + 8)))
+                    addView(ctx.icon(ctx.getDrawable(R.drawable.ic_back), 12), FrameLayout.LayoutParams(WRAP, WRAP, Gravity.CENTER))
+                }, FrameLayout.LayoutParams(ctx.dp(20), ctx.dp(20), Gravity.TOP or Gravity.START))
+            }, lp(ctx.dp(iconSize), ctx.dp(iconSize)))
         } else {
             addView(appIcon)
         }
@@ -546,22 +547,22 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
             else -> RecentApps.ago(e.at)
         }
         addView(ctx.vbox().apply {
-            addView(ctx.text(label, if (compact) 15f else 17f, bold = true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
-            addView(ctx.text(sub, 12f, color = Ink.MUTED).apply { maxLines = 1 })
+            addView(ctx.text(label, if (compact) Type.M else Type.L, bold = true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+            addView(ctx.text(sub, Type.S, color = Ink.MUTED).apply { maxLines = 1 })
         }, lp(0, WRAP, 1f).apply { marginStart = ctx.dp(12) })
-        if (!compact && (now || previous)) addView(ctx.text(if (now) "Open now" else "Previous", 11f, bold = true).apply {
-            background = ctx.outline(2, 6)
+        if (!compact && (now || previous)) addView(ctx.text(if (now) "Open now" else "Previous", Type.XS, bold = true).apply {
+            background = ctx.outline(2, Radius.SMALL)
             setPadding(ctx.dp(7), ctx.dp(2), ctx.dp(7), ctx.dp(2))
         })
         // ✕: close the app and take it off the list (not the one you're in).
-        if (!now) addView(ctx.inkButton("✕", 13f) { close(e.pkg) }.apply {
+        if (!now) addView(ctx.inkButton("✕", Type.S) { close(e.pkg) }.apply {
             minWidth = 0; minimumWidth = 0; minHeight = ctx.dp(if (compact) 42 else 48); minimumHeight = minHeight; setPadding(0, 0, 0, 0)
             contentDescription = "Close $label"
         }, lp(ctx.dp(if (compact) 42 else 48), ctx.dp(if (compact) 42 else 48)).apply { marginStart = ctx.dp(8) })
         // Pressed: the same instant gray as the settings app, inside the rounded outline.
         val normal = background
         background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(if (now || previous) 3 else 2, 12, Ink.PRESSED))
+            addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(if (now || previous) 3 else 2, Radius.MEDIUM, Ink.PRESSED))
             addState(intArrayOf(), normal)
         }
         isClickable = true
@@ -572,18 +573,20 @@ class SidePanel(private val service: QuickPanelService, private val onClose: () 
         (it.layoutParams as LinearLayout.LayoutParams).setMargins(ctx.dp(4), ctx.dp(4), ctx.dp(4), ctx.dp(4))
     }
 
-    /** Hold menu: a rounded card over the list. */
+    /** Hold menu: a rounded card on an opaque white backdrop that covers the list. */
     private fun showMenu(pkg: String) {
         val label = RecentApps.Info.label(ctx, pkg)
         val shade = FrameLayout(ctx).apply {
             isClickable = true
+            // Opaque paper, not translucent: the list must not show through on e-ink.
+            setBackgroundColor(Ink.PAPER)
             setOnClickListener { menuFor = null; render() }
         }
         val card = ctx.vbox().apply {
-            background = ctx.outline(3, 12)
+            background = ctx.outline(3, Radius.MEDIUM)
             setPadding(ctx.dp(6), ctx.dp(6), ctx.dp(6), ctx.dp(6))
-            addView(ctx.text(label, 16f, bold = true).apply { setPadding(ctx.dp(10), ctx.dp(6), ctx.dp(10), ctx.dp(6)) })
-            fun item(title: String, action: () -> Unit) = addView(ctx.inkButton(title, 15f) { menuFor = null; action() },
+            addView(ctx.text(label, Type.L, bold = true).apply { setPadding(ctx.dp(10), ctx.dp(6), ctx.dp(10), ctx.dp(6)) })
+            fun item(title: String, action: () -> Unit) = addView(ctx.inkButton(title, Type.M) { menuFor = null; action() },
                 lp(MATCH, WRAP).apply { topMargin = ctx.dp(6) })
             item("Remove from list") { service.recents.remove(pkg); render() }
             item("Open its e-ink settings") {

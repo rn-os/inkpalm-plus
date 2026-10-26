@@ -230,8 +230,23 @@ object Aod {
             events = if (face == Face.AGENDA) events(c, now) else null,
             book = if (face == Face.READING) book(c) else null,
             photo = if (face == Face.PHOTO) photo(c) else null,
-            rotation = displayRotation(c),
+            rotation = rotations.current(c),
         )
+    }
+
+    /** The orientation the face is drawn in; see [Orientation]. */
+    private val rotations = Orientation()
+
+    /** The screen turned while awake (or the strip was rebuilt): remembered as the held orientation. */
+    fun noteRotation(c: Context) { if (!redrawing()) rotations.awake(displayRotation(c)) }
+
+    /** The configuration changed. False when it must be ignored: asleep, or the redraw's own wake (the window manager
+     *  and keyguard report portrait then). Otherwise the face is drawn again for the new orientation. */
+    fun onConfigChanged(c: Context): Boolean {
+        if (redrawing() || rotations.asleep) return false
+        noteRotation(c)
+        prepare(c)
+        return true
     }
 
     fun displayRotation(c: Context): Int =
@@ -319,6 +334,26 @@ object Aod {
         return BitmapFactory.decodeFile(f.path).also { photoCache = key to it }
     }
 
+    /**
+     * The orientation the faces are drawn in. Awake it is the display's; the last one seen is kept, and at the user's
+     * sleep it is frozen for every render until the user wakes: asleep (and in the bridge's redraw wake) Android reports
+     * rotation 0, which would turn a landscape face to portrait.
+     */
+    class Orientation {
+        @Volatile private var last = Surface.ROTATION_0
+        @Volatile private var frozen: Int? = null
+        val asleep: Boolean get() = frozen != null
+        /** Awake, the display's rotation [r]. Ignored while frozen. */
+        fun awake(r: Int) { if (frozen == null) last = r }
+        /** The user's sleep: freeze the orientation they were holding the phone in. */
+        fun sleep() { frozen = last }
+        /** The user's wake: back to the display's rotation. */
+        fun wake() { frozen = null }
+        /** The rotation to draw with, [live] being the display's now (called only when needed). */
+        fun current(live: () -> Int): Int = frozen ?: live().also { last = it }
+        fun current(c: Context): Int = current { displayRotation(c) }
+    }
+
     // ---- The redraw's own wake ---------------------------------------------------------------------
 
     /** A redraw InkPalm+ asked for is in flight until then (elapsedRealtime): its SCREEN_ON is not the user's. */
@@ -345,12 +380,15 @@ object Aod {
 
     /** Screen off (the user's): arm the next Live update. */
     fun onScreenOff(c: Context) {
+        rotations.sleep()
         Prefs(c).sp.edit().putBoolean(K_LOW_SHOWN, false).apply()
         schedule(c)
     }
 
     /** Screen on (the user's): no updates while it's on; the face is drawn fresh for the next sleep. */
     fun onScreenOn(c: Context) {
+        rotations.wake()
+        noteRotation(c)
         cancel(c)
         tick(c)
     }

@@ -506,7 +506,12 @@ open class MainActivity : Activity() {
         }
         if (face == Aod.Face.PHOTO || face == Aod.Face.PICTURE) body.addView(hbox().apply {
             setPadding(g, dp(8), g, dp(4))
-            addView(text(if (Aod.hasPicture(this@MainActivity)) "Your picture, in gray" else "No picture yet: the Photo face shows the clock and date", Type.S, color = Ink.MUTED), lp(0, WRAP, 1f))
+            val hint = when {
+                !Aod.hasPicture(this@MainActivity) -> "No picture yet: the Photo face shows the clock and date"
+                face == Aod.Face.PHOTO && !Aod.hasPictureSource(this@MainActivity) -> "Pick the picture again for a better landscape crop"
+                else -> "Your picture, in gray"
+            }
+            addView(text(hint, Type.S, color = Ink.MUTED), lp(0, WRAP, 1f))
             addView(inkButton("Choose picture…") { pickImage(PICK_SLEEP) }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
         })
         if (face == Aod.Face.AGENDA && Aod.needsCalendar(this)) body.addView(vbox().apply {

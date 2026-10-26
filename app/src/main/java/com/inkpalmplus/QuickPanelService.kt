@@ -424,6 +424,8 @@ class QuickPanelService : AccessibilityService() {
             "aod_soon" -> { Aod.schedule(this, value.toLong() * 1000); true }
             "aod_fire" -> { Eink.post { Aod.update(this) }; true }
             "aod_arrow" -> { val r = value.toIntOrNull(); Eink.post { Aod.installArrow(this, r) }; true }
+            // A picture file as the sleep-screen picture, as if picked: "aod_pick /sdcard/Download/x.png".
+            "aod_pick" -> { Eink.post { Log.i(TAG, "aod_pick: ${SleepImages.setSleep(this, android.net.Uri.fromFile(java.io.File(value))) ?: "ok"}") }; true }
             "aod_state" -> { Log.i(TAG, "aod: face=${Aod.face(this)} interval=${Aod.interval(this)} rotation=${Aod.displayRotation(this)} redrawing=${Aod.redrawing()}"); true }
             "books_state" -> { Log.i(TAG, "books: ${side?.describeBooks() ?: "closed"}"); true }
             "side_state" -> { Log.i(TAG, "side: ${side?.describe() ?: "closed"}"); true }

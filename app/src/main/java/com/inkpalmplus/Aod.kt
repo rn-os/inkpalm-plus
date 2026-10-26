@@ -121,6 +121,11 @@ object Aod {
 
     fun hasPicture(c: Context) = picture(c).isFile
 
+    /** The whole picked picture (long side ≤ 1440), for the landscape crop. Pictures picked before it existed have none. */
+    fun pictureSource(c: Context) = File(c.filesDir, "sleep_picture_src.png")
+
+    fun hasPictureSource(c: Context) = pictureSource(c).isFile
+
     fun needsCalendar(c: Context) = c.checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED
 
     /** Picks [face] and installs it. Error or null. Blocking (on [Eink.worker]). */
@@ -192,10 +197,10 @@ object Aod {
     fun thumbnail(c: Context, face: Face): Bitmap? {
         val big = when {
             face == Face.DEFAULT -> return null
-            face == Face.PICTURE -> photo(c) ?: return null
+            face == Face.PICTURE -> { photo(c); BitmapFactory.decodeFile(picture(c).path) ?: return null }
             else -> AodFaces.render(face, collect(c, face, false).copy(rotation = Surface.ROTATION_0))
         }
-        return Bitmap.createScaledBitmap(big, AodFaces.W / 4, AodFaces.H / 4, true).also { if (face != Face.PICTURE) big.recycle() }
+        return Bitmap.createScaledBitmap(big, AodFaces.W / 4, AodFaces.H / 4, true).also { big.recycle() }
     }
 
     /** A test face (debug hook): an arrow to the top of the screen as it's held, to check the turn. Blocking. */
@@ -301,14 +306,17 @@ object Aod {
         }
     }.getOrNull()
 
-    private var photoCache: Pair<Long, Bitmap?>? = null
+    private var photoCache: Pair<String, Bitmap?>? = null
 
+    /** The picture for the Photo face: the whole one when there is one (cropped to the face's shape when drawn),
+     *  else the portrait crop. */
     private fun photo(c: Context): Bitmap? {
         migrate(c)
-        val f = picture(c)
+        val f = pictureSource(c).takeIf { it.isFile } ?: picture(c)
         if (!f.isFile) return null
-        photoCache?.takeIf { it.first == f.lastModified() }?.let { return it.second }
-        return BitmapFactory.decodeFile(f.path).also { photoCache = f.lastModified() to it }
+        val key = "${f.name}@${f.lastModified()}"
+        photoCache?.takeIf { it.first == key }?.let { return it.second }
+        return BitmapFactory.decodeFile(f.path).also { photoCache = key to it }
     }
 
     // ---- The redraw's own wake ---------------------------------------------------------------------

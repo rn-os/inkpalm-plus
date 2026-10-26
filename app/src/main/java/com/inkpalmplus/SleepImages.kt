@@ -39,6 +39,8 @@ object SleepImages {
      *  Null when done, else what went wrong. Blocking (decodes and writes a PNG). */
     fun setSleep(c: Context, uri: Uri): String? {
         writePicked(c, uri, Aod.picture(c).name)?.let { return it }
+        // The whole picture too, so a landscape face crops it to its own shape (not a band of the portrait crop).
+        writeSource(c, uri, Aod.pictureSource(c))
         return Aod.setFace(c, if (Aod.face(c) == Aod.Face.PHOTO) Aod.Face.PHOTO else Aod.Face.PICTURE)
     }
 
@@ -106,6 +108,24 @@ object SleepImages {
             Thread.sleep(150)   // the bridge's copy may still be finishing
         }
         return BitmapFactory.decodeFile(copy.path)
+    }
+
+    /** The picked image whole, gray, its long side at most 1440 px, as [out]; removed if that fails. */
+    private fun writeSource(c: Context, uri: Uri, out: File) {
+        runCatching {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            c.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            val o = BitmapFactory.Options().apply { inSampleSize = 1 }
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (o.inSampleSize * 2) >= 1440) o.inSampleSize *= 2
+            val src = c.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o) } ?: error("unreadable")
+            val k = minOf(1f, 1440f / maxOf(src.width, src.height))
+            val w = (src.width * k).toInt().coerceAtLeast(1); val h = (src.height * k).toInt().coerceAtLeast(1)
+            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val gray = Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) }) }
+            Canvas(bmp).apply { drawColor(Ink.PAPER); drawBitmap(src, null, Rect(0, 0, w, h), gray) }
+            out.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bmp.recycle(); src.recycle()
+        }.onFailure { out.delete(); Log.w(TAG, "sleep picture source: $it") }
     }
 
     /** The picked image, centre-cropped to the panel, gray, as files/[name]. Null when done, else what went wrong. */

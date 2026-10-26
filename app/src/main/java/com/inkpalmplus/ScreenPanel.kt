@@ -141,9 +141,10 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
         val lightView = lightBlock?.view
 
         if (landscape) {
-            val left = ctx.vbox().apply { addView(label); addView(modes) }
+            // Full refresh and contrast sit under the modes (the empty space there), so the light block fits on the right.
+            val left = ctx.vbox().apply { addView(label); addView(modes); addView(actions) }
             val right = ctx.vbox().apply {
-                addView(scopeRow); addView(sourceLine); addView(actions)
+                addView(scopeRow); addView(sourceLine)
                 addView(View(ctx), lp(MATCH, 0, 1f))
                 lightView?.let { addView(it) }
             }
@@ -177,7 +178,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(if (on) 3 else 2, Radius.MEDIUM, Ink.PRESSED))
             addState(intArrayOf(), ctx.outline(if (on) 3 else 2, Radius.MEDIUM, if (on) Ink.INK else Ink.PAPER))
         }
-        setPadding(ctx.dp(12), ctx.dp(4), ctx.dp(12), ctx.dp(4))
+        setPadding(ctx.dp(12), ctx.dp(if (compact) 4 else 2), ctx.dp(12), ctx.dp(if (compact) 4 else 2))
         addView(ctx.text(m.title, if (compact) Type.M else Type.L, bold = true, color = fg))
         addView(ctx.text(m.detail, if (compact) Type.XS else Type.S, color = if (on) Ink.PAPER else Ink.MUTED).apply {
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
@@ -199,7 +200,8 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
  * Brightness and Warmth, each − [label over slider] +, the same in both orientations (the slider applies when you let
  * go, so e-ink redraws once; the buttons step by 10). Brightness 0% is off: − to 0 turns the light off, + or the
  * slider turns it back on at the level it had. The Auto pill (mockup 18) is Android's adaptive brightness and the only
- * thing that turns it on or off; with it on, Brightness is the maximum, a Sensitivity − + row shows, with the
+ * thing that turns it on or off; with it on, the lux curves set brightness and warmth, both sliders become offsets
+ * (Brighter / Dimmer than auto, Warmer / Cooler than auto, -50..+50, the buttons step by 5), a Sensitivity − + row shows, with the
  * lux readout under its label (mockup 22). Targets are 48 dp.
  */
 class LightBlock(private val ctx: QuickPanelService, private val s: Light.State, private val onClose: () -> Unit) {
@@ -211,100 +213,137 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
         var level = if (s.on) s.level else 0
         var lastLevel = s.level.takeIf { it > 0 } ?: 50
         var warmth = s.warmth
+        var on = s.on
+        fun autoOn() = s.follows && Light.auto(ctx)
         fun send() {
+            if (autoOn()) return
             if (level > 0) lastLevel = level
-            state = Light.State(lastLevel, warmth, level > 0, s.follows, Light.auto(ctx))
-            Light.set(ctx, lastLevel, warmth, level > 0)
+            on = level > 0
+            state = Light.State(lastLevel, warmth, on, s.follows, false)
+            Light.set(ctx, lastLevel, warmth, on)
         }
         val pills = mutableListOf<() -> Unit>()
-        fun slider(label: () -> String, get: () -> Int, put: (Int) -> Unit, extra: View? = null, reserve: Boolean = false) = addView(ctx.hbox().apply {
+        fun off(v: Int, more: String, less: String, same: String) =
+            if (v > 0) "$more +$v" else if (v < 0) "$less −$" + "{-v}" else same
+        // − [label over slider] +, full width. Under Auto the slider is an offset: -50..+50 points around the curve,
+        // centred (progress 0..100 = offset + 50), and the buttons step by 5.
+        fun slider(bright: Boolean, label: () -> String, get: () -> Int, put: (Int) -> Unit) = addView(ctx.hbox().apply {
             gravity = Gravity.CENTER_VERTICAL
             val text = ctx.text(label(), Type.S, bold = true).apply {
                 gravity = Gravity.CENTER; maxLines = 1
                 setAutoSizeTextTypeUniformWithConfiguration(10, 13, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
             }
+            fun shown() = if (autoOn()) get() + Light.OFFSET_MAX else get()
             val bar = android.widget.SeekBar(ctx).apply {
                 max = 100
-                progress = get()
+                progress = shown()
                 progressTintList = android.content.res.ColorStateList.valueOf(Ink.INK)
                 progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Ink.MUTED)
                 thumbTintList = android.content.res.ColorStateList.valueOf(Ink.INK)
                 setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(b: android.widget.SeekBar, p: Int, fromUser: Boolean) {}
                     override fun onStartTrackingTouch(b: android.widget.SeekBar) {}
-                    override fun onStopTrackingTouch(b: android.widget.SeekBar) { put(b.progress); send(); text.text = label(); pills.forEach { it() } }
+                    override fun onStopTrackingTouch(b: android.widget.SeekBar) {
+                        put(if (autoOn()) b.progress - Light.OFFSET_MAX else b.progress); send(); pills.forEach { it() }
+                    }
                 })
             }
-            pills += { text.text = label() }
-            fun step(d: Int) { put((get() + d).coerceIn(0, 100)); bar.progress = get(); send(); text.text = label(); pills.forEach { it() } }
+            pills += { text.text = label(); bar.progress = shown() }
+            fun step(d: Int) {
+                if (autoOn()) put((get() + d / 2).coerceIn(-Light.OFFSET_MAX, Light.OFFSET_MAX)) else put((get() + d).coerceIn(0, 100))
+                send(); pills.forEach { it() }
+            }
             addView(ctx.inkButton("−", Type.XL) { step(-10) }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
             addView(ctx.vbox().apply {
                 addView(text, lp(MATCH, WRAP))
                 addView(bar, lp(MATCH, WRAP))
             }, lp(0, WRAP, 1f))
-            // Auto sits between the slider and +, a 48 dp box like them, one 6 dp gap on each side. The Warmth row gets
-            // an empty box of the same width, so both sliders end in the same place.
-            if (extra != null) addView(extra, lp(WRAP, ctx.dp(48)).apply { marginStart = ctx.dp(6); marginEnd = ctx.dp(6) })
-            else if (reserve) addView(View(ctx), lp(ctx.dp(60), ctx.dp(48)))
             addView(ctx.inkButton("+", Type.XL) { step(10) }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
         }, lp(MATCH, WRAP).apply { topMargin = ctx.dp(2) })
-        // Auto: only when the light follows Android's brightness. Only this pill turns it on or off; Brightness is then the maximum.
-        val readout = ctx.text("", Type.S, color = Ink.MUTED).apply { gravity = Gravity.CENTER_VERTICAL; maxLines = 1 }
+
+        // The bar above the sliders: [Light on/off] [Auto], two equal outlined 48 dp buttons, filled black when active.
+        fun toggle(title: String, isOn: () -> Boolean, desc: (Boolean) -> String, click: () -> Unit) = ctx.text(title, Type.S, bold = true).apply {
+            gravity = Gravity.CENTER
+            setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
+            minHeight = ctx.dp(48)
+            fun look() {
+                val v = isOn()
+                background = ctx.outline(2, Radius.SMALL, if (v) Ink.INK else Ink.PAPER)
+                setTextColor(if (v) Ink.PAPER else Ink.INK)
+                contentDescription = desc(v)
+            }
+            look()
+            pills += { look() }
+            setOnClickListener { click() }
+        }
+        val readout = ctx.text("", Type.S, color = Ink.MUTED).apply {
+            maxLines = 1
+            setAutoSizeTextTypeUniformWithConfiguration(8, 13, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+        }
         val sens = ctx.hbox()
-        val sensValue = ctx.text("", Type.S, bold = true).apply { gravity = Gravity.CENTER; minWidth = ctx.dp(48) }
+        val sensValue = ctx.text("", Type.S, bold = true).apply { gravity = Gravity.CENTER; minWidth = ctx.dp(28) }
         fun refresh() {
-            val on = Light.auto(ctx)
-            readout.text = if (on) Light.readout().orEmpty() else ""
-            sens.visibility = if (on) View.VISIBLE else View.GONE
+            val a = autoOn()
+            readout.text = if (a) Light.readout(ctx) ?: "Waiting for the light sensor" else ""
+            sens.visibility = if (a) View.VISIBLE else View.GONE
             val v = Light.sensitivity(ctx)
             sensValue.text = if (v > 0) "+$v" else "$v"
         }
-        val pill = if (!s.follows) null else ctx.text("Auto", Type.S, bold = true).apply {
-            gravity = Gravity.CENTER
-            setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
-            minWidth = ctx.dp(48); minHeight = ctx.dp(48)
-            fun look(on: Boolean) {
-                background = ctx.outline(2, Radius.SMALL, if (on) Ink.INK else Ink.PAPER)
-                setTextColor(if (on) Ink.PAPER else Ink.INK)
-                contentDescription = if (on) "Auto brightness on" else "Auto brightness off"
-            }
-            look(s.auto)
-            pills += { look(Light.auto(ctx)); refresh() }
-            setOnClickListener {
-                val on = !Light.auto(ctx)
-                if (Light.setAuto(ctx, on)) {
-                    pills.forEach { it() }
-                    Light.apply(ctx)
-                } else {
-                    // Modify system settings isn't allowed yet: Android's screen for it.
-                    runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS,
-                        android.net.Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    onClose()
-                }
+        pills += { refresh() }
+        val onButton = toggle("Light: ${if (on) "On" else "Off"}", { Light.isOn(ctx) }, { "Front light ${if (it) "on" else "off"}" }) {
+            val now = !Light.isOn(ctx)
+            if (now && level == 0) level = lastLevel
+            if (!now) level = 0 else if (level == 0) level = lastLevel
+            if (autoOn()) Light.setOn(ctx, now) else { Light.set(ctx, lastLevel, warmth, now) }
+            pills.forEach { it() }
+        }
+        onButton.apply { pills += { text = "Light: ${if (Light.isOn(ctx)) "On" else "Off"}" } }
+        val autoButton = if (!s.follows) null else toggle("Auto", { Light.auto(ctx) }, { if (it) "Auto brightness on" else "Auto brightness off" }) {
+            val on2 = !Light.auto(ctx)
+            if (Light.setAuto(ctx, on2)) {
+                pills.forEach { it() }
+                Light.apply(ctx)
+            } else {
+                // Modify system settings isn't allowed yet: Android's screen for it.
+                runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                    android.net.Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                onClose()
             }
         }
-        slider({ if (level == 0) "Light off" else if (Light.auto(ctx)) "Maximum $level%" else "Brightness $level%" }, { level }, { level = it }, pill)
-        slider({ "Warmth $warmth%" }, { warmth }, { warmth = it }, reserve = pill != null)
-        if (pill != null) {
+        addView(ctx.hbox().apply {
+            addView(onButton, lp(0, ctx.dp(48), 1f).apply { marginEnd = if (autoButton != null) ctx.dp(6) else 0 })
+            autoButton?.let { addView(it, lp(0, ctx.dp(48), 1f)) }
+        }, lp(MATCH, WRAP).apply { topMargin = ctx.dp(2) })
+        if (autoButton != null) {
             sens.apply {
                 gravity = Gravity.CENTER_VERTICAL
-                // The lux readout sits under the label (the Brightness line has no room for it beside the pill).
+                // The readout sits directly under the bar, with the Sensitivity label under it.
                 addView(ctx.vbox().apply {
-                    addView(ctx.text("Sensitivity", Type.S, bold = true))
                     addView(readout)
+                    addView(ctx.text("Sensitivity", Type.S, bold = true))
                 }, lp(0, WRAP, 1f))
                 addView(ctx.inkButton("−", Type.XL) { Light.setSensitivity(ctx, Light.sensitivity(ctx) - 1); refresh() }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
                 addView(sensValue, lp(WRAP, WRAP))
                 addView(ctx.inkButton("+", Type.XL) { Light.setSensitivity(ctx, Light.sensitivity(ctx) + 1); refresh() }.apply { minHeight = ctx.dp(48) }, lp(ctx.dp(48), WRAP))
             }
             addView(sens, lp(MATCH, WRAP).apply { topMargin = ctx.dp(2) })
-            refresh()
-            // The readout follows the light while the panel is open.
-            addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-                override fun onViewAttachedToWindow(v: View) { Light.listener = { refresh() } }
-                override fun onViewDetachedFromWindow(v: View) { Light.listener = null }
-            })
         }
+        slider(true, {
+            if (autoOn()) off(Light.autoOffset(ctx, true), "Brighter than auto", "Dimmer than auto", "Brightness: as auto")
+            else if (level == 0) "Light off" else "Brightness $level%"
+        }, { if (autoOn()) Light.autoOffset(ctx, true) else level },
+            { if (autoOn()) Light.setAutoOffset(ctx, true, it) else level = it })
+        slider(false, {
+            if (autoOn()) off(Light.autoOffset(ctx, false), "Warmer than auto", "Cooler than auto", "Warmth: as auto")
+            else "Warmth $warmth%"
+        }, { if (autoOn()) Light.autoOffset(ctx, false) else warmth },
+            { if (autoOn()) Light.setAutoOffset(ctx, false, it) else warmth = it })
+        refresh()
+        // The readout follows the light while the panel is open.
+        addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) { Light.listener = { refresh() } }
+            override fun onViewDetachedFromWindow(v: View) { Light.listener = null }
+        })
     }.also { it.layoutParams = LinearLayout.LayoutParams(MATCH, WRAP) }
 
     fun describe(): String = "light level=${state.level} warmth=${state.warmth} on=${state.on} auto=${Light.auto(ctx)}"

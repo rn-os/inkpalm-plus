@@ -29,13 +29,44 @@ class MergedLogicTest {
         assertEquals(Light.MAX, Light.raw(150, 2f))   // clamped
     }
 
-    @Test fun luxCurveIsBoundedAndRising() {
-        assertEquals(0.08f, Light.luxScale(0f), 0.001f)
-        assertEquals(1f, Light.luxScale(1999f), 0.001f)
-        assertEquals(1f, Light.luxScale(100_000f), 0.001f)
-        assertTrue(Light.luxScale(10f) < Light.luxScale(100f))
-        assertEquals(Light.luxScale(200f), Light.luxScale(50f, 2), 0.001f)    // +2 = lux × 4
-        assertEquals(Light.luxScale(25f), Light.luxScale(50f, -1), 0.001f)
+    @Test fun autoBrightnessCurveCoversTheWholeRange() {
+        assertEquals(2f, Light.autoLevel(1f), 0.01f)
+        assertEquals(15f, Light.autoLevel(20f), 0.01f)
+        assertEquals(35f, Light.autoLevel(100f), 0.01f)
+        assertEquals(60f, Light.autoLevel(500f), 0.01f)
+        assertEquals(100f, Light.autoLevel(100_000f), 0.01f)
+        assertTrue(Light.autoLevel(2000f) >= 85f)
+        var prev = -1f
+        for (lux in listOf(0f, 1f, 5f, 20f, 100f, 500f, 2000f, 10000f)) { val v = Light.autoLevel(lux); assertTrue(v >= prev); prev = v }
+        assertEquals(Light.autoLevel(200f), Light.autoLevel(50f, 2), 0.001f)    // +2 = lux × 4
+        assertEquals(Light.autoLevel(25f), Light.autoLevel(50f, -1), 0.001f)
+    }
+
+    @Test fun autoWarmthCurveIsWarmInTheDarkAndCoolInSun() {
+        assertTrue(Light.autoWarmth(1f) in 85f..90f)
+        assertTrue(Light.autoWarmth(5f) >= 85f)
+        assertTrue(Light.autoWarmth(120f) in 45f..60f)
+        assertTrue(Light.autoWarmth(1500f) < 25f)
+        assertTrue(Light.autoWarmth(5000f) in 15f..20f)
+        var prev = 101f
+        for (lux in listOf(0f, 1f, 10f, 100f, 300f, 1000f, 3000f, 20000f)) { val v = Light.autoWarmth(lux); assertTrue(v <= prev); prev = v }
+    }
+
+    @Test fun autoOffsetsShiftAndClamp() {
+        assertEquals(41 to 55, Light.autoResult(41f, 55f, 0, 0))
+        assertEquals(51 to 45, Light.autoResult(41f, 55f, 10, -10))
+        assertEquals(100 to 100, Light.autoResult(90f, 90f, 50, 50))
+        assertEquals(0 to 5, Light.autoResult(15f, 55f, -50, -50))
+    }
+
+    /** Prints the lux table: the cold/warm LED values Auto writes at offset 0 (mix + gamma 2). */
+    @Test fun autoLuxTable() {
+        for (lux in listOf(1f, 10f, 50f, 120f, 500f, 2000f)) {
+            val (l, w) = Light.autoResult(Light.autoLevel(lux), Light.autoWarmth(lux), 0, 0)
+            val (c, wm) = Light.mix(l, w)
+            println("AUTOTABLE lux=${lux.toInt()} level=$l% warmth=$w cold=${Light.raw(c, 1f)} warm=${Light.raw(wm, 1f)}")
+            assertTrue(Light.raw(c, 1f) + Light.raw(wm, 1f) > 0)
+        }
     }
 
     @Test fun autoHoldsThenAppliesFirstValueDirectly() {
@@ -43,7 +74,8 @@ class MergedLogicTest {
         a.restart(0)
         assertEquals(null, a.sample(400, 100f, 0))
         val r = a.sample(500, 100f, 0)!!
-        assertEquals(Light.luxScale(100f), r.scale, 0.001f)
+        assertEquals(Light.autoLevel(100f), r.level, 0.001f)
+        assertEquals(Light.autoWarmth(100f), r.warmth, 0.001f)
         assertEquals(false, r.ramp)
     }
 
@@ -61,7 +93,8 @@ class MergedLogicTest {
         var down: AutoLux.Result? = null
         while (down == null && t < 20_000) { t += 1000; down = b.sample(t, 100f, 0) }
         assertTrue(t - 500 >= 4000)
-        assertTrue(down!!.scale < Light.luxScale(1000f))
+        assertTrue(down!!.level < Light.autoLevel(1000f))
+        assertTrue(down.warmth > Light.autoWarmth(1000f))
     }
 
     @Test fun autoIgnoresSmallDriftAndSteadyLight() {
@@ -74,7 +107,9 @@ class MergedLogicTest {
         val a = AutoLux()
         assertEquals(null, a.force(1))
         a.restart(0); a.sample(500, 50f, 0)
-        assertEquals(Light.luxScale(100f), a.force(1)!!, 0.001f)
+        val r = a.force(1)!!
+        assertEquals(Light.autoLevel(100f), r.level, 0.001f)
+        assertEquals(Light.autoWarmth(100f), r.warmth, 0.001f)
     }
 
     @Test fun contrastLabelsCountStepsFromNormal() {

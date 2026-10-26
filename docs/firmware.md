@@ -208,3 +208,7 @@ Source of truth for the image: `~/Github Repos/InkPalm-KompaktOS` (`docs/HANDOFF
 ## Gotchas
 - `content query` on this Android has no `--arg`; `einksettingsupdate` queries with a `--where` throw. Untested from an app with selectionArgs.
 - `uiautomator dump` leaves out views behind the keyboard; hide it (Back) before dumping.
+
+## Stock auto light (SystemUI `com.android.systemui.moan.light`, from the firmware backup)
+- Switches: `Settings.Global mogu_auto_light_status` (brightness) and `mogu_auto_warm_status` (warmth); `AutoLightControl`, `AutoLightProcess`, `AutoLightGradientControl` ramp the seekbar value in 200 ms steps per level.
+- Lux to a level: `AutoLightParam.LEVEL_GAP` = 0, 10, 29, 56, 81, 126, 171, 341, 601 lux; `AutoLightProcess.DEFAULT_AUTO_LIGHT_TABLE` = {5, 6, 7, 8, 9, 0} (a coarse 6-step table in stock seekbar units); `DEFAULT_AUTO_WARM_TABLE` (25 entries, indexed by that brightness value) = 0,0,1,1,2,2,3,4,4,6,6,6,6,8,8,8,8,8,9,9,9,9,10,10,10. Stock is a stepped table, not a curve; InkPalm+ uses log-shaped curves (`Light.autoLevel`, `Light.autoWarmth`) instead.

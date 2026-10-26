@@ -8,7 +8,7 @@
 2. `2-hold.png`: holding an app for its menu
 3. `3-eink.png`: the e-ink panel (Preset, Size, Contrast, Rotate)
 4. `4-landscape.png`: the panel in landscape
-5. `5-home.png`: the home screen
+5. `5-home.png`: the home screen: a short list of categories (Side panel, Screen & e-ink, Front light, Sleep & power, Reading, Buttons, About)
 
 ---
 

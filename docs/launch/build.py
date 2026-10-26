@@ -198,26 +198,15 @@ img4 = page(f'<div style="display:flex;flex-direction:column;gap:22px">{phone(LS
 def hrow(name, sub, right):
     return f'<div class="hr"><div class="n"><b>{name}</b><span>{sub}</span></div>{right}</div>'
 
-HOME = ('<div style="position:absolute;inset:20px 0 0 0;background:#fff" class="home"><h1>InkPalm+</h1>'
-        '<div class="subt">A side panel of recent apps for the InkPalm Plus</div><div class="sec">SIDE PANEL</div>'
-        + hrow("Side panel", "On", '<div class="btn on">On</div>')
-        + hrow("Strip side", "Where you swipe", '<div class="btn">Left</div><div class="btn on">Right</div>')
-        + hrow("Strip width", "", '<div class="btn sq">−</div><b style="font-size:12px;width:40px;text-align:center">18 dp</b><div class="btn sq">+</div>')
-        + hrow("Show strip", "A thin black line where you swipe", '<div class="btn">Off</div>')
-        + hrow("Panel width", "How much of the screen it covers", '<div class="btn">66%</div><div class="btn on">78%</div><div class="btn">90%</div>')
-        + hrow("Apps kept", "Recent apps the panel remembers", '<div class="btn">9</div><div class="btn on">18</div><div class="btn">27</div>')
-        + '<div class="sec">MORE</div>'
-        + hrow("Touch button", "Tap: Home · Hold: Full refresh", '<div class="btn">Open</div>')
-        + hrow("E-ink settings", "Per-app DPI, refresh, contrast, presets, font", '<div class="btn">Open</div>')
-        + hrow("Keeping the panel on", "Survives Clear Memory · turns itself back on", '<div class="btn">Open</div>')
-        + '</div>')
+# The real home screen, captured from the device (720x1440, shown at half size like the other mockups).
+HOME = '<img src="home-screen.png" style="position:absolute;inset:0;width:360px;height:720px;display:block" alt="">'
 img5 = page(phone(HOME) + callouts(
     "Simple to set up",
-    "One switch to turn it on. The rest is optional.",
-    [("Your edge, your width", "Left or right, any strip width, show it or hide it."),
-     ("Touch button", "Pick what tap and hold do on the button below the screen."),
-     ("Fonts", "Heavier fonts that hold up better on e-ink, for every app."),
-     ("No internet permission", "Everything stays on the phone.")]))
+    "One switch to turn it on. Everything else is in short categories.",
+    [("Side panel", "Your edge, its width, how many apps it keeps."),
+     ("Screen &amp; e-ink · Front light", "Per-app refresh and contrast, and whether the light follows Android."),
+     ("Sleep &amp; power", "Sleep screen, power-off screen and auto power-off."),
+     ("Reading · Buttons · About", "Pick your reader app, set the touch button, and see the version. No internet permission.")]))
 
 for name, html in [("1-panel", img1), ("2-hold", img2), ("3-eink", img3), ("4-landscape", img4), ("5-home", img5)]:
     (HERE / f"{name}.html").write_text(html)

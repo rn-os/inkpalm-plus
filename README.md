@@ -185,6 +185,8 @@ These are the actions already built into the device. Changes apply on the next t
 
 The home screen is a short list of categories; each opens its own screen (◀ goes back). Each row says what's set there.
 
+<img src="docs/launch/5-home.png" width="720" alt="The InkPalm+ home screen: Side panel, Screen & e-ink, Front light, Sleep & power, Reading, Buttons and About">
+
 - **Side panel:**
   - **Side panel.** Opens Accessibility so you can turn the service on or off.
   - **Newest app.** Bottom (the default) or Top of the list.

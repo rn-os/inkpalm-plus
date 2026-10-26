@@ -191,10 +191,11 @@ object Aod {
             tmp.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
             tmp.renameTo(File(c.filesDir, "standby.png"))
         }.getOrDefault(false)
-        bmp.recycle()
-        if (!ok) { Log.w(TAG, "aod: couldn't write the face"); return false }
+        if (!ok) { bmp.recycle(); Log.w(TAG, "aod: couldn't write the face"); return false }
         // The redraw's wake shows the new face at once (not the home screen) until the HWC draws it at the sleep.
-        val covered = redraw && WakeCover.show(bmp.copy(Bitmap.Config.ARGB_8888, false), "aod")
+        // The cover owns the bitmap from then on.
+        val covered = redraw && WakeCover.show(bmp, "aod")
+        if (!redraw) bmp.recycle()
         val sent = Eink.bridgeWrite("standby.req", if (redraw) "apply=1\nredraw=1\n" else "apply=1\n")
         if (covered && !sent) WakeCover.hide("request failed")
         if (sent) lastKey = key

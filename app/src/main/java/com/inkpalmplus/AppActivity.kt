@@ -29,14 +29,14 @@ class AppActivity : Activity() {
 
         val root = vbox()
         root.addView(hbox().apply {
-            setPadding(dp(8), dp(8), dp(16), dp(8))
+            setPadding(dp(8), dp(8), dp(Space.GUTTER), dp(8))
             addView(inkIconButton(R.drawable.ic_back, "Back", 48) { finish() })
             addView(icon(runCatching { packageManager.getApplicationIcon(pkg) }.getOrNull(), 40, tint = false).apply {
                 (layoutParams as LinearLayout.LayoutParams).marginStart = dp(12)
             })
             addView(vbox().apply {
-                addView(text(label, 20f, bold = true))
-                addView(text(pkg, 12f, color = Ink.MUTED))
+                addView(text(label, Type.XL, bold = true))
+                addView(text(pkg, Type.S, color = Ink.MUTED))
             }, lp(0, WRAP, 1f).apply { marginStart = dp(12) })
         })
         root.addView(divider(2))
@@ -66,10 +66,10 @@ class AppActivity : Activity() {
         body.addView(note("Lower fits more on screen; higher makes everything bigger. The screen's own is ${EinkDb.NATIVE_DPI}. Takes effect when the app reopens."))
         val dpi = edit.dpi
         body.addView(hbox().apply {
-            setPadding(dp(16), dp(6), dp(16), dp(6))
-            addView(inkButton("−10", 18f) { setDpi((if (dpi > 0) dpi else EinkDb.NATIVE_DPI) - 10) }, lp(dp(64), WRAP))
-            addView(text(if (dpi > 0) "$dpi dpi" else "System", 22f, bold = true).apply { gravity = Gravity.CENTER }, lp(0, WRAP, 1f))
-            addView(inkButton("+10", 18f) { setDpi((if (dpi > 0) dpi else EinkDb.NATIVE_DPI) + 10) }, lp(dp(64), WRAP))
+            setPadding(dp(Space.GUTTER), dp(6), dp(Space.GUTTER), dp(6))
+            addView(inkButton("−10", Type.XL) { setDpi((if (dpi > 0) dpi else EinkDb.NATIVE_DPI) - 10) }, lp(dp(64), WRAP))
+            addView(text(if (dpi > 0) "$dpi dpi" else "System", Type.XXL, bold = true).apply { gravity = Gravity.CENTER }, lp(0, WRAP, 1f))
+            addView(inkButton("+10", Type.XL) { setDpi((if (dpi > 0) dpi else EinkDb.NATIVE_DPI) + 10) }, lp(dp(64), WRAP))
         })
         body.addView(chips(listOf(-1, 200, 240, 276, 300, 330, 360, 400), { if (it < 0) "System" else "$it" }, dpi.takeIf { it > 0 } ?: -1) { setDpi(it) })
 
@@ -92,13 +92,13 @@ class AppActivity : Activity() {
         val idx = edit.contrast?.let { g -> steps.indexOfFirst { kotlin.math.abs(it - g) < 0.01f } } ?: -1
         val base = steps.indexOfFirst { kotlin.math.abs(it - EinkDb.DEFAULT_CONTRAST) < 0.01f }
         body.addView(hbox().apply {
-            setPadding(dp(16), dp(6), dp(16), dp(6))
-            addView(inkButton("Lighter", 15f) {
+            setPadding(dp(Space.GUTTER), dp(6), dp(Space.GUTTER), dp(6))
+            addView(inkButton("Lighter", Type.M) {
                 val i = if (idx < 0) base else idx
                 edit = edit.copy(contrast = steps[(i - 1).coerceAtLeast(0)]); render()
             }, lp(0, WRAP, 1f))
-            addView(text(edit.contrast?.let { EinkDb.contrastLabel(it) } ?: "System", 17f, bold = true).apply { gravity = Gravity.CENTER }, lp(0, WRAP, 1.3f))
-            addView(inkButton("Darker", 15f) {
+            addView(text(edit.contrast?.let { EinkDb.contrastLabel(it) } ?: "System", Type.L, bold = true).apply { gravity = Gravity.CENTER }, lp(0, WRAP, 1.3f))
+            addView(inkButton("Darker", Type.M) {
                 val i = if (idx < 0) base else idx
                 edit = edit.copy(contrast = steps[(i + 1).coerceAtMost(steps.size - 1)]); render()
             }, lp(0, WRAP, 1f))
@@ -114,7 +114,7 @@ class AppActivity : Activity() {
         for ((key, title, _) in Prefs.HELPERS) {
             val own = prefs.helperOverride(key, pkg)
             val def = if (prefs.helperDefault(key)) "on" else "off"
-            body.addView(text(title, 16f, medium = true).apply { setPadding(dp(16), dp(8), dp(16), 0) })
+            body.addView(text(title, Type.L, medium = true).apply { setPadding(dp(Space.GUTTER), dp(8), dp(Space.GUTTER), 0) })
             body.addView(chips(listOf<Boolean?>(null, true, false), { if (it == null) "Default ($def)" else if (it) "On" else "Off" }, own) {
                 prefs.setHelper(key, pkg, it); render()
             })
@@ -163,7 +163,7 @@ class AppActivity : Activity() {
 
     // ---- Views --------------------------------------------------------------------------------
 
-    private fun note(s: String) = text(s, 13f, color = Ink.MUTED).apply { setPadding(dp(16), dp(4), dp(16), dp(4)) }
+    private fun note(s: String) = text(s, Type.S, color = Ink.MUTED).apply { setPadding(dp(Space.GUTTER), dp(4), dp(Space.GUTTER), dp(4)) }
 
     private fun <T> chips(options: List<T>, title: (T) -> String, selected: T, onPick: (T) -> Unit): View =
         HorizontalScrollView(this).apply {
@@ -175,12 +175,13 @@ class AppActivity : Activity() {
         }
 
     private fun choiceRow(title: String, detail: String, selected: Boolean, check: Boolean = false, onClick: () -> Unit): View = hbox().apply {
-        setPadding(dp(16), dp(10), dp(16), dp(10))
+        // The glyph's 48 dp touch box has the 24 dp shape centered in it: 12 dp of box padding + 4 = the gutter.
+        setPadding(dp(Space.GUTTER - 12), dp(4), dp(Space.GUTTER), dp(4))
         pressable()
-        addView(text(if (selected) (if (check) "☑" else "●") else (if (check) "☐" else "○"), 20f, bold = true), lp(dp(32), WRAP))
+        addView(ChoiceGlyph(this@AppActivity, check, selected), lp(dp(48), dp(48)).apply { marginEnd = dp(4) })
         addView(vbox().apply {
-            addView(text(title, 16f, bold = selected, medium = !selected))
-            addView(text(detail, 13f, color = Ink.MUTED))
+            addView(text(title, Type.L, bold = selected, medium = !selected))
+            addView(text(detail, Type.S, color = Ink.MUTED))
         }, lp(0, WRAP, 1f))
         setOnClickListener { onClick() }
     }
@@ -189,5 +190,40 @@ class AppActivity : Activity() {
 
     companion object {
         const val EXTRA_PKG = "pkg"
+    }
+}
+
+/**
+ * Radio (circle) or check (rounded square) drawn as a 24 dp shape in a 48 dp touch box: black outline,
+ * filled black when selected (with a white dot / white tick). No grays.
+ */
+private class ChoiceGlyph(context: android.content.Context, private val check: Boolean, private val on: Boolean) : View(context) {
+    private val stroke = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE; strokeWidth = context.dp(2).toFloat(); color = Ink.INK
+    }
+    private val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = Ink.INK }
+    private val white = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = Ink.PAPER; style = android.graphics.Paint.Style.STROKE; strokeWidth = context.dp(3).toFloat()
+        strokeCap = android.graphics.Paint.Cap.ROUND; strokeJoin = android.graphics.Paint.Join.ROUND
+    }
+
+    override fun onDraw(c: android.graphics.Canvas) {
+        val size = context.dp(24).toFloat()
+        val inset = stroke.strokeWidth / 2
+        val l = (width - size) / 2; val t = (height - size) / 2
+        val box = android.graphics.RectF(l + inset, t + inset, l + size - inset, t + size - inset)
+        val r = context.dp(Radius.SMALL).toFloat()
+        if (check) {
+            if (on) c.drawRoundRect(box, r, r, fill)
+            c.drawRoundRect(box, r, r, stroke)
+            if (on) c.drawPath(android.graphics.Path().apply {
+                moveTo(l + size * 0.26f, t + size * 0.52f); lineTo(l + size * 0.43f, t + size * 0.69f); lineTo(l + size * 0.76f, t + size * 0.33f)
+            }, white)
+        } else {
+            val cx = width / 2f; val cy = height / 2f
+            if (on) c.drawCircle(cx, cy, size / 2, fill)
+            c.drawCircle(cx, cy, size / 2 - inset, stroke)
+            if (on) c.drawCircle(cx, cy, size * 0.18f, android.graphics.Paint(white).apply { style = android.graphics.Paint.Style.FILL })
+        }
     }
 }

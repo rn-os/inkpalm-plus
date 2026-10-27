@@ -54,6 +54,9 @@ object Eink {
     /** The bridge knows `power.req` (auto power-off); older images don't. */
     val bridgeKnowsPower: Boolean by lazy { bridgeAvailable() && runCatching { APPLY.readText().contains("power.req") }.getOrDefault(false) }
 
+    /** The bridge knows `radio.req` (Wi-Fi and Bluetooth on/off); older images don't. */
+    val bridgeKnowsRadio: Boolean by lazy { bridgeAvailable() && runCatching { APPLY.readText().contains("radio.req") }.getOrDefault(false) }
+
     val backend: Backend
         get() = when {
             // The bridge exists only on our GSIs, which have no Moaan eink service: don't look for it there

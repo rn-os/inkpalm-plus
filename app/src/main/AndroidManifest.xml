@@ -32,6 +32,8 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Always-on sleep screen: stays awake while the bridge wakes and sleeps the screen for a Live update. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Wi-Fi on/off state for the screen and light panel's toggle. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <!-- KompaktOS: the "Uninstall InkControl" button (InkPalm+ replaces it). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />

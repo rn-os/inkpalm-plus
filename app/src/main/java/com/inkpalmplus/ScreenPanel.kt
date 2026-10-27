@@ -158,9 +158,9 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
 
         if (landscape) {
             // Full refresh and contrast sit under the modes (the empty space there), so the light block fits on the right.
-            val left = ctx.vbox().apply { addView(label); addView(modes); addView(actions) }
+            val left = ctx.vbox().apply { addView(label); addView(modes); addView(actions); addView(sourceLine) }
             val right = ctx.vbox().apply {
-                addView(scopeRow); addView(sourceLine)
+                addView(scopeRow)
                 addView(View(ctx), lp(MATCH, 0, 1f))
                 lightView?.let { addView(it) }
             }

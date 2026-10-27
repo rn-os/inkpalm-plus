@@ -101,7 +101,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             setPadding(0, 0, 0, 0); contentDescription = desc
         }
         val label = ctx.text("SCREEN MODE", Type.XS, bold = true).apply {
-            letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(6), ctx.dp(12), ctx.dp(3))
+            letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(8), ctx.dp(12), ctx.dp(4))
         }
         content.addView(ctx.hbox().apply {
             setPadding(ctx.dp(8), statusBarInset() + ctx.dp(Space.GUTTER), ctx.dp(8), ctx.dp(4))
@@ -118,13 +118,13 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
         val modes = ctx.vbox().apply { setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
         if (landscape) ScreenMode.entries.chunked(2).forEach { pair ->
             modes.addView(ctx.hbox().apply {
-                pair.forEach { addView(modeButton(it, it == now, compact = true), lp(0, WRAP, 1f).apply { setMargins(ctx.dp(2), ctx.dp(2), ctx.dp(2), ctx.dp(2)) }) }
-            }, lp(MATCH, WRAP))
+                pair.forEach { addView(modeButton(it, it == now, compact = true), lp(0, MATCH, 1f).apply { setMargins(ctx.dp(2), ctx.dp(2), ctx.dp(2), ctx.dp(2)) }) }
+            }, lp(MATCH, 0, 1f))
         } else ScreenMode.entries.forEach {
-            modes.addView(modeButton(it, it == now, compact = false), lp(MATCH, WRAP).apply { setMargins(0, ctx.dp(1), 0, 0) })
+            modes.addView(modeButton(it, it == now, compact = false), lp(MATCH, 0, 1f).apply { setMargins(0, ctx.dp(1), 0, ctx.dp(1)) })
         }
         val scopeRow = ctx.hbox().apply {
-            setPadding(ctx.dp(8), ctx.dp(4), ctx.dp(8), 0)
+            setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), 0)
             if (pkg != null) addView(ctx.chip("Use for $appLabel", forApp) { scope(true) }.oneLine(),
                 lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
             addView(ctx.chip("Use everywhere", !forApp) { scope(false) }.oneLine(), lp(0, WRAP, 1f))
@@ -135,9 +135,9 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             else -> ""
         }
         val sourceLine = ctx.text("${now.title} · ${if (source == ScreenModes.Source.APP) "$appLabel's own" else source.label}$hint", Type.S, color = Ink.MUTED)
-            .apply { setPadding(ctx.dp(12), ctx.dp(2), ctx.dp(12), ctx.dp(3)) }
+            .apply { setPadding(ctx.dp(12), ctx.dp(4), ctx.dp(12), ctx.dp(6)) }
         val actions = ctx.hbox().apply {
-            setPadding(ctx.dp(8), ctx.dp(4), ctx.dp(8), ctx.dp(4))
+            setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
             addView(ctx.inkButton("Full refresh", Type.M) { ScreenModes.fullRefresh() }.oneLine(), lp(WRAP, WRAP).apply { marginEnd = ctx.dp(6) })
             val level = ScreenModes.contrast(ctx)
             addView(ctx.inkButton("−", Type.XL) { ScreenModes.setContrast(ctx, level - ScreenModes.CONTRAST_STEP); render() }.apply {
@@ -158,7 +158,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
 
         if (landscape) {
             // Full refresh and contrast sit under the modes (the empty space there), so the light block fits on the right.
-            val left = ctx.vbox().apply { addView(label); addView(modes); addView(actions); addView(sourceLine) }
+            val left = ctx.vbox().apply { addView(label); addView(modes, lp(MATCH, 0, 1f)); addView(actions); addView(sourceLine) }
             val right = ctx.vbox().apply {
                 addView(scopeRow)
                 addView(View(ctx), lp(MATCH, 0, 1f))
@@ -172,12 +172,11 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             }, lp(MATCH, 0, 1f))
         } else {
             content.addView(label)
-            content.addView(modes)
+            content.addView(modes, lp(MATCH, 0, 1f))
             content.addView(scopeRow)
             content.addView(sourceLine)
             content.addView(View(ctx).apply { setBackgroundColor(Ink.INK) }, lp(MATCH, ctx.dp(2)))
             content.addView(actions)
-            content.addView(View(ctx), lp(MATCH, 0, 1f))
             lightView?.let {
                 content.addView(View(ctx).apply { setBackgroundColor(Ink.INK) }, lp(MATCH, ctx.dp(2)))
                 content.addView(it)
@@ -241,19 +240,20 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
     private fun TextView.oneLine() = apply { maxLines = 1; setAutoSizeTextTypeUniformWithConfiguration(10, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP) }
 
     /** A big labelled button: the mode's name and one line on what it's for; filled black when it's in use. */
-    private fun modeButton(m: ScreenMode, on: Boolean, compact: Boolean): View = (if (compact) ctx.vbox() else ctx.hbox()).apply {
+    private fun modeButton(m: ScreenMode, on: Boolean, compact: Boolean): View = ctx.vbox().apply {
         val fg = if (on) Ink.PAPER else Ink.INK
         background = StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(if (on) 3 else 2, Radius.MEDIUM, Ink.PRESSED))
             addState(intArrayOf(), ctx.outline(if (on) 3 else 2, Radius.MEDIUM, if (on) Ink.INK else Ink.PAPER))
         }
-        setPadding(ctx.dp(12), ctx.dp(if (compact) 4 else 5), ctx.dp(12), ctx.dp(if (compact) 4 else 5))
-        // Portrait is short on height: the name and its one line sit side by side. Landscape stacks them.
-        if (!compact) gravity = Gravity.CENTER_VERTICAL
+        // The grid hands each button its share of the free height; the text sits in the middle of it.
+        gravity = Gravity.CENTER_VERTICAL
+        minimumHeight = ctx.dp(if (compact) 40 else 44)
+        setPadding(ctx.dp(12), ctx.dp(if (compact) 4 else 2), ctx.dp(12), ctx.dp(if (compact) 4 else 2))
         addView(ctx.text(m.title, if (compact) Type.M else Type.L, bold = true, color = fg))
         addView(ctx.text(m.detail, if (compact) Type.XS else Type.S, color = if (on) Ink.PAPER else Ink.MUTED).apply {
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-        }, if (compact) LinearLayout.LayoutParams(WRAP, WRAP) else lp(0, WRAP, 1f).apply { marginStart = ctx.dp(10) })
+        })
         contentDescription = "${m.title}: ${m.detail}${if (on) ", in use" else ""}"
         isClickable = true
         setOnClickListener { pick(m) }

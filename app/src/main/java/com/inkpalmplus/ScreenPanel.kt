@@ -246,17 +246,19 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
     private fun TextView.oneLine() = apply { maxLines = 1; setAutoSizeTextTypeUniformWithConfiguration(10, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP) }
 
     /** A big labelled button: the mode's name and one line on what it's for; filled black when it's in use. */
-    private fun modeButton(m: ScreenMode, on: Boolean, compact: Boolean): View = ctx.vbox().apply {
+    private fun modeButton(m: ScreenMode, on: Boolean, compact: Boolean): View = (if (compact) ctx.vbox() else ctx.hbox()).apply {
         val fg = if (on) Ink.PAPER else Ink.INK
         background = StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(if (on) 3 else 2, Radius.MEDIUM, Ink.PRESSED))
             addState(intArrayOf(), ctx.outline(if (on) 3 else 2, Radius.MEDIUM, if (on) Ink.INK else Ink.PAPER))
         }
-        setPadding(ctx.dp(12), ctx.dp(if (compact) 4 else 1), ctx.dp(12), ctx.dp(if (compact) 4 else 1))
+        setPadding(ctx.dp(12), ctx.dp(if (compact) 4 else 5), ctx.dp(12), ctx.dp(if (compact) 4 else 5))
+        // Portrait is short on height: the name and its one line sit side by side. Landscape stacks them.
+        if (!compact) gravity = Gravity.CENTER_VERTICAL
         addView(ctx.text(m.title, if (compact) Type.M else Type.L, bold = true, color = fg))
         addView(ctx.text(m.detail, if (compact) Type.XS else Type.S, color = if (on) Ink.PAPER else Ink.MUTED).apply {
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-        })
+        }, if (compact) LinearLayout.LayoutParams(WRAP, WRAP) else lp(0, WRAP, 1f).apply { marginStart = ctx.dp(10) })
         contentDescription = "${m.title}: ${m.detail}${if (on) ", in use" else ""}"
         isClickable = true
         setOnClickListener { pick(m) }

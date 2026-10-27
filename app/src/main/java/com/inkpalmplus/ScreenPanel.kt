@@ -101,7 +101,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             setPadding(0, 0, 0, 0); contentDescription = desc
         }
         val label = ctx.text("SCREEN MODE", Type.XS, bold = true).apply {
-            letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(8), ctx.dp(12), ctx.dp(4))
+            letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(5), ctx.dp(12), ctx.dp(2))
         }
         content.addView(ctx.hbox().apply {
             setPadding(ctx.dp(8), statusBarInset() + ctx.dp(Space.GUTTER), ctx.dp(8), ctx.dp(4))
@@ -124,7 +124,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             modes.addView(modeButton(it, it == now, compact = false), lp(MATCH, 0, 1f).apply { setMargins(0, ctx.dp(1), 0, ctx.dp(1)) })
         }
         val scopeRow = ctx.hbox().apply {
-            setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), 0)
+            setPadding(ctx.dp(8), ctx.dp(4), ctx.dp(8), 0)
             if (pkg != null) addView(ctx.chip("Use for $appLabel", forApp) { scope(true) }.oneLine(),
                 lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
             addView(ctx.chip("Use everywhere", !forApp) { scope(false) }.oneLine(), lp(0, WRAP, 1f))
@@ -135,9 +135,9 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             else -> ""
         }
         val sourceLine = ctx.text("${now.title} · ${if (source == ScreenModes.Source.APP) "$appLabel's own" else source.label}$hint", Type.S, color = Ink.MUTED)
-            .apply { setPadding(ctx.dp(12), ctx.dp(4), ctx.dp(12), ctx.dp(6)) }
+            .apply { setPadding(ctx.dp(12), ctx.dp(2), ctx.dp(12), ctx.dp(2)) }
         val actions = ctx.hbox().apply {
-            setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
+            setPadding(ctx.dp(8), ctx.dp(4), ctx.dp(8), ctx.dp(4))
             addView(ctx.inkButton("Full refresh", Type.M) { ScreenModes.fullRefresh() }.oneLine(), lp(WRAP, WRAP).apply { marginEnd = ctx.dp(6) })
             val level = ScreenModes.contrast(ctx)
             addView(ctx.inkButton("−", Type.XL) { ScreenModes.setContrast(ctx, level - ScreenModes.CONTRAST_STEP); render() }.apply {
@@ -249,7 +249,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
         // The grid hands each button its share of the free height; the text sits in the middle of it.
         gravity = Gravity.CENTER_VERTICAL
         minimumHeight = ctx.dp(if (compact) 40 else 44)
-        setPadding(ctx.dp(12), ctx.dp(if (compact) 4 else 2), ctx.dp(12), ctx.dp(if (compact) 4 else 2))
+        setPadding(ctx.dp(12), ctx.dp(if (compact) 4 else 0), ctx.dp(12), ctx.dp(if (compact) 4 else 0))
         addView(ctx.text(m.title, if (compact) Type.M else Type.L, bold = true, color = fg))
         addView(ctx.text(m.detail, if (compact) Type.XS else Type.S, color = if (on) Ink.PAPER else Ink.MUTED).apply {
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END

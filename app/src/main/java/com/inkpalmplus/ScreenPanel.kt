@@ -95,29 +95,24 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
     private fun render() {
         content.removeAllViews()
         val (now, source) = ScreenModes.resolve(ctx, pkg)
-        fun gear() = ctx.inkButton("⚙", Type.XL) {
-            ctx.startActivity(Intent(ctx, SectionActivity::class.java).putExtra(MainActivity.EXTRA_SECTION, MainActivity.SECTION_SCREEN)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
-            onClose()
-        }.apply { contentDescription = "Screen and light settings" }
-        fun close() = ctx.inkButton("✕", Type.L) { onClose() }
-        val title = ctx.text("SCREEN MODE", Type.XS, bold = true).apply { letterSpacing = 0.06f }
-        // Landscape: [Wi-Fi] [Bluetooth] [Airplane] ⚙ ✕ in one row. Portrait is too narrow for that, so the three
-        // toggles take the top row and ⚙ ✕ share the SCREEN MODE label's row.
-        val label: View = if (landscape) title.apply { setPadding(ctx.dp(12), ctx.dp(8), ctx.dp(12), ctx.dp(4)) }
-        else ctx.hbox().apply {
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(ctx.dp(12), 0, ctx.dp(8), ctx.dp(2))
-            addView(title, lp(0, WRAP, 1f))
-            addView(gear(), lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(6) })
-            addView(close(), lp(ctx.dp(48), WRAP))
+        // One row at the top, below the status bar: [Wi-Fi] [Bluetooth] [Airplane] ⚙ ✕. Portrait is too narrow for the
+        // ✕ as well (the toggle names would shrink past reading), and a tap outside the panel closes it anyway.
+        fun square(glyph: String, size: Float, desc: String, click: () -> Unit) = ctx.inkButton(glyph, size, click).apply {
+            setPadding(0, 0, 0, 0); contentDescription = desc
         }
-        if (landscape) content.addView(ctx.hbox().apply {
-            setPadding(ctx.dp(8), statusBarInset() + ctx.dp(Space.GUTTER), ctx.dp(10), ctx.dp(4))
+        val label = ctx.text("SCREEN MODE", Type.XS, bold = true).apply {
+            letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(6), ctx.dp(12), ctx.dp(3))
+        }
+        content.addView(ctx.hbox().apply {
+            setPadding(ctx.dp(8), statusBarInset() + ctx.dp(Space.GUTTER), ctx.dp(8), ctx.dp(4))
             addView(radioRow(), lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
-            addView(gear(), lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(6) })
-            addView(close(), lp(ctx.dp(48), WRAP))
-        }) else content.addView(radioRow(), lp(MATCH, WRAP).apply { setMargins(ctx.dp(8), statusBarInset() + ctx.dp(Space.GUTTER), ctx.dp(8), ctx.dp(3)) })
+            addView(square("⚙", Type.XL, "Screen and light settings") {
+                ctx.startActivity(Intent(ctx, SectionActivity::class.java).putExtra(MainActivity.EXTRA_SECTION, MainActivity.SECTION_SCREEN)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+                onClose()
+            }, lp(ctx.dp(48), ctx.dp(48)))
+            if (landscape) addView(square("✕", Type.L, "Close") { onClose() }, lp(ctx.dp(48), ctx.dp(48)).apply { marginStart = ctx.dp(6) })
+        })
         content.addView(View(ctx).apply { setBackgroundColor(Ink.INK) }, lp(MATCH, ctx.dp(2)))
 
         val modes = ctx.vbox().apply { setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }

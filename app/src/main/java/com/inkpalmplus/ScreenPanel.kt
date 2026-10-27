@@ -107,17 +107,17 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
         val label: View = if (landscape) title.apply { setPadding(ctx.dp(12), ctx.dp(8), ctx.dp(12), ctx.dp(4)) }
         else ctx.hbox().apply {
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(ctx.dp(12), ctx.dp(2), ctx.dp(8), ctx.dp(2))
+            setPadding(ctx.dp(12), 0, ctx.dp(8), ctx.dp(2))
             addView(title, lp(0, WRAP, 1f))
             addView(gear(), lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(6) })
             addView(close(), lp(ctx.dp(48), WRAP))
         }
         if (landscape) content.addView(ctx.hbox().apply {
-            setPadding(ctx.dp(8), ctx.dp(5), ctx.dp(10), ctx.dp(4))
+            setPadding(ctx.dp(8), statusBarInset() + ctx.dp(Space.GUTTER), ctx.dp(10), ctx.dp(4))
             addView(radioRow(), lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
             addView(gear(), lp(ctx.dp(48), WRAP).apply { marginEnd = ctx.dp(6) })
             addView(close(), lp(ctx.dp(48), WRAP))
-        }) else content.addView(radioRow(), lp(MATCH, WRAP).apply { setMargins(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(4)) })
+        }) else content.addView(radioRow(), lp(MATCH, WRAP).apply { setMargins(ctx.dp(8), statusBarInset() + ctx.dp(Space.GUTTER), ctx.dp(8), ctx.dp(3)) })
         content.addView(View(ctx).apply { setBackgroundColor(Ink.INK) }, lp(MATCH, ctx.dp(2)))
 
         val modes = ctx.vbox().apply { setPadding(ctx.dp(8), 0, ctx.dp(8), 0) }
@@ -126,10 +126,10 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
                 pair.forEach { addView(modeButton(it, it == now, compact = true), lp(0, WRAP, 1f).apply { setMargins(ctx.dp(2), ctx.dp(2), ctx.dp(2), ctx.dp(2)) }) }
             }, lp(MATCH, WRAP))
         } else ScreenMode.entries.forEach {
-            modes.addView(modeButton(it, it == now, compact = false), lp(MATCH, WRAP).apply { setMargins(0, ctx.dp(1), 0, ctx.dp(1)) })
+            modes.addView(modeButton(it, it == now, compact = false), lp(MATCH, WRAP).apply { setMargins(0, ctx.dp(1), 0, 0) })
         }
         val scopeRow = ctx.hbox().apply {
-            setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), 0)
+            setPadding(ctx.dp(8), ctx.dp(4), ctx.dp(8), 0)
             if (pkg != null) addView(ctx.chip("Use for $appLabel", forApp) { scope(true) }.oneLine(),
                 lp(0, WRAP, 1f).apply { marginEnd = ctx.dp(6) })
             addView(ctx.chip("Use everywhere", !forApp) { scope(false) }.oneLine(), lp(0, WRAP, 1f))
@@ -140,9 +140,9 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             else -> ""
         }
         val sourceLine = ctx.text("${now.title} · ${if (source == ScreenModes.Source.APP) "$appLabel's own" else source.label}$hint", Type.S, color = Ink.MUTED)
-            .apply { setPadding(ctx.dp(12), ctx.dp(4), ctx.dp(12), ctx.dp(6)) }
+            .apply { setPadding(ctx.dp(12), ctx.dp(2), ctx.dp(12), ctx.dp(3)) }
         val actions = ctx.hbox().apply {
-            setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
+            setPadding(ctx.dp(8), ctx.dp(4), ctx.dp(8), ctx.dp(4))
             addView(ctx.inkButton("Full refresh", Type.M) { ScreenModes.fullRefresh() }.oneLine(), lp(WRAP, WRAP).apply { marginEnd = ctx.dp(6) })
             val level = ScreenModes.contrast(ctx)
             addView(ctx.inkButton("−", Type.XL) { ScreenModes.setContrast(ctx, level - ScreenModes.CONTRAST_STEP); render() }.apply {
@@ -188,6 +188,14 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
                 content.addView(it)
             }
         }
+    }
+
+    /** The real status bar height (the panel is drawn over it): the window's inset, else Android's dimen. */
+    private fun statusBarInset(): Int {
+        val w = runCatching { root.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.statusBars())?.top }.getOrNull() ?: 0
+        if (w > 0) return w
+        val id = ctx.resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (id > 0) ctx.resources.getDimensionPixelSize(id) else 0
     }
 
     /** [Wi-Fi] [Bluetooth]: two equal 48 dp toggles in the header's place; filled black while on (or turning on). */
@@ -244,7 +252,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             addState(intArrayOf(android.R.attr.state_pressed), ctx.outline(if (on) 3 else 2, Radius.MEDIUM, Ink.PRESSED))
             addState(intArrayOf(), ctx.outline(if (on) 3 else 2, Radius.MEDIUM, if (on) Ink.INK else Ink.PAPER))
         }
-        setPadding(ctx.dp(12), ctx.dp(if (compact) 4 else 2), ctx.dp(12), ctx.dp(if (compact) 4 else 2))
+        setPadding(ctx.dp(12), ctx.dp(if (compact) 4 else 1), ctx.dp(12), ctx.dp(if (compact) 4 else 1))
         addView(ctx.text(m.title, if (compact) Type.M else Type.L, bold = true, color = fg))
         addView(ctx.text(m.detail, if (compact) Type.XS else Type.S, color = if (on) Ink.PAPER else Ink.MUTED).apply {
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
@@ -290,7 +298,7 @@ class LightBlock(private val ctx: QuickPanelService, private val s: Light.State,
         }
         val pills = mutableListOf<() -> Unit>()
         fun off(v: Int, more: String, less: String, same: String) =
-            if (v > 0) "$more +$v" else if (v < 0) "$less −$" + "{-v}" else same
+            if (v > 0) "$more +$v" else if (v < 0) "$less −${-v}" else same
         // − [label over slider] +, full width. Under Auto the slider is an offset: -50..+50 points around the curve,
         // centred (progress 0..100 = offset + 50), and the buttons step by 5.
         fun slider(bright: Boolean, label: () -> String, get: () -> Int, put: (Int) -> Unit) = addView(ctx.hbox().apply {

@@ -124,3 +124,18 @@ class MergedLogicTest {
         assertEquals(520..620, SleepImages.band(720))
     }
 }
+
+class RadiosTest {
+    @Test fun requestsAreKeyValueLines() {
+        assertEquals("wifi=1\n", Radios.request(Radios.Radio.WIFI, true))
+        assertEquals("bt=0\n", Radios.request(Radios.Radio.BT, false))
+        assertEquals("airplane=1\n", Radios.request(Radios.Radio.AIRPLANE, true))
+    }
+
+    @Test fun labelsAreShort() {
+        assertEquals("Wi-Fi\nOn", Radios.label(Radios.Radio.WIFI, Radios.State.ON))
+        assertEquals("Bluetooth\nTurning on…", Radios.label(Radios.Radio.BT, Radios.State.TURNING_ON))
+        assertEquals("svc bluetooth disable", Radios.shell(Radios.Radio.BT, false))
+        assertEquals("cmd connectivity airplane-mode enable", Radios.shell(Radios.Radio.AIRPLANE, true))
+    }
+}

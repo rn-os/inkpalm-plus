@@ -27,6 +27,10 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
     private val appLabel = pkg?.let { RecentApps.Info.label(ctx, it) }
     /** Where the next tap on a mode goes: the app in front, or everywhere. Starts on the app when it has its own. */
     private var forApp = pkg != null && ScreenModes.own(ctx, pkg) != null
+    private val radioViews = LinkedHashMap<Radios.Radio, TextView>()
+    /** A switch in flight: what to show (Turning on…) and the state that ends it. */
+    private val pending = HashMap<Radios.Radio, Pair<Radios.State, Radios.State>>()
+    private var shown = false
     private var light: Light.State? = null
     private var lightBlock: LightBlock? = null
     private val landscape get() = ctx.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -57,9 +61,18 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.TOP or if (onLeft) Gravity.START else Gravity.END }
         wm.addView(root, lp)
+        shown = true
+        ctx.registerReceiver(radioReceiver, android.content.IntentFilter().apply {
+            addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION)
+            addAction(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED)
+            addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
+        })
+        refreshRadios()
     }
 
     fun dismiss(wm: WindowManager) {
+        shown = false
+        runCatching { ctx.unregisterReceiver(radioReceiver) }
         runCatching { wm.removeView(root) }
     }
 
@@ -83,11 +96,8 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
         content.removeAllViews()
         val (now, source) = ScreenModes.resolve(ctx, pkg)
         val header = ctx.hbox().apply {
-            setPadding(ctx.dp(14), ctx.dp(if (landscape) 6 else 10), ctx.dp(10), ctx.dp(if (landscape) 4 else 8))
-            addView(ctx.text("Screen & light", Type.XL, bold = true).apply {
-                maxLines = 1
-                setAutoSizeTextTypeUniformWithConfiguration(15, 19, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
-            }, lp(0, WRAP, 1f))
+            setPadding(ctx.dp(8), ctx.dp(if (landscape) 5 else 8), ctx.dp(10), ctx.dp(if (landscape) 4 else 6))
+            addView(View(ctx), lp(0, 0, 1f))
             addView(ctx.inkButton("⚙", Type.XL) {
                 ctx.startActivity(Intent(ctx, SectionActivity::class.java).putExtra(MainActivity.EXTRA_SECTION, MainActivity.SECTION_SCREEN)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
@@ -96,6 +106,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             addView(ctx.inkButton("✕", Type.L) { onClose() }, lp(ctx.dp(48), WRAP))
         }
         content.addView(header)
+        content.addView(radioRow(), lp(MATCH, WRAP).apply { setMargins(ctx.dp(8), 0, ctx.dp(8), ctx.dp(6)) })
         content.addView(View(ctx).apply { setBackgroundColor(Ink.INK) }, lp(MATCH, ctx.dp(2)))
 
         val label = ctx.text("SCREEN MODE", Type.XS, bold = true).apply { letterSpacing = 0.06f; setPadding(ctx.dp(12), ctx.dp(8), ctx.dp(12), ctx.dp(4)) }
@@ -167,6 +178,51 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
                 content.addView(it)
             }
         }
+    }
+
+    /** [Wi-Fi] [Bluetooth]: two equal 48 dp toggles in the header's place; filled black while on (or turning on). */
+    private fun radioRow(): View {
+        radioViews.clear()
+        return ctx.hbox().apply {
+            Radios.Radio.entries.forEachIndexed { i, r ->
+                val v = ctx.text("", Type.S, bold = true).apply {
+                    gravity = Gravity.CENTER; maxLines = 2; minHeight = ctx.dp(48)
+                    setPadding(ctx.dp(2), 0, ctx.dp(2), 0)
+                    setAutoSizeTextTypeUniformWithConfiguration(9, 12, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+                    setOnClickListener { toggleRadio(r) }
+                }
+                radioViews[r] = v
+                addView(v, lp(0, ctx.dp(48), 1f).apply { if (i < Radios.Radio.entries.size - 1) marginEnd = ctx.dp(4) })
+            }
+            refreshRadios()
+        }
+    }
+
+    private fun refreshRadios() = radioViews.forEach { (r, v) ->
+        val s = pending[r]?.takeIf { Radios.state(ctx, r) != it.second }?.first ?: Radios.state(ctx, r)
+        val on = with(Radios) { s.wantsOn() }
+        v.text = Radios.label(r, s)
+        v.background = ctx.outline(2, Radius.SMALL, if (on) Ink.INK else Ink.PAPER)
+        v.setTextColor(if (on) Ink.PAPER else Ink.INK)
+        v.contentDescription = "${r.title} ${Radios.label(r, s).substringAfter('\n').lowercase()}"
+        v.isEnabled = s != Radios.State.NONE
+    }
+
+    private fun toggleRadio(r: Radios.Radio) {
+        val now = with(Radios) { state(ctx, r).wantsOn() }
+        val target = !now
+        pending[r] = (if (target) Radios.State.TURNING_ON else Radios.State.TURNING_OFF) to
+            (if (target) Radios.State.ON else Radios.State.OFF)
+        refreshRadios()
+        Shell.background({ Radios.set(ctx, r, target) }) { asked ->
+            if (!asked) { pending.remove(r); onClose() }   // Android's own screen opened over the panel
+            else Shell.main.postDelayed({ pending.remove(r); if (shown) refreshRadios() }, 8000)
+            if (shown) refreshRadios()
+        }
+    }
+
+    private val radioReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: android.content.Context, i: Intent) { refreshRadios() }
     }
 
     private fun TextView.oneLine() = apply { maxLines = 1; setAutoSizeTextTypeUniformWithConfiguration(10, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP) }

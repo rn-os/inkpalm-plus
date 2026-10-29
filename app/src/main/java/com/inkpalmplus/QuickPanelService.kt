@@ -445,6 +445,11 @@ class QuickPanelService : AccessibilityService() {
             // Always-on display: "aod_face CLOCK", "aod_interval 5", "aod_render" (draw and install now),
             // "aod_soon 20" (the Live alarm in 20 s), "aod_fire" (one Live update now), "aod_arrow" / "aod_arrow 1".
             "aod_face" -> { val f = Aod.Face.valueOf(value.uppercase()); Eink.post { Log.i(TAG, "aod_face ${f.name}: ${Aod.setFace(this, f) ?: "ok"}") }; true }
+            // The Agenda face's style ("aod_agenda WEEK"), and every style in both orientations to files/ ("aod_agenda_dump").
+            "aod_agenda" -> { val st = Agenda.Style.valueOf(value.uppercase()); Eink.post { Aod.setAgendaStyle(this, st) }; true }
+            "aod_agenda_dump" -> { Eink.post { Aod.dumpAgenda(this) }; true }
+            // The Photo and Picture faces' style ("aod_photo SMOOTH").
+            "aod_photo" -> { val st = Dither.Style.valueOf(value.uppercase()); Eink.post { Log.i(TAG, "aod_photo ${st.name}: ${Aod.setPhotoStyle(this, st) ?: "ok"}") }; true }
             "aod_interval" -> { Aod.setInterval(this, value.toInt()); true }
             "aod_render" -> { Aod.prepare(this, force = true); true }
             "aod_soon" -> { Aod.schedule(this, value.toLong() * 1000); true }

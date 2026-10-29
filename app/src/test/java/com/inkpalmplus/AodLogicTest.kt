@@ -117,4 +117,58 @@ class AodLogicTest {
         o.awake(3); o.sleep()
         assertEquals(3, o.current { 0 })
     }
+
+    /** Android's accelerometer axes in the panel's natural portrait: +g along the edge pointing up. */
+    @Test fun gravityGivesThePhysicalOrientation() {
+        val g = 9.8f
+        assertEquals(0, Aod.rotationFromGravity(0f, g, 0f))      // upright portrait: top edge up
+        assertEquals(1, Aod.rotationFromGravity(g, 0f, 0f))      // turned counter-clockwise: right edge up → ROTATION_90
+        assertEquals(2, Aod.rotationFromGravity(0f, -g, 0f))     // upside down
+        assertEquals(3, Aod.rotationFromGravity(-g, 0f, 0f))     // turned clockwise: left edge up → ROTATION_270
+        // Held at a reading angle (leaning back 40°): still decided.
+        assertEquals(1, Aod.rotationFromGravity(7.5f, 0.5f, 6.3f))
+        assertEquals(0, Aod.rotationFromGravity(-0.8f, 7.5f, 6.3f))
+    }
+
+    @Test fun ambiguousGravityKeepsTheHeldOrientation() {
+        assertNull(Aod.rotationFromGravity(0.2f, -0.3f, 9.8f))   // flat on a table, face up
+        assertNull(Aod.rotationFromGravity(0.1f, 0.4f, -9.8f))   // face down
+        assertNull(Aod.rotationFromGravity(6.9f, 6.9f, 0f))      // 45°
+        assertNull(Aod.rotationFromGravity(4f, 1f, 8.9f))        // tilted a little off flat: too weak
+        assertEquals(1, Aod.rotationFromGravity(6.5f, 0.7f, 7.3f)) // leaning back on a stand (device log)
+        // The margins: 4.5 m/s² on the dominant axis, 2.5 over the other.
+        assertNull(Aod.rotationFromGravity(4.3f, 0f, 8.8f))
+        assertEquals(1, Aod.rotationFromGravity(4.7f, 0f, 8.6f))
+        assertNull(Aod.rotationFromGravity(7.4f, 5.0f, 4.4f))    // 2.4 over the other
+        assertEquals(1, Aod.rotationFromGravity(7.6f, 5.0f, 4.0f)) // 2.6 over
+        assertEquals(3, Aod.rotationFromGravity(-7.6f, -5.0f, 4.0f))
+        assertEquals(2, Aod.rotationFromGravity(5.0f, -7.6f, 4.0f))
+    }
+
+    @Test fun onlySteadyReadingsCount() {
+        assertNull(Aod.steady(listOf(floatArrayOf(9.8f, 0f, 0f), floatArrayOf(9.8f, 0f, 0f), floatArrayOf(9.8f, 0f, 0f))))
+        val still = List(4) { floatArrayOf(9.6f + it * 0.1f, 0.2f, 0.5f) }
+        assertEquals(9.75f, Aod.steady(still)!![0], 0.001f)
+        // Moving: one sample 3 m/s² off.
+        assertNull(Aod.steady(still.take(3) + listOf(floatArrayOf(6.6f, 3f, 0.5f))))
+        // Only the last four count.
+        assertEquals(0f, Aod.steady(listOf(floatArrayOf(0f, 9.8f, 0f)) + List(4) { floatArrayOf(0f, 0f, 9.8f) })!![1], 0f)
+    }
+
+    @Test fun aTurnAsleepIsHeldUntilTheUserWakes() {
+        val o = Aod.Orientation()
+        assertEquals(0, o.current { 0 })
+        o.sleep()
+        assertFalse(o.turned(0))                // still portrait
+        assertTrue(o.turned(1))                 // turned to landscape while asleep
+        assertEquals(1, o.current { 0 })        // the display's 0 asleep is still ignored
+        assertTrue(o.asleep)
+        o.awake(0)
+        assertEquals(1, o.held)
+        assertTrue(o.turned(0))                 // and back
+        assertEquals(0, o.current { 3 })
+        o.wake()
+        assertFalse(o.asleep)
+        assertEquals(3, o.current { 3 })
+    }
 }

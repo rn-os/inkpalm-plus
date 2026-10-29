@@ -39,7 +39,9 @@ import java.util.concurrent.TimeUnit
  * Asleep the display is at rotation 0, and an app held in landscape turns it back at the wake, 1-3 s in; Android hides
  * overlays during a turn until they have drawn again, which showed the app for a moment. So the cover asks for the
  * orientation held at the user's sleep ([orientationFor]): the display turns while still asleep, under the cover, and
- * the wake itself doesn't turn.
+ * the wake itself doesn't turn. If the phone was turned while asleep (auto-rotate on), [Aod] has already moved the
+ * held orientation to the physical one before drawing, so the face, the held orientation and the counter-turn all
+ * follow the same new rotation.
  */
 object WakeCover {
     private const val TAG = "InkPalmPlus"

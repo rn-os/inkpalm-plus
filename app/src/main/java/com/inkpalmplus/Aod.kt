@@ -10,12 +10,17 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.hardware.display.DisplayManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.CalendarContract
+import android.provider.Settings
 import android.text.format.DateFormat
 import android.util.Log
 import android.view.Display
@@ -24,7 +29,12 @@ import java.io.File
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * The always-on sleep screen (KompaktOS; mockups 20, 21): a face drawn by InkPalm+ and handed to the vendor HWC as
@@ -40,12 +50,17 @@ import java.util.zip.ZipFile
  * power-off reset); [WakeCover] shows the new face over everything during it, so the panel never shows the home
  * screen or the last app. Updates continue while charging (the cost is then free). Below [LOW_BATTERY] % on battery the
  * face becomes the low-battery box, drawn once, and the updates stop.
+ *
+ * The face keeps the orientation the phone was held in at the user's sleep ([Orientation]); with auto-rotate on, each
+ * Live update first reads the accelerometer ([reorient]) and turns the face if the phone was turned while asleep.
  */
 object Aod {
     private const val TAG = "InkPalmPlus"
     private const val K_FACE = "aod_face"
     private const val K_INTERVAL = "aod_interval"
     private const val K_LOW_SHOWN = "aod_low_shown"
+    private const val K_AGENDA = "aod_agenda_style"
+    private const val K_PHOTO_STYLE = "aod_photo_style"
     const val LOW_BATTERY = 10
     val INTERVALS = listOf(0, 5, 15, 30, 60)
     const val DEFAULT_INTERVAL = 5
@@ -91,6 +106,36 @@ object Aod {
         else -> 0
     }
 
+    /** Gravity along the dominant screen axis must reach this (m/s²) for an orientation to be decided: the screen
+     *  tilted up at least ~27° from flat. A phone leaning back on a stand still counts (2026-10-29: propped at ~45°,
+     *  x=6.5 z=7.3, was kept as before when z had to be smaller) ... */
+    const val GRAVITY_MIN = 4.5f
+    /** ... and beat the other screen axis by this much (no decision near 45°). */
+    const val GRAVITY_MARGIN = 2.5f
+
+    /**
+     * The display rotation that shows a face upright for the accelerometer's gravity reading ([x], [y], [z], m/s²), or
+     * null when it can't be told: (near) flat, or turned near 45° between portrait and landscape. Android's sensor axes, in the
+     * panel's natural portrait: x to the right edge, y to the top edge, z out of the screen; at rest a reading is +g
+     * along the axis pointing up. So y up is ROTATION_0, x up (the top edge turned to the left) ROTATION_90, y down
+     * ROTATION_180, x down ROTATION_270: as Android's own WindowOrientationListener (angle = -atan2(-x, y)).
+     */
+    fun rotationFromGravity(x: Float, y: Float, z: Float): Int? {
+        val ax = abs(x); val ay = abs(y); val big = max(ax, ay)
+        if (big < GRAVITY_MIN || big - min(ax, ay) < GRAVITY_MARGIN) return null
+        return if (ax > ay) { if (x > 0) Surface.ROTATION_90 else Surface.ROTATION_270 }
+        else { if (y > 0) Surface.ROTATION_0 else Surface.ROTATION_180 }
+    }
+
+    /** The mean of the last [n] samples (x, y, z) when each axis stays within [spread] m/s² of it (the phone is
+     *  still), else null. */
+    fun steady(samples: List<FloatArray>, n: Int = 4, spread: Float = 1.5f): FloatArray? {
+        if (samples.size < n) return null
+        val last = samples.takeLast(n)
+        val mean = FloatArray(3) { a -> last.map { it[a] }.average().toFloat() }
+        return mean.takeIf { last.all { s -> (0..2).all { a -> abs(s[a] - mean[a]) <= spread } } }
+    }
+
     fun isLow(level: Int, plugged: Boolean) = !plugged && level in 0 until LOW_BATTERY
 
     /** "About 4% of battery a day." and the detail, for an update interval (0 = Frozen). Estimates: ~3 s awake at
@@ -117,6 +162,31 @@ object Aod {
 
     fun interval(c: Context): Int = Prefs(c).sp.getInt(K_INTERVAL, DEFAULT_INTERVAL)
 
+    /** How the Agenda face lays out the day ([Agenda.Style]); Classic until one is picked. */
+    fun agendaStyle(c: Context): Agenda.Style = Agenda.Style.of(Prefs(c).sp.getString(K_AGENDA, null))
+
+    /** Picks the Agenda face's [style] and, when Agenda is the face, installs it. Blocking (on [Eink.worker]). */
+    fun setAgendaStyle(c: Context, style: Agenda.Style): String? {
+        Prefs(c).sp.edit().putString(K_AGENDA, style.name).apply()
+        lastKey = null
+        if (face(c) == Face.AGENDA) install(c, redraw = false, force = true)
+        return null
+    }
+
+    /** How the Photo and Picture faces dither the picture ([Dither.Style]); Crisp until one is picked. */
+    fun photoStyle(c: Context): Dither.Style = Dither.Style.of(Prefs(c).sp.getString(K_PHOTO_STYLE, null))
+
+    /** Picks the Photo style and, when Photo or Picture is the face, installs it again. Error or null. Blocking (on [Eink.worker]). */
+    fun setPhotoStyle(c: Context, style: Dither.Style): String? {
+        Prefs(c).sp.edit().putString(K_PHOTO_STYLE, style.name).apply()
+        lastKey = null
+        return when (face(c)) {
+            Face.PHOTO -> { install(c, redraw = false, force = true); null }
+            Face.PICTURE -> setFace(c, Face.PICTURE)
+            else -> null
+        }
+    }
+
     fun setInterval(c: Context, minutes: Int) {
         Prefs(c).sp.edit().putInt(K_INTERVAL, minutes).apply()
         prepare(c, force = true)
@@ -140,7 +210,7 @@ object Aod {
         val err = when (face) {
             Face.DEFAULT -> if (Eink.bridgeWrite("standby.req", "reset=1\n")) null else "the bridge isn't there"
             Face.PICTURE -> if (!hasPicture(c)) "no picture yet" else runCatching {
-                picture(c).copyTo(File(c.filesDir, "standby.png"), overwrite = true)
+                installPicture(c)
                 if (Eink.bridgeWrite("standby.req", "apply=1\n")) null else "the bridge isn't there"
             }.getOrElse { it.toString() }
             else -> null
@@ -150,6 +220,22 @@ object Aod {
         lastKey = null
         if (face.drawn) install(c, redraw = false, force = true)
         return null
+    }
+
+    /** The picture (already the panel's 720×1440 portrait) as files/standby.png: copied as it is for Plain, else
+     *  dithered at that size. */
+    private fun installPicture(c: Context) {
+        val out = File(c.filesDir, "standby.png")
+        val style = photoStyle(c)
+        if (style == Dither.Style.PLAIN) { picture(c).copyTo(out, overwrite = true); return }
+        val t0 = SystemClock.uptimeMillis()
+        val bmp = BitmapFactory.decodeFile(picture(c).path, BitmapFactory.Options().apply { inMutable = true }) ?: error("unreadable picture")
+        Dither.apply(bmp, style)
+        val tmp = File(c.filesDir, "standby.png.tmp")
+        tmp.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        bmp.recycle()
+        if (!tmp.renameTo(out)) error("couldn't write the picture")
+        Log.i(TAG, "aod: picture ${style.name} in ${SystemClock.uptimeMillis() - t0} ms")
     }
 
     /** Before faces: the picked picture lived only in files/standby.png (and /data/misc). Keep it as the picture. */
@@ -203,14 +289,21 @@ object Aod {
         return sent
     }
 
-    /** A small picture of [face] with today's data, portrait, for the settings grid (null for Moaan's). Blocking. */
-    fun thumbnail(c: Context, face: Face): Bitmap? {
+    /** A small picture of [face] with today's data, portrait, for the settings grid (null for Moaan's); for Agenda,
+     *  in [style] (else the one picked); for Photo and Picture, in [photoStyle] (else the one picked). The picture is
+     *  dithered at the thumbnail's size, so its dots show on screen as they will on the sleep screen (a scaled-down
+     *  dither would blur back to grey). Blocking. */
+    fun thumbnail(c: Context, face: Face, style: Agenda.Style? = null, photoStyle: Dither.Style? = null): Bitmap? {
+        val dots = photoStyle ?: photoStyle(c)
         val big = when {
             face == Face.DEFAULT -> return null
             face == Face.PICTURE -> { photo(c); BitmapFactory.decodeFile(picture(c).path) ?: return null }
-            else -> AodFaces.render(face, collect(c, face, false).copy(rotation = Surface.ROTATION_0))
+            else -> AodFaces.render(face, collect(c, face, false).copy(rotation = Surface.ROTATION_0, agenda = style, photoStyle = Dither.Style.PLAIN))
         }
-        return Bitmap.createScaledBitmap(big, AodFaces.W / 4, AodFaces.H / 4, true).also { big.recycle() }
+        val small = Bitmap.createScaledBitmap(big, AodFaces.W / 4, AodFaces.H / 4, true).also { if (it !== big) big.recycle() }
+        if ((face == Face.PICTURE || face == Face.PHOTO) && dots != Dither.Style.PLAIN)
+            return (if (small.isMutable) small else small.copy(Bitmap.Config.ARGB_8888, true).also { small.recycle() }).also { Dither.apply(it, dots) }
+        return small
     }
 
     /** A test face (debug hook): an arrow to the top of the screen as it's held, to check the turn. Blocking. */
@@ -222,6 +315,19 @@ object Aod {
         lastKey = null
         Eink.bridgeWrite("standby.req", "apply=1\n")
         Log.i(TAG, "aod: arrow face installed for rotation $rot")
+    }
+
+    /** Every Agenda style, portrait and landscape, as files/agenda_<STYLE>_<rotation>.png, turned upright (debug hook,
+     *  for checking the layouts off the sleep screen). Blocking. */
+    fun dumpAgenda(c: Context) {
+        val data = collect(c, Face.AGENDA, false)
+        for (style in Agenda.Style.entries) for (rot in listOf(Surface.ROTATION_0, Surface.ROTATION_90)) {
+            val bmp = AodFaces.render(Face.AGENDA, data.copy(rotation = rot, agenda = style))
+            val up = if (rot == Surface.ROTATION_0) bmp else AodFaces.turnBack(bmp, Aod.degreesFor(rot))
+            File(c.filesDir, "agenda_${style.name}_$rot.png").outputStream().use { up.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            up.recycle()
+        }
+        Log.i(TAG, "aod: agenda styles dumped (${data.events?.size ?: "no access"} events)")
     }
 
     private fun collect(c: Context, face: Face, lowOverride: Boolean?): AodFaces.Data {
@@ -238,6 +344,8 @@ object Aod {
             low = lowOverride ?: isLow(level, plugged),
             live = live,
             events = if (face == Face.AGENDA) events(c, now) else null,
+            agenda = agendaStyle(c),
+            photoStyle = photoStyle(c),
             book = if (face == Face.READING) book(c) else null,
             photo = if (face == Face.PHOTO) photo(c) else null,
             rotation = rotations.current(c),
@@ -265,27 +373,40 @@ object Aod {
     fun displayRotation(c: Context): Int =
         c.getSystemService(DisplayManager::class.java)?.getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: Surface.ROTATION_0
 
-    /** The next 3 events (up to a week ahead), or null without calendar access. */
+    /**
+     * The events from the start of this week (or of today, if earlier) to a week from now or the end of this week,
+     * whichever is later, or null without calendar access: the styles pick from them (the next 3, today, tomorrow,
+     * the week's dots; [Agenda]). At most [MAX_EVENTS], the soonest.
+     */
     private fun events(c: Context, now: Long): List<AodFaces.Event>? {
         if (needsCalendar(c)) return null
+        val week = Agenda.weekBounds(now)
+        val from = min(week.first(), Agenda.midnight(now))
+        val to = max(week.last(), now + 7 * Agenda.DAY)
         return runCatching {
             val out = ArrayList<AodFaces.Event>()
             val proj = arrayOf(CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN, CalendarContract.Instances.END,
                 CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.EVENT_LOCATION)
-            CalendarContract.Instances.query(c.contentResolver, proj, now - 86_400_000L, now + 7 * 86_400_000L)?.use { cur ->
+            CalendarContract.Instances.query(c.contentResolver, proj, from - Agenda.DAY, to)?.use { cur ->
                 while (cur.moveToNext()) {
                     val allDay = cur.getInt(3) == 1
                     var begin = cur.getLong(1); var end = cur.getLong(2)
                     if (allDay) {   // stored as UTC midnights: the same dates, local
                         begin = utcDayToLocal(begin); end = utcDayToLocal(end)
                     }
-                    if (end <= now) continue
+                    if (end <= from && begin < from) continue
                     out += AodFaces.Event(cur.getString(0)?.takeIf { it.isNotBlank() } ?: "(No title)", begin, end, allDay, cur.getString(4)?.takeIf { it.isNotBlank() })
                 }
             }
-            out.sortedWith(compareBy({ it.begin }, { !it.allDay })).take(3)
+            out.sortedWith(compareBy({ it.begin }, { !it.allDay })).let { all ->
+                // Many events: keep the week's past ones only as far as room allows; the coming ones first.
+                if (all.size <= MAX_EVENTS) all else (all.filter { it.end > now }.take(MAX_EVENTS) + all.filter { it.end <= now }.takeLast(MAX_EVENTS / 4))
+                    .sortedWith(compareBy({ it.begin }, { !it.allDay }))
+            }
         }.onFailure { Log.w(TAG, "aod: calendar: $it") }.getOrDefault(emptyList())
     }
+
+    private const val MAX_EVENTS = 200
 
     private fun utcDayToLocal(utc: Long): Long {
         val u = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = utc }
@@ -350,7 +471,8 @@ object Aod {
     /**
      * The orientation the faces are drawn in. Awake it is the display's; the last one seen is kept, and at the user's
      * sleep it is frozen for every render until the user wakes: asleep (and in the bridge's redraw wake) Android reports
-     * rotation 0, which would turn a landscape face to portrait.
+     * rotation 0, which would turn a landscape face to portrait. A Live update may move it to the phone's physical
+     * orientation ([turned], from the accelerometer).
      */
     class Orientation {
         @Volatile private var last = Surface.ROTATION_0
@@ -362,6 +484,11 @@ object Aod {
         fun sleep() { frozen = last }
         /** The user's wake: back to the display's rotation. */
         fun wake() { frozen = null }
+        /** The rotation held now. */
+        val held: Int get() = frozen ?: last
+        /** Asleep, the phone was found turned to [r] ([reorient]): held from now on (the user's wake still clears it).
+         *  True when it changed. */
+        fun turned(r: Int): Boolean { val was = held; frozen = r; last = r; return was != r }
         /** The rotation to draw with, [live] being the display's now (called only when needed). */
         fun current(live: () -> Int): Int = frozen ?: live().also { last = it }
         fun current(c: Context): Int = current { displayRotation(c) }
@@ -464,12 +591,59 @@ object Aod {
         val low = isLow(level, plugged)
         val sp = Prefs(c).sp
         if (low && sp.getBoolean(K_LOW_SHOWN, false)) { Log.i(TAG, "aod: battery $level%, updates stopped"); return }
+        reorient(c)
         // The bridge wakes the screen for ~5 s; until its SCREEN_OFF, the wake is ours.
         expectWake(15_000L)
         if (!install(c, redraw = true, force = true, low = low)) { redrawUntil = 0; return }
         if (low) { sp.edit().putBoolean(K_LOW_SHOWN, true).apply(); Log.i(TAG, "aod: battery $level%, last update"); return }
         if (interval(c) > 0) schedule(c)
     }
+
+    /** Auto-rotate (Settings.System.accelerometer_rotation) is on. */
+    private fun autoRotate(c: Context) =
+        runCatching { Settings.System.getInt(c.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1 }.getOrDefault(false)
+
+    /**
+     * Asleep, before a Live update: the phone may have been turned since the user's sleep. Asleep the window manager
+     * reports rotation 0 whatever the phone does, so the accelerometer is read directly (up to [SENSOR_MS], until 4
+     * steady samples) and, when the gravity decides it ([rotationFromGravity]), that orientation is held from now on:
+     * the face and [WakeCover] (its counter-turn and held orientation) both take it from [Orientation]. Flat, near 45°,
+     * moving, or no samples: the held one stays. Only with auto-rotate on. Blocking (on [Eink.worker], under the
+     * alarm's wake lock).
+     */
+    private fun reorient(c: Context) {
+        val was = rotations.held
+        if (!autoRotate(c)) { Log.i(TAG, "aod: orient: auto-rotate off, keep $was"); return }
+        val sm = c.getSystemService(SensorManager::class.java)
+        val sensor = sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        if (sensor == null) { Log.w(TAG, "aod: orient: no accelerometer, keep $was"); return }
+        val t0 = SystemClock.uptimeMillis()
+        val samples = ArrayList<FloatArray>()
+        val done = CountDownLatch(1)
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) {
+                synchronized(samples) {
+                    samples += floatArrayOf(e.values[0], e.values[1], e.values[2])
+                    if (steady(samples) != null) done.countDown()
+                }
+            }
+            override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+        }
+        if (!sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME, Shell.main)) {
+            Log.w(TAG, "aod: orient: couldn't listen to ${sensor.name}, keep $was"); return
+        }
+        done.await(SENSOR_MS, TimeUnit.MILLISECONDS)
+        sm.unregisterListener(listener)
+        val (n, mean, lastSample) = synchronized(samples) { Triple(samples.size, steady(samples), samples.lastOrNull()) }
+        val r = mean?.let { rotationFromGravity(it[0], it[1], it[2]) }
+        val turned = r != null && rotations.turned(r)
+        fun f(v: FloatArray?) = v?.joinToString(",") { "%.1f".format(Locale.US, it) } ?: "-"
+        Log.i(TAG, "aod: orient: ${sensor.name} n=$n in ${SystemClock.uptimeMillis() - t0} ms xyz=${f(mean ?: lastSample)}" +
+            "${if (mean == null) " (not steady)" else ""} → ${r ?: "keep"}, held $was → ${rotations.held}${if (turned) " (turned)" else ""}")
+    }
+
+    /** The longest accelerometer read before a Live update. */
+    private const val SENSOR_MS = 600L
 
     /** The Live update alarm. Holds a wake lock while the bridge wakes and sleeps the screen. Not exported: only
      *  InkPalm+'s own PendingIntent reaches it (and root: `am broadcast -n com.inkpalmplus/.Aod\$Alarm` is one

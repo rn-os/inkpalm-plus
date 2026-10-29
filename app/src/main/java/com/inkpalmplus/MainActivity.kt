@@ -64,6 +64,8 @@ open class MainActivity : Activity() {
             SECTION_LIGHT -> "Front light" to "How the light follows Android"
             SECTION_SLEEP -> "Sleep & power" to "Sleep screen, power-off screen, auto power-off"
             SECTION_AOD -> "Sleep screen" to "What the screen shows while the phone is off"
+            SECTION_AGENDA -> "Agenda style" to "How the Agenda sleep screen lays out your day"
+            SECTION_PHOTO -> "Photo style" to "How your picture is drawn on the sleep screen"
             SECTION_READING -> "Reading" to "Your reader app and its last book"
             SECTION_TOUCH -> "Buttons" to "The touch button below the screen"
             SECTION_ABOUT -> "About" to "Version, permissions and privacy"
@@ -120,6 +122,8 @@ open class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // Back from Agenda or Photo style: the tile shows the style picked there.
+        if (section == SECTION_AOD) thumbs = null
         // The panel may have been switched off by a force-stop (Moaan's Clear Memory): put it back.
         Shell.background({ Survival.repair(this, "app opened") }) { reload() }
     }
@@ -145,6 +149,8 @@ open class MainActivity : Activity() {
             SECTION_LIGHT -> renderLight()
             SECTION_SLEEP -> renderSleep()
             SECTION_AOD -> renderAod()
+            SECTION_AGENDA -> renderAgenda()
+            SECTION_PHOTO -> renderPhotoStyle()
             SECTION_READING -> renderReading()
             SECTION_ABOUT -> renderAbout()
             else -> { renderAsk(); renderHome() }
@@ -184,7 +190,7 @@ open class MainActivity : Activity() {
         if (SleepImages.supported()) {
             body.addView(divider())
             val f = Aod.face(this)
-            val sleep = if (f == Aod.Face.DEFAULT) "Moaan's" else f.title + if (f.drawn) " · ${updateLabel(Aod.interval(this))}" else ""
+            val sleep = if (f == Aod.Face.DEFAULT) "Moaan's" else faceLabel(f) + if (f.drawn) " · ${updateLabel(Aod.interval(this))}" else ""
             val auto = if (AutoOff.supported()) " · auto off ${AutoOff.hours(this).let { if (it == 0) "never" else "$it h" }}" else ""
             body.addView(navRow("Sleep & power", "Sleep screen: $sleep · power-off: ${SleepImages.powerOff(this).title}$auto", SECTION_SLEEP))
         }
@@ -460,13 +466,16 @@ open class MainActivity : Activity() {
 
     private fun updateLabel(minutes: Int) = if (minutes <= 0) "Frozen" else "every $minutes min"
 
+    /** "Agenda (Week)" for a style other than Classic; else the face's name. */
+    private fun faceLabel(f: Aod.Face) = f.title + Aod.agendaStyle(this).takeIf { f == Aod.Face.AGENDA && it != Agenda.Style.CLASSIC }?.let { " (${it.title})" }.orEmpty()
+
     private fun renderSleep() {
         body.removeAllViews()
         if (!SleepImages.supported()) { body.addView(note("Needs KompaktOS's bridge.")); return }
         val f = Aod.face(this)
         body.addView(navRow("Sleep screen", when {
             f == Aod.Face.DEFAULT -> "Moaan's picture"
-            f.drawn -> "${f.title} · ${updateLabel(Aod.interval(this)).replaceFirstChar { it.uppercase() }}"
+            f.drawn -> "${faceLabel(f)} · ${updateLabel(Aod.interval(this)).replaceFirstChar { it.uppercase() }}"
             else -> "Your picture"
         }, SECTION_AOD))
         body.addView(divider())
@@ -514,11 +523,21 @@ open class MainActivity : Activity() {
             addView(text(hint, Type.S, color = Ink.MUTED), lp(0, WRAP, 1f))
             addView(inkButton("Choose picture…") { pickImage(PICK_SLEEP) }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
         })
+        if ((face == Aod.Face.PHOTO || face == Aod.Face.PICTURE) && Aod.hasPicture(this)) {
+            val style = Aod.photoStyle(this)
+            body.addView(navRow("Photo style", "${style.title} · ${style.detail}", SECTION_PHOTO), lp(MATCH, WRAP).apply { topMargin = dp(4) })
+            body.addView(divider())
+        }
+        if (face == Aod.Face.AGENDA) {
+            val style = Aod.agendaStyle(this)
+            body.addView(navRow("Agenda style", "${style.title} · ${style.detail}", SECTION_AGENDA), lp(MATCH, WRAP).apply { topMargin = dp(4) })
+            body.addView(divider())
+        }
         if (face == Aod.Face.AGENDA && Aod.needsCalendar(this)) body.addView(vbox().apply {
             background = outline(3)
             setPadding(dp(14), dp(12), dp(14), dp(12))
             addView(text("Calendar access needed", Type.L, bold = true))
-            addView(text("The Agenda face shows your next 3 events. Without access it says so on the sleep screen.", Type.S, color = Ink.MUTED))
+            addView(text("The Agenda face shows your events. Without access it says so on the sleep screen.", Type.S, color = Ink.MUTED))
             addView(inkButton("Allow") { askCalendar(fromSettings = true) }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
         }, lp(MATCH, WRAP).apply { setMargins(g, dp(8), g, dp(4)) })
 
@@ -545,6 +564,58 @@ open class MainActivity : Activity() {
         body.addView(note("In landscape the face is drawn sideways to match. The face is redrawn every minute while the screen is on, so it's ready when you press the power button."))
     }
 
+    // ---- Agenda style (docs/mockups/aod/agenda-variants/) ---------------------------------------------
+
+    /** The styles drawn with today's events, off the main thread; kept while the screen is open. */
+    private var styleThumbs: Map<Agenda.Style, Bitmap?>? = null
+
+    /** The Agenda face's styles as a grid of thumbnails (3 a row); a tap picks one and installs it. */
+    private fun renderAgenda() {
+        body.removeAllViews()
+        if (!Aod.supported()) { body.addView(note("Needs KompaktOS's bridge.")); return }
+        val style = Aod.agendaStyle(this)
+        val t = styleThumbs
+        if (t == null) Shell.background({ Agenda.Style.entries.associateWith { Aod.thumbnail(this, Aod.Face.AGENDA, it) } }) { styleThumbs = it; renderAgenda() }
+        Agenda.Style.entries.chunked(3).forEach { row ->
+            body.addView(hbox().apply {
+                setPadding(dp(12), dp(4), dp(12), dp(4))
+                gravity = Gravity.TOP
+                for (s in row) addView(thumbTile(s.title, s == style, t?.get(s), 190) {
+                    work({ Aod.setAgendaStyle(this@MainActivity, s) }, "Agenda style: ${s.title}")
+                }, lp(0, WRAP, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
+            })
+        }
+        body.addView(note("${style.title}: ${style.detail}."))
+        if (Aod.face(this) != Aod.Face.AGENDA) body.addView(note("The sleep screen shows another face now: pick Agenda under Sleep screen to see this."))
+        if (Aod.needsCalendar(this)) body.addView(note("Calendar access needed: without it each style says so."))
+    }
+
+    // ---- Photo style ([Dither]) ---------------------------------------------------------------------
+
+    /** The face's picture in each style, off the main thread; kept while the screen is open. */
+    private var photoThumbs: Map<Dither.Style, Bitmap?>? = null
+
+    /** The Photo and Picture faces' styles side by side, previewed on the face in use (Photo when it's another);
+     *  a tap picks one and installs it. */
+    private fun renderPhotoStyle() {
+        body.removeAllViews()
+        if (!Aod.supported()) { body.addView(note("Needs KompaktOS's bridge.")); return }
+        val style = Aod.photoStyle(this)
+        val face = Aod.face(this).takeIf { it == Aod.Face.PICTURE } ?: Aod.Face.PHOTO
+        val t = photoThumbs
+        if (t == null) Shell.background({ Dither.Style.entries.associateWith { Aod.thumbnail(this, face, photoStyle = it) } }) { photoThumbs = it; renderPhotoStyle() }
+        body.addView(hbox().apply {
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+            gravity = Gravity.TOP
+            for (s in Dither.Style.entries) addView(thumbTile(s.title, s == style, t?.get(s), 190, description = "Photo style ${s.title}", keepShape = true) {
+                work({ Aod.setPhotoStyle(this@MainActivity, s) }, "Photo style: ${s.title}")
+            }, lp(0, WRAP, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
+        })
+        for (s in Dither.Style.entries) body.addView(note("${s.title}${if (s == Dither.Style.CRISP) " (default)" else ""}: ${s.detail}."))
+        if (Aod.face(this) != Aod.Face.PHOTO && Aod.face(this) != Aod.Face.PICTURE)
+            body.addView(note("The sleep screen shows another face now: pick Photo or Picture under Sleep screen to see this."))
+    }
+
     /** A fixed answer on the right (mockup 21: Show seconds, Frontlight). */
     private fun infoRow(title: String, detail: String, value: String, filled: Boolean): View = hbox().apply {
         setPadding(g, dp(10), g, dp(10))
@@ -558,25 +629,31 @@ open class MainActivity : Activity() {
         })
     }
 
-    private fun faceTile(f: Aod.Face, selected: Boolean, thumb: Bitmap?): View = vbox().apply {
+    private fun faceTile(f: Aod.Face, selected: Boolean, thumb: Bitmap?): View =
+        thumbTile(f.title, selected, thumb, 150, if (f == Aod.Face.DEFAULT) "Moaan" else if (f == Aod.Face.PICTURE) "Choose…" else "…", "Face ${f.title}") { pickFace(f) }
+
+    /** A thumbnail [heightDp] tall over its [title]; a thick frame and a ✓ when [selected]. [keepShape]: not stretched
+     *  to the frame (pictures). */
+    private fun thumbTile(title: String, selected: Boolean, thumb: Bitmap?, heightDp: Int, placeholder: String = "…",
+                          description: String = title, keepShape: Boolean = false, onClick: () -> Unit): View = vbox().apply {
         gravity = Gravity.CENTER_HORIZONTAL
         val frame = FrameLayout(this@MainActivity).apply {
             background = outline(if (selected) 4 else 2, Radius.SMALL)
             val pad = dp(if (selected) 4 else 2)
             setPadding(pad, pad, pad, pad)
-            if (thumb != null) addView(ImageView(this@MainActivity).apply { setImageBitmap(thumb); scaleType = ImageView.ScaleType.FIT_XY },
+            if (thumb != null) addView(ImageView(this@MainActivity).apply { setImageBitmap(thumb); scaleType = if (keepShape) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.FIT_XY },
                 FrameLayout.LayoutParams(MATCH, MATCH))
-            else addView(text(if (f == Aod.Face.DEFAULT) "Moaan" else if (f == Aod.Face.PICTURE) "Choose…" else "…", Type.M, bold = true).apply { gravity = Gravity.CENTER },
+            else addView(text(placeholder, Type.M, bold = true).apply { gravity = Gravity.CENTER },
                 FrameLayout.LayoutParams(MATCH, MATCH))
             if (selected) addView(text("✓", Type.L, bold = true, color = Ink.PAPER).apply {
                 background = outline(2, Radius.LARGE, Ink.INK); gravity = Gravity.CENTER
             }, FrameLayout.LayoutParams(dp(26), dp(26), Gravity.TOP or Gravity.END))
         }
-        addView(frame, lp(MATCH, 0).apply { height = dp(150) })
-        addView(text(f.title, Type.M, bold = true).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(4)) }, lp(MATCH, WRAP))
+        addView(frame, lp(MATCH, 0).apply { height = dp(heightDp) })
+        addView(text(title, Type.M, bold = true).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(4)) }, lp(MATCH, WRAP))
         pressable()
-        contentDescription = "Face ${f.title}"
-        setOnClickListener { pickFace(f) }
+        contentDescription = description
+        setOnClickListener { onClick() }
     }
 
     private fun pickFace(f: Aod.Face) {
@@ -833,6 +910,8 @@ open class MainActivity : Activity() {
         const val SECTION_LIGHT = "light"
         const val SECTION_SLEEP = "sleep"
         const val SECTION_AOD = "aod"
+        const val SECTION_AGENDA = "agenda"
+        const val SECTION_PHOTO = "photo"
         const val SECTION_READING = "reading"
         const val SECTION_ABOUT = "about"
         private const val PICK_SLEEP = 51

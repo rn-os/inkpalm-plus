@@ -146,6 +146,51 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - Verified on the device (release-signed branch build): portrait and landscape updates and the power-off dry run,
   LEDs 0 in every sample, screenshots during the wake pixel-identical to /data/misc/standby.png (poweroff.png).
 
+## AOD follows the phone turned while asleep (branch `aod-reorient`, 2026-10-28)
+- Asked: sleep in portrait, turn to landscape while asleep, and the next Live update shows the landscape face.
+- Asleep the window manager reports rotation 0 whatever the phone does, so `Aod.reorient` (in `update`, before
+  drawing, under the alarm's wake lock) reads TYPE_ACCELEROMETER directly: up to 600 ms or until 4 steady samples
+  (`steady`: each axis within 1.5 m/s² of the mean), then `rotationFromGravity`: |x| vs |y|, decided only when the
+  dominant axis is ≥ 4.5 m/s² (screen tilted up ≥ ~27°; a phone leaning back on a stand counts) and beats the other by ≥ 2.5; near-flat, ~45° or moving keeps the held one. (Requiring it to beat |z| too kept a propped phone at ~45° from turning, 2026-10-29.)
+  Mapping is Android's (x up → ROTATION_90, -x up → 270, -y up → 180), as WindowOrientationListener.
+- `Orientation.turned(r)` moves the held (frozen) rotation; the user's wake still clears it. The face and
+  `WakeCover` (orientationFor + turnFor) both read the same held rotation, so the cover and panel buffer agree.
+- Only with `accelerometer_rotation` = 1; off, the sleep orientation is kept as before.
+- Log line per update: `aod: orient: <sensor> n=… in … ms xyz=… → <rotation|keep>, held A → B`.
+
+## Agenda styles (branch `agenda-styles`, from `aod-reorient`, 2026-10-29)
+- Mockups: docs/mockups/aod/agenda-variants/ (sheet.png; Current, A big clock, B day rail, C next up, D today /
+  tomorrow, E week strip). All five built next to Classic (the default): `Agenda.Style`, drawn in `AodFaces`
+  (portrait and landscape; the mockups' CSS px are panel px). Sleep screen → Agenda style (shown when Agenda is the
+  face): thumbnails with today's events, a tap installs it (pref `aod_agenda_style`).
+- The calendar read now covers the start of this week (or today) to a week ahead / the week's end (≤ 200 events);
+  each style picks from it (`Agenda.upcoming`, `onDay`, `perDay`). Pure layout parts in `Agenda` (rail hours,
+  hour-label step, label stacking, longest free stretch, row sharing, "+2 more") with AgendaLogicTest.
+- Debug hooks: `aod_agenda <STYLE>`, `aod_agenda_dump` (every style, both orientations, to files/agenda_*.png).
+  Dense / empty / no-access / 24 h layouts were checked that way on an emulator with test events.
+- Verified on the device (1.1.0-branch.42): every style picked through the UI in landscape and portrait, the
+  installed files/standby.png pulled for each; a Live update asleep (Week) matched. Left on Agenda · Classic.
+- Known: Day rail pushes labels apart when events crowd, so a label can sit below its block. 12 h times have no AM/PM (as Classic).
+
+## Photo style (branch `agenda-styles`, 2026-10-29)
+- The panel bands photos into grey steps. Mockups compared plain 16-grey, Floyd–Steinberg 16-grey / 1-bit, Atkinson
+  1-bit, Bayer and a boosted 16-grey (the dither mockups' scratch dir, `dither.py`); on the device the user picked
+  Atkinson 1-bit.
+- `Dither`: Crisp = Atkinson 1-bit (default), Smooth = Floyd–Steinberg to the 16 levels (0, 17, …, 255), Plain = as
+  before. Pure functions on grey IntArrays (Rec. 601 luma first) with DitherTest; `Dither.apply` wraps a Bitmap
+  (getPixels/setPixels) and logs `dither: <STYLE> WxH in N ms`.
+- Photo face: the picture is dithered right after it's scaled and cropped, in the face's own shape (1440×720 in
+  landscape; `turn` is an exact quarter turn, so still one pixel per panel pixel), before the clock box is drawn.
+  Picture face: `Aod.installPicture` dithers files/sleep_picture.png (already 720×1440) into files/standby.png; Plain
+  copies it byte for byte as before.
+- Settings: Sleep screen → Photo style (shown for Photo and Picture once a picture is picked): three previews of the
+  face in use, dithered at the thumbnail's own size so the dots show (a scaled-down dither would blur back to grey);
+  a tap installs it. One pref for both faces: `aod_photo_style`; debug hook `aod_photo <STYLE>`.
+- Also in this round (user, 2026-10-29): Day rail starts at the first timed event's hour or 7 AM, whichever is
+  earlier, and ends at 7 PM or the last event (no longer stretched to take in now, so an empty day at night isn't a
+  rail from 12 AM); the now line only when now is on the rail. Every Agenda style now stops 40 px above the
+  "Updated" footer (`limit`; the landscape Big clock divider and the rail's spill below its last hour included).
+
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown
   landed; the release APK itself was checked: signed with the release key, not debuggable, SectionActivity not

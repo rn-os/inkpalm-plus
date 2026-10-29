@@ -170,8 +170,26 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   Dense / empty / no-access / 24 h layouts were checked that way on an emulator with test events.
 - Verified on the device (1.1.0-branch.42): every style picked through the UI in landscape and portrait, the
   installed files/standby.png pulled for each; a Live update asleep (Week) matched. Left on Agenda · Classic.
-- Known: Day rail pushes labels apart when events crowd, so a label can sit below its block; at night the rail
-  runs from midnight (it always takes in now). 12 h times have no AM/PM (as Classic).
+- Known: Day rail pushes labels apart when events crowd, so a label can sit below its block. 12 h times have no AM/PM (as Classic).
+
+## Photo style (branch `agenda-styles`, 2026-10-29)
+- The panel bands photos into grey steps. Mockups compared plain 16-grey, Floyd–Steinberg 16-grey / 1-bit, Atkinson
+  1-bit, Bayer and a boosted 16-grey (the dither mockups' scratch dir, `dither.py`); on the device the user picked
+  Atkinson 1-bit.
+- `Dither`: Crisp = Atkinson 1-bit (default), Smooth = Floyd–Steinberg to the 16 levels (0, 17, …, 255), Plain = as
+  before. Pure functions on grey IntArrays (Rec. 601 luma first) with DitherTest; `Dither.apply` wraps a Bitmap
+  (getPixels/setPixels) and logs `dither: <STYLE> WxH in N ms`.
+- Photo face: the picture is dithered right after it's scaled and cropped, in the face's own shape (1440×720 in
+  landscape; `turn` is an exact quarter turn, so still one pixel per panel pixel), before the clock box is drawn.
+  Picture face: `Aod.installPicture` dithers files/sleep_picture.png (already 720×1440) into files/standby.png; Plain
+  copies it byte for byte as before.
+- Settings: Sleep screen → Photo style (shown for Photo and Picture once a picture is picked): three previews of the
+  face in use, dithered at the thumbnail's own size so the dots show (a scaled-down dither would blur back to grey);
+  a tap installs it. One pref for both faces: `aod_photo_style`; debug hook `aod_photo <STYLE>`.
+- Also in this round (user, 2026-10-29): Day rail starts at the first timed event's hour or 7 AM, whichever is
+  earlier, and ends at 7 PM or the last event (no longer stretched to take in now, so an empty day at night isn't a
+  rail from 12 AM); the now line only when now is on the rail. Every Agenda style now stops 40 px above the
+  "Updated" footer (`limit`; the landscape Big clock divider and the rail's spill below its last hour included).
 
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown

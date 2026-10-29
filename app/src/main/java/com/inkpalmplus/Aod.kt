@@ -60,6 +60,7 @@ object Aod {
     private const val K_INTERVAL = "aod_interval"
     private const val K_LOW_SHOWN = "aod_low_shown"
     private const val K_AGENDA = "aod_agenda_style"
+    private const val K_PHOTO_STYLE = "aod_photo_style"
     const val LOW_BATTERY = 10
     val INTERVALS = listOf(0, 5, 15, 30, 60)
     const val DEFAULT_INTERVAL = 5
@@ -172,6 +173,20 @@ object Aod {
         return null
     }
 
+    /** How the Photo and Picture faces dither the picture ([Dither.Style]); Crisp until one is picked. */
+    fun photoStyle(c: Context): Dither.Style = Dither.Style.of(Prefs(c).sp.getString(K_PHOTO_STYLE, null))
+
+    /** Picks the Photo style and, when Photo or Picture is the face, installs it again. Error or null. Blocking (on [Eink.worker]). */
+    fun setPhotoStyle(c: Context, style: Dither.Style): String? {
+        Prefs(c).sp.edit().putString(K_PHOTO_STYLE, style.name).apply()
+        lastKey = null
+        return when (face(c)) {
+            Face.PHOTO -> { install(c, redraw = false, force = true); null }
+            Face.PICTURE -> setFace(c, Face.PICTURE)
+            else -> null
+        }
+    }
+
     fun setInterval(c: Context, minutes: Int) {
         Prefs(c).sp.edit().putInt(K_INTERVAL, minutes).apply()
         prepare(c, force = true)
@@ -195,7 +210,7 @@ object Aod {
         val err = when (face) {
             Face.DEFAULT -> if (Eink.bridgeWrite("standby.req", "reset=1\n")) null else "the bridge isn't there"
             Face.PICTURE -> if (!hasPicture(c)) "no picture yet" else runCatching {
-                picture(c).copyTo(File(c.filesDir, "standby.png"), overwrite = true)
+                installPicture(c)
                 if (Eink.bridgeWrite("standby.req", "apply=1\n")) null else "the bridge isn't there"
             }.getOrElse { it.toString() }
             else -> null
@@ -205,6 +220,22 @@ object Aod {
         lastKey = null
         if (face.drawn) install(c, redraw = false, force = true)
         return null
+    }
+
+    /** The picture (already the panel's 720×1440 portrait) as files/standby.png: copied as it is for Plain, else
+     *  dithered at that size. */
+    private fun installPicture(c: Context) {
+        val out = File(c.filesDir, "standby.png")
+        val style = photoStyle(c)
+        if (style == Dither.Style.PLAIN) { picture(c).copyTo(out, overwrite = true); return }
+        val t0 = SystemClock.uptimeMillis()
+        val bmp = BitmapFactory.decodeFile(picture(c).path, BitmapFactory.Options().apply { inMutable = true }) ?: error("unreadable picture")
+        Dither.apply(bmp, style)
+        val tmp = File(c.filesDir, "standby.png.tmp")
+        tmp.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        bmp.recycle()
+        if (!tmp.renameTo(out)) error("couldn't write the picture")
+        Log.i(TAG, "aod: picture ${style.name} in ${SystemClock.uptimeMillis() - t0} ms")
     }
 
     /** Before faces: the picked picture lived only in files/standby.png (and /data/misc). Keep it as the picture. */
@@ -259,14 +290,20 @@ object Aod {
     }
 
     /** A small picture of [face] with today's data, portrait, for the settings grid (null for Moaan's); for Agenda,
-     *  in [style] (else the one picked). Blocking. */
-    fun thumbnail(c: Context, face: Face, style: Agenda.Style? = null): Bitmap? {
+     *  in [style] (else the one picked); for Photo and Picture, in [photoStyle] (else the one picked). The picture is
+     *  dithered at the thumbnail's size, so its dots show on screen as they will on the sleep screen (a scaled-down
+     *  dither would blur back to grey). Blocking. */
+    fun thumbnail(c: Context, face: Face, style: Agenda.Style? = null, photoStyle: Dither.Style? = null): Bitmap? {
+        val dots = photoStyle ?: photoStyle(c)
         val big = when {
             face == Face.DEFAULT -> return null
             face == Face.PICTURE -> { photo(c); BitmapFactory.decodeFile(picture(c).path) ?: return null }
-            else -> AodFaces.render(face, collect(c, face, false).copy(rotation = Surface.ROTATION_0, agenda = style))
+            else -> AodFaces.render(face, collect(c, face, false).copy(rotation = Surface.ROTATION_0, agenda = style, photoStyle = Dither.Style.PLAIN))
         }
-        return Bitmap.createScaledBitmap(big, AodFaces.W / 4, AodFaces.H / 4, true).also { big.recycle() }
+        val small = Bitmap.createScaledBitmap(big, AodFaces.W / 4, AodFaces.H / 4, true).also { if (it !== big) big.recycle() }
+        if ((face == Face.PICTURE || face == Face.PHOTO) && dots != Dither.Style.PLAIN)
+            return (if (small.isMutable) small else small.copy(Bitmap.Config.ARGB_8888, true).also { small.recycle() }).also { Dither.apply(it, dots) }
+        return small
     }
 
     /** A test face (debug hook): an arrow to the top of the screen as it's held, to check the turn. Blocking. */
@@ -308,6 +345,7 @@ object Aod {
             live = live,
             events = if (face == Face.AGENDA) events(c, now) else null,
             agenda = agendaStyle(c),
+            photoStyle = photoStyle(c),
             book = if (face == Face.READING) book(c) else null,
             photo = if (face == Face.PHOTO) photo(c) else null,
             rotation = rotations.current(c),

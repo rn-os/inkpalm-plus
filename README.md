@@ -105,10 +105,18 @@ With Agenda picked, **Agenda style** (under the faces) changes how it lays out y
 |---|---|
 | **Classic** (default) | The time, then your next 3 events in boxes |
 | **Big clock** | A large time and date, then your next 3 events as rows |
-| **Day rail** | Today by the hour: a block per event, a line at now and your longest free stretch |
+| **Day rail** | Today by the hour (from 7 AM, or your first event if earlier): a block per event, a line at now and your longest free stretch |
 | **Next up** | Your next event in a large black card, the rest of today below and tomorrow's first event |
 | **Two days** | Today and tomorrow, one under the other (side by side in landscape) |
 | **Week** | This week's days with a dot per event, the time, then the rest of today |
+
+With Photo or Picture picked, **Photo style** (under the faces) sets how your picture is drawn. The panel shows 16 greys, so a photo's soft gradients fall into blotchy grey steps; the dithered styles trade those for fine dots, drawn one per screen pixel. Each style has a preview; the clock and date on the Photo face stay clean.
+
+| Photo style | What it does |
+|---|---|
+| **Crisp** (default) | Black and white dots (Atkinson dithering): sharp, no grey bands |
+| **Smooth** | The panel's 16 greys with fine dots between them (Floyd–Steinberg) |
+| **Plain** | Greys as they come, as before: gradients may show bands |
 
 **Update** sets how the drawn faces keep up while the phone sleeps:
 

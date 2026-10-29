@@ -37,11 +37,14 @@ object AodFaces {
         /** Null: no calendar access. Otherwise this week's and the next 7 days' events ([Aod]'s calendar read). */
         val events: List<Event>?, val book: Book?, val photo: Bitmap?, val rotation: Int,
         val agenda: Agenda.Style = Agenda.Style.CLASSIC,
+        /** How the Photo face's picture is dithered ([Dither]). */
+        val photoStyle: Dither.Style = Dither.Style.CRISP,
     ) {
-        fun copy(rotation: Int, agenda: Agenda.Style? = null) = Data(now, h24, battery, low, live, events, book, photo, rotation, agenda ?: this.agenda)
+        fun copy(rotation: Int, agenda: Agenda.Style? = null, photoStyle: Dither.Style? = null) =
+            Data(now, h24, battery, low, live, events, book, photo, rotation, agenda ?: this.agenda, photoStyle ?: this.photoStyle)
 
-        /** Everything the face shows: the minute, battery, events, book, photo, orientation and Agenda style. */
-        fun key(face: Aod.Face): String = listOf(face.name, agenda.name, minute(now), battery, low, live, rotation,
+        /** Everything the face shows: the minute, battery, events, book, photo, orientation, Agenda and Photo style. */
+        fun key(face: Aod.Face): String = listOf(face.name, agenda.name, photoStyle.name, minute(now), battery, low, live, rotation,
             events?.joinToString("|") { "${it.title}${it.begin}${it.end}" } ?: "no-access",
             book?.let { "${it.title}${it.progress}${it.cover != null}" }, photo?.generationId).joinToString(";")
 
@@ -102,7 +105,7 @@ object AodFaces {
                 Agenda.Style.WEEK -> week(c, w, h, d)
             }
             Aod.Face.READING -> reading(c, w, h, d)
-            Aod.Face.PHOTO -> if (d.photo != null) photo(c, w, h, d, d.photo) else clockDate(c, w, h, d)
+            Aod.Face.PHOTO -> if (d.photo != null) photo(bmp, c, w, h, d, d.photo) else clockDate(c, w, h, d)
             Aod.Face.MINIMAL -> minimal(c, w, h, d)
             else -> clockDate(c, w, h, d)
         }
@@ -822,13 +825,16 @@ object AodFaces {
         readingText(c, d, w / 2f, w * 0.8f, r.bottom + u(22))
     }
 
-    private fun photo(c: Canvas, w: Int, h: Int, d: Data, src: Bitmap) {
+    /** The picture fills the face, dithered in the face's own shape (one pixel per panel pixel; [turn] is exact), then
+     *  the clock box is drawn on it clean. */
+    private fun photo(bmp: Bitmap, c: Canvas, w: Int, h: Int, d: Data, src: Bitmap) {
         val scale = maxOf(w.toFloat() / src.width, h.toFloat() / src.height)
         val cw = (w / scale).toInt(); val chh = (h / scale).toInt()
         val from = Rect((src.width - cw) / 2, (src.height - chh) / 2, (src.width + cw) / 2, (src.height + chh) / 2)
         c.drawBitmap(src, from, Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG).apply {
             colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
         })
+        Dither.apply(bmp, d.photoStyle)
         val tp = pen(u(40), HEAVY, -0.02f, align = Paint.Align.RIGHT)
         val dp = pen(u(13), BOLD, align = Paint.Align.RIGHT)
         val sp = pen(u(11), SEMI, align = Paint.Align.RIGHT)

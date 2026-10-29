@@ -111,7 +111,7 @@ The InkPalm keeps a picture on the screen while it sleeps, at no cost: e-ink hol
 
 Each update wakes the phone for about 3 seconds, redraws the face and sleeps again, with one screen flash. The front light stays off, and auto power-off keeps counting. A Live face carries a small **Updated 10:15** stamp, so you can tell how fresh it is. Updates land on the clock (10:15, 10:20, …), carry on while charging, and stop below 10% battery: the face then shows a black **BATTERY 9%** box. The costs are estimates (about 3 s awake at about 400 mA per update, on a 2500 mAh battery), not measurements. KompaktOS exempts InkPalm+ from Doze, so the updates come on time.
 
-While the screen is on, the face is redrawn whenever what it shows changes (the minute, the battery, your events), so it's ready the moment you press the power button. If the phone is in landscape when it sleeps, the face is laid out for landscape; a photo is cropped from the whole picture you picked (pictures picked before this version: pick them again for the best landscape crop).
+While the screen is on, the face is redrawn whenever what it shows changes (the minute, the battery, your events), so it's ready the moment you press the power button. If the phone is in landscape when it sleeps, the face is laid out for landscape; a photo is cropped from the whole picture you picked (pictures picked before this version: pick them again for the best landscape crop). Turning the phone while it sleeps is picked up at the next update when auto-rotate is on.
 
 ## E-ink panel and settings
 

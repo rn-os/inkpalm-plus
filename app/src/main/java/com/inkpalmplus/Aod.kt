@@ -10,12 +10,17 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.hardware.display.DisplayManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.CalendarContract
+import android.provider.Settings
 import android.text.format.DateFormat
 import android.util.Log
 import android.view.Display
@@ -24,7 +29,12 @@ import java.io.File
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * The always-on sleep screen (KompaktOS; mockups 20, 21): a face drawn by InkPalm+ and handed to the vendor HWC as
@@ -40,6 +50,9 @@ import java.util.zip.ZipFile
  * power-off reset); [WakeCover] shows the new face over everything during it, so the panel never shows the home
  * screen or the last app. Updates continue while charging (the cost is then free). Below [LOW_BATTERY] % on battery the
  * face becomes the low-battery box, drawn once, and the updates stop.
+ *
+ * The face keeps the orientation the phone was held in at the user's sleep ([Orientation]); with auto-rotate on, each
+ * Live update first reads the accelerometer ([reorient]) and turns the face if the phone was turned while asleep.
  */
 object Aod {
     private const val TAG = "InkPalmPlus"
@@ -89,6 +102,34 @@ object Aod {
         Surface.ROTATION_180 -> 180
         Surface.ROTATION_270 -> 270
         else -> 0
+    }
+
+    /** Gravity along the dominant screen axis must reach this (m/s²) for an orientation to be decided ... */
+    const val GRAVITY_MIN = 6f
+    /** ... and beat the other screen axis by this much (no decision near 45°). */
+    const val GRAVITY_MARGIN = 2.5f
+
+    /**
+     * The display rotation that shows a face upright for the accelerometer's gravity reading ([x], [y], [z], m/s²), or
+     * null when it can't be told: flat (|z| dominant), tilted near 45°, or too weak. Android's sensor axes, in the
+     * panel's natural portrait: x to the right edge, y to the top edge, z out of the screen; at rest a reading is +g
+     * along the axis pointing up. So y up is ROTATION_0, x up (the top edge turned to the left) ROTATION_90, y down
+     * ROTATION_180, x down ROTATION_270: as Android's own WindowOrientationListener (angle = -atan2(-x, y)).
+     */
+    fun rotationFromGravity(x: Float, y: Float, z: Float): Int? {
+        val ax = abs(x); val ay = abs(y); val big = max(ax, ay)
+        if (big < GRAVITY_MIN || big - min(ax, ay) < GRAVITY_MARGIN || abs(z) > big) return null
+        return if (ax > ay) { if (x > 0) Surface.ROTATION_90 else Surface.ROTATION_270 }
+        else { if (y > 0) Surface.ROTATION_0 else Surface.ROTATION_180 }
+    }
+
+    /** The mean of the last [n] samples (x, y, z) when each axis stays within [spread] m/s² of it (the phone is
+     *  still), else null. */
+    fun steady(samples: List<FloatArray>, n: Int = 4, spread: Float = 1.5f): FloatArray? {
+        if (samples.size < n) return null
+        val last = samples.takeLast(n)
+        val mean = FloatArray(3) { a -> last.map { it[a] }.average().toFloat() }
+        return mean.takeIf { last.all { s -> (0..2).all { a -> abs(s[a] - mean[a]) <= spread } } }
     }
 
     fun isLow(level: Int, plugged: Boolean) = !plugged && level in 0 until LOW_BATTERY
@@ -350,7 +391,8 @@ object Aod {
     /**
      * The orientation the faces are drawn in. Awake it is the display's; the last one seen is kept, and at the user's
      * sleep it is frozen for every render until the user wakes: asleep (and in the bridge's redraw wake) Android reports
-     * rotation 0, which would turn a landscape face to portrait.
+     * rotation 0, which would turn a landscape face to portrait. A Live update may move it to the phone's physical
+     * orientation ([turned], from the accelerometer).
      */
     class Orientation {
         @Volatile private var last = Surface.ROTATION_0
@@ -362,6 +404,11 @@ object Aod {
         fun sleep() { frozen = last }
         /** The user's wake: back to the display's rotation. */
         fun wake() { frozen = null }
+        /** The rotation held now. */
+        val held: Int get() = frozen ?: last
+        /** Asleep, the phone was found turned to [r] ([reorient]): held from now on (the user's wake still clears it).
+         *  True when it changed. */
+        fun turned(r: Int): Boolean { val was = held; frozen = r; last = r; return was != r }
         /** The rotation to draw with, [live] being the display's now (called only when needed). */
         fun current(live: () -> Int): Int = frozen ?: live().also { last = it }
         fun current(c: Context): Int = current { displayRotation(c) }
@@ -464,12 +511,59 @@ object Aod {
         val low = isLow(level, plugged)
         val sp = Prefs(c).sp
         if (low && sp.getBoolean(K_LOW_SHOWN, false)) { Log.i(TAG, "aod: battery $level%, updates stopped"); return }
+        reorient(c)
         // The bridge wakes the screen for ~5 s; until its SCREEN_OFF, the wake is ours.
         expectWake(15_000L)
         if (!install(c, redraw = true, force = true, low = low)) { redrawUntil = 0; return }
         if (low) { sp.edit().putBoolean(K_LOW_SHOWN, true).apply(); Log.i(TAG, "aod: battery $level%, last update"); return }
         if (interval(c) > 0) schedule(c)
     }
+
+    /** Auto-rotate (Settings.System.accelerometer_rotation) is on. */
+    private fun autoRotate(c: Context) =
+        runCatching { Settings.System.getInt(c.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1 }.getOrDefault(false)
+
+    /**
+     * Asleep, before a Live update: the phone may have been turned since the user's sleep. Asleep the window manager
+     * reports rotation 0 whatever the phone does, so the accelerometer is read directly (up to [SENSOR_MS], until 4
+     * steady samples) and, when the gravity decides it ([rotationFromGravity]), that orientation is held from now on:
+     * the face and [WakeCover] (its counter-turn and held orientation) both take it from [Orientation]. Flat, near 45°,
+     * moving, or no samples: the held one stays. Only with auto-rotate on. Blocking (on [Eink.worker], under the
+     * alarm's wake lock).
+     */
+    private fun reorient(c: Context) {
+        val was = rotations.held
+        if (!autoRotate(c)) { Log.i(TAG, "aod: orient: auto-rotate off, keep $was"); return }
+        val sm = c.getSystemService(SensorManager::class.java)
+        val sensor = sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        if (sensor == null) { Log.w(TAG, "aod: orient: no accelerometer, keep $was"); return }
+        val t0 = SystemClock.uptimeMillis()
+        val samples = ArrayList<FloatArray>()
+        val done = CountDownLatch(1)
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) {
+                synchronized(samples) {
+                    samples += floatArrayOf(e.values[0], e.values[1], e.values[2])
+                    if (steady(samples) != null) done.countDown()
+                }
+            }
+            override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+        }
+        if (!sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME, Shell.main)) {
+            Log.w(TAG, "aod: orient: couldn't listen to ${sensor.name}, keep $was"); return
+        }
+        done.await(SENSOR_MS, TimeUnit.MILLISECONDS)
+        sm.unregisterListener(listener)
+        val (n, mean, lastSample) = synchronized(samples) { Triple(samples.size, steady(samples), samples.lastOrNull()) }
+        val r = mean?.let { rotationFromGravity(it[0], it[1], it[2]) }
+        val turned = r != null && rotations.turned(r)
+        fun f(v: FloatArray?) = v?.joinToString(",") { "%.1f".format(Locale.US, it) } ?: "-"
+        Log.i(TAG, "aod: orient: ${sensor.name} n=$n in ${SystemClock.uptimeMillis() - t0} ms xyz=${f(mean ?: lastSample)}" +
+            "${if (mean == null) " (not steady)" else ""} → ${r ?: "keep"}, held $was → ${rotations.held}${if (turned) " (turned)" else ""}")
+    }
+
+    /** The longest accelerometer read before a Live update. */
+    private const val SENSOR_MS = 600L
 
     /** The Live update alarm. Holds a wake lock while the bridge wakes and sleeps the screen. Not exported: only
      *  InkPalm+'s own PendingIntent reaches it (and root: `am broadcast -n com.inkpalmplus/.Aod\$Alarm` is one

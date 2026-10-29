@@ -146,6 +146,18 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - Verified on the device (release-signed branch build): portrait and landscape updates and the power-off dry run,
   LEDs 0 in every sample, screenshots during the wake pixel-identical to /data/misc/standby.png (poweroff.png).
 
+## AOD follows the phone turned while asleep (branch `aod-reorient`, 2026-10-28)
+- Asked: sleep in portrait, turn to landscape while asleep, and the next Live update shows the landscape face.
+- Asleep the window manager reports rotation 0 whatever the phone does, so `Aod.reorient` (in `update`, before
+  drawing, under the alarm's wake lock) reads TYPE_ACCELEROMETER directly: up to 600 ms or until 4 steady samples
+  (`steady`: each axis within 1.5 m/s² of the mean), then `rotationFromGravity`: |x| vs |y|, decided only when the
+  dominant axis is ≥ 6 m/s², beats the other by ≥ 2.5 and beats |z|; flat, ~45° or moving keeps the held one.
+  Mapping is Android's (x up → ROTATION_90, -x up → 270, -y up → 180), as WindowOrientationListener.
+- `Orientation.turned(r)` moves the held (frozen) rotation; the user's wake still clears it. The face and
+  `WakeCover` (orientationFor + turnFor) both read the same held rotation, so the cover and panel buffer agree.
+- Only with `accelerometer_rotation` = 1; off, the sleep orientation is kept as before.
+- Log line per update: `aod: orient: <sensor> n=… in … ms xyz=… → <rotation|keep>, held A → B`.
+
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown
   landed; the release APK itself was checked: signed with the release key, not debuggable, SectionActivity not

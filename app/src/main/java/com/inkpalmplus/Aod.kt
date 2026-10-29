@@ -59,6 +59,7 @@ object Aod {
     private const val K_FACE = "aod_face"
     private const val K_INTERVAL = "aod_interval"
     private const val K_LOW_SHOWN = "aod_low_shown"
+    private const val K_AGENDA = "aod_agenda_style"
     const val LOW_BATTERY = 10
     val INTERVALS = listOf(0, 5, 15, 30, 60)
     const val DEFAULT_INTERVAL = 5
@@ -160,6 +161,17 @@ object Aod {
 
     fun interval(c: Context): Int = Prefs(c).sp.getInt(K_INTERVAL, DEFAULT_INTERVAL)
 
+    /** How the Agenda face lays out the day ([Agenda.Style]); Classic until one is picked. */
+    fun agendaStyle(c: Context): Agenda.Style = Agenda.Style.of(Prefs(c).sp.getString(K_AGENDA, null))
+
+    /** Picks the Agenda face's [style] and, when Agenda is the face, installs it. Blocking (on [Eink.worker]). */
+    fun setAgendaStyle(c: Context, style: Agenda.Style): String? {
+        Prefs(c).sp.edit().putString(K_AGENDA, style.name).apply()
+        lastKey = null
+        if (face(c) == Face.AGENDA) install(c, redraw = false, force = true)
+        return null
+    }
+
     fun setInterval(c: Context, minutes: Int) {
         Prefs(c).sp.edit().putInt(K_INTERVAL, minutes).apply()
         prepare(c, force = true)
@@ -246,12 +258,13 @@ object Aod {
         return sent
     }
 
-    /** A small picture of [face] with today's data, portrait, for the settings grid (null for Moaan's). Blocking. */
-    fun thumbnail(c: Context, face: Face): Bitmap? {
+    /** A small picture of [face] with today's data, portrait, for the settings grid (null for Moaan's); for Agenda,
+     *  in [style] (else the one picked). Blocking. */
+    fun thumbnail(c: Context, face: Face, style: Agenda.Style? = null): Bitmap? {
         val big = when {
             face == Face.DEFAULT -> return null
             face == Face.PICTURE -> { photo(c); BitmapFactory.decodeFile(picture(c).path) ?: return null }
-            else -> AodFaces.render(face, collect(c, face, false).copy(rotation = Surface.ROTATION_0))
+            else -> AodFaces.render(face, collect(c, face, false).copy(rotation = Surface.ROTATION_0, agenda = style))
         }
         return Bitmap.createScaledBitmap(big, AodFaces.W / 4, AodFaces.H / 4, true).also { big.recycle() }
     }
@@ -265,6 +278,19 @@ object Aod {
         lastKey = null
         Eink.bridgeWrite("standby.req", "apply=1\n")
         Log.i(TAG, "aod: arrow face installed for rotation $rot")
+    }
+
+    /** Every Agenda style, portrait and landscape, as files/agenda_<STYLE>_<rotation>.png, turned upright (debug hook,
+     *  for checking the layouts off the sleep screen). Blocking. */
+    fun dumpAgenda(c: Context) {
+        val data = collect(c, Face.AGENDA, false)
+        for (style in Agenda.Style.entries) for (rot in listOf(Surface.ROTATION_0, Surface.ROTATION_90)) {
+            val bmp = AodFaces.render(Face.AGENDA, data.copy(rotation = rot, agenda = style))
+            val up = if (rot == Surface.ROTATION_0) bmp else AodFaces.turnBack(bmp, Aod.degreesFor(rot))
+            File(c.filesDir, "agenda_${style.name}_$rot.png").outputStream().use { up.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            up.recycle()
+        }
+        Log.i(TAG, "aod: agenda styles dumped (${data.events?.size ?: "no access"} events)")
     }
 
     private fun collect(c: Context, face: Face, lowOverride: Boolean?): AodFaces.Data {
@@ -281,6 +307,7 @@ object Aod {
             low = lowOverride ?: isLow(level, plugged),
             live = live,
             events = if (face == Face.AGENDA) events(c, now) else null,
+            agenda = agendaStyle(c),
             book = if (face == Face.READING) book(c) else null,
             photo = if (face == Face.PHOTO) photo(c) else null,
             rotation = rotations.current(c),
@@ -308,27 +335,40 @@ object Aod {
     fun displayRotation(c: Context): Int =
         c.getSystemService(DisplayManager::class.java)?.getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: Surface.ROTATION_0
 
-    /** The next 3 events (up to a week ahead), or null without calendar access. */
+    /**
+     * The events from the start of this week (or of today, if earlier) to a week from now or the end of this week,
+     * whichever is later, or null without calendar access: the styles pick from them (the next 3, today, tomorrow,
+     * the week's dots; [Agenda]). At most [MAX_EVENTS], the soonest.
+     */
     private fun events(c: Context, now: Long): List<AodFaces.Event>? {
         if (needsCalendar(c)) return null
+        val week = Agenda.weekBounds(now)
+        val from = min(week.first(), Agenda.midnight(now))
+        val to = max(week.last(), now + 7 * Agenda.DAY)
         return runCatching {
             val out = ArrayList<AodFaces.Event>()
             val proj = arrayOf(CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN, CalendarContract.Instances.END,
                 CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.EVENT_LOCATION)
-            CalendarContract.Instances.query(c.contentResolver, proj, now - 86_400_000L, now + 7 * 86_400_000L)?.use { cur ->
+            CalendarContract.Instances.query(c.contentResolver, proj, from - Agenda.DAY, to)?.use { cur ->
                 while (cur.moveToNext()) {
                     val allDay = cur.getInt(3) == 1
                     var begin = cur.getLong(1); var end = cur.getLong(2)
                     if (allDay) {   // stored as UTC midnights: the same dates, local
                         begin = utcDayToLocal(begin); end = utcDayToLocal(end)
                     }
-                    if (end <= now) continue
+                    if (end <= from && begin < from) continue
                     out += AodFaces.Event(cur.getString(0)?.takeIf { it.isNotBlank() } ?: "(No title)", begin, end, allDay, cur.getString(4)?.takeIf { it.isNotBlank() })
                 }
             }
-            out.sortedWith(compareBy({ it.begin }, { !it.allDay })).take(3)
+            out.sortedWith(compareBy({ it.begin }, { !it.allDay })).let { all ->
+                // Many events: keep the week's past ones only as far as room allows; the coming ones first.
+                if (all.size <= MAX_EVENTS) all else (all.filter { it.end > now }.take(MAX_EVENTS) + all.filter { it.end <= now }.takeLast(MAX_EVENTS / 4))
+                    .sortedWith(compareBy({ it.begin }, { !it.allDay }))
+            }
         }.onFailure { Log.w(TAG, "aod: calendar: $it") }.getOrDefault(emptyList())
     }
+
+    private const val MAX_EVENTS = 200
 
     private fun utcDayToLocal(utc: Long): Long {
         val u = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = utc }

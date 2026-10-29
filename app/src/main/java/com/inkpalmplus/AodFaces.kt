@@ -34,13 +34,14 @@ object AodFaces {
 
     class Data(
         val now: Long, val h24: Boolean, val battery: Int, val low: Boolean, val live: Boolean,
-        /** Null: no calendar access. */
+        /** Null: no calendar access. Otherwise this week's and the next 7 days' events ([Aod]'s calendar read). */
         val events: List<Event>?, val book: Book?, val photo: Bitmap?, val rotation: Int,
+        val agenda: Agenda.Style = Agenda.Style.CLASSIC,
     ) {
-        fun copy(rotation: Int) = Data(now, h24, battery, low, live, events, book, photo, rotation)
+        fun copy(rotation: Int, agenda: Agenda.Style? = null) = Data(now, h24, battery, low, live, events, book, photo, rotation, agenda ?: this.agenda)
 
-        /** Everything the face shows: the minute, battery, events, book, photo and orientation. */
-        fun key(face: Aod.Face): String = listOf(face.name, minute(now), battery, low, live, rotation,
+        /** Everything the face shows: the minute, battery, events, book, photo, orientation and Agenda style. */
+        fun key(face: Aod.Face): String = listOf(face.name, agenda.name, minute(now), battery, low, live, rotation,
             events?.joinToString("|") { "${it.title}${it.begin}${it.end}" } ?: "no-access",
             book?.let { "${it.title}${it.progress}${it.cover != null}" }, photo?.generationId).joinToString(";")
 
@@ -92,7 +93,14 @@ object AodFaces {
             Aod.Face.CLOCK -> clock(c, w, h, d)
             Aod.Face.CLOCK_DATE -> clockDate(c, w, h, d)
             Aod.Face.ANALOG -> analog(c, w, h, d)
-            Aod.Face.AGENDA -> agenda(c, w, h, d)
+            Aod.Face.AGENDA -> when (d.agenda) {
+                Agenda.Style.CLASSIC -> agenda(c, w, h, d)
+                Agenda.Style.BIG_CLOCK -> bigClock(c, w, h, d)
+                Agenda.Style.DAY_RAIL -> dayRail(c, w, h, d)
+                Agenda.Style.NEXT_UP -> nextUp(c, w, h, d)
+                Agenda.Style.TWO_DAYS -> twoDays(c, w, h, d)
+                Agenda.Style.WEEK -> week(c, w, h, d)
+            }
             Aod.Face.READING -> reading(c, w, h, d)
             Aod.Face.PHOTO -> if (d.photo != null) photo(c, w, h, d, d.photo) else clockDate(c, w, h, d)
             Aod.Face.MINIMAL -> minimal(c, w, h, d)
@@ -117,6 +125,13 @@ object AodFaces {
         }
         src.recycle()
         return out
+    }
+
+    /** Undoes [turn] (for pictures checked upright). */
+    fun turnBack(src: Bitmap, deg: Int): Bitmap {
+        if (deg == 0) return src
+        val m = android.graphics.Matrix().apply { postRotate(-deg.toFloat()) }
+        return Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true).also { src.recycle() }
     }
 
     /** Test face: a big arrow to the top of the screen as held, with the rotation written under it. */
@@ -239,7 +254,7 @@ object AodFaces {
 
     private fun agendaList(c: Canvas, d: Data, cx: Float, width: Float, top: Float): Float {
         var y = c.line("NEXT 3", cx, top, pen(u(16), HEAVY, 0.08f)) + u(4)
-        val ev = d.events
+        val ev = d.events?.let { Agenda.upcoming(it, d.now) }
         val msg = when {
             ev == null -> "Calendar access needed" to "Open InkPalm+ → Sleep & power → Sleep screen"
             ev.isEmpty() -> "Nothing in the next 7 days" to ""
@@ -263,7 +278,7 @@ object AodFaces {
             var y = (h - big.textSize - u(6) - day.textSize) / 2
             y = c.line(time(d), cx, y, big) + u(6)
             c.line(dayLong(d), cx, y, day)
-            val count = d.events?.size?.coerceAtLeast(1) ?: 1
+            val count = d.events?.let { Agenda.upcoming(it, d.now).size }?.coerceAtLeast(1) ?: 1
             val listH = u(20) + count * u(72)
             agendaList(c, d, w * 0.72f, w * 0.48f, ((h - listH) / 2).coerceAtLeast(u(10)))
             return
@@ -273,6 +288,462 @@ object AodFaces {
         y = c.line(dayLong(d), w / 2f, y, day) + day.textSize * 0.2f + u(14)
         rule(c, w / 2f, y, minOf(w * 0.7f, u(250))); y += u(3 + 14)
         agendaList(c, d, w / 2f, w * 0.9f, y)
+    }
+
+    // ---- Agenda styles (docs/mockups/aod/agenda-variants/; their CSS px are panel px, no [u]) -------------
+
+    private val THIN: Typeface = Typeface.create(Typeface.DEFAULT, 400, false)
+    private val LEFT = Paint.Align.LEFT
+    private val RIGHT = Paint.Align.RIGHT
+
+    /** Draws [s] as CSS does in a line box [lh] × its size from [top] (glyphs centred). Returns the box bottom. */
+    private fun Canvas.css(s: String, x: Float, top: Float, p: Paint, lh: Float = 1.2f): Float {
+        line(s, x, top + p.textSize * (lh - 1) / 2, p)
+        return top + p.textSize * lh
+    }
+
+    /** The baseline [Canvas.css] draws [p]'s glyphs on, in a box from [top]. */
+    private fun baseline(p: Paint, top: Float, lh: Float = 1.2f): Float {
+        val fm = p.fontMetrics
+        return top + p.textSize * lh / 2 - (fm.ascent + fm.descent) / 2
+    }
+
+    /** The mockups' small capitals ("NEXT 3", "TODAY"). */
+    private fun cap(size: Float, align: Paint.Align = LEFT, color: Int = Color.BLACK, spacing: Float = 0.08f) = pen(size, HEAVY, spacing, color, align)
+
+    private fun thin(size: Float, align: Paint.Align = LEFT, color: Int = Color.BLACK) = pen(size, THIN, color = color, align = align)
+
+    /** The big time of the styles (800, tight), shrunk to [maxW]. */
+    private fun clockPen(size: Float, d: Data, maxW: Float, align: Paint.Align = Paint.Align.CENTER, spacing: Float = -0.045f) =
+        fit(pen(size, HEAVY, spacing, align = align), time(d), maxW)
+
+    private fun hm(d: Data, t: Long) = fmt(if (d.h24) "HH:mm" else "h:mm", t)
+
+    /** Where a style's content must end: above the "Updated" stamp when Live. */
+    private fun limit(d: Data, h: Int) = h - if (d.live) 90f else 44f
+
+    private fun today(d: Data, t: Long) = t >= Agenda.midnight(d.now) && t < Agenda.midnight(d.now, 1)
+
+    /** "until 12:00 · Room 4" (or "until Sat 09:00"); an all-day event's place. */
+    private fun subOf(d: Data, e: Event): String = if (e.allDay) e.where.orEmpty() else
+        "until " + (if (today(d, e.end - 1) || e.end - e.begin < 12 * Agenda.HOUR) hm(d, e.end) else fmt("EEE ", e.end) + hm(d, e.end)) +
+            (e.where?.let { " · $it" } ?: "")
+
+    /** The mockups' battery: a 38×18 icon and "82%" (22 px), [align]ed on [x], centred on [cy]. */
+    private fun bat(c: Canvas, x: Float, cy: Float, level: Int, align: Paint.Align = Paint.Align.CENTER) {
+        if (level < 0) return
+        val p = pen(22f, BOLD, align = LEFT)
+        val label = "$level%"
+        val total = 38f + 8f + p.measureText(label)
+        val x0 = when (align) { LEFT -> x; RIGHT -> x - total; else -> x - total / 2 }
+        c.drawRoundRect(RectF(x0 + 1.5f, cy - 7.5f, x0 + 36.5f, cy + 7.5f), 4f, 4f, stroke(3f))
+        c.drawRect(x0 + 5, cy - 4, x0 + 5 + 28 * level.coerceIn(0, 100) / 100f, cy + 4, fill)
+        c.line(label, x0 + 46, cy - 11, p)
+    }
+
+    /** No calendar access, else [empty]: one or two lines from [top]. Returns the bottom. */
+    private fun notice(c: Canvas, d: Data, empty: String, x: Float, top: Float, width: Float, align: Paint.Align = LEFT, size: Float = 32f): Float {
+        val (a, b) = if (d.events == null) "Calendar access needed" to "Open InkPalm+ → Sleep & power → Sleep screen" else empty to ""
+        var y = c.css(a, x, top, fit(pen(size, HEAVY, align = align), a, width))
+        if (b.isNotEmpty()) y = c.css(b, x, y + 4, fit(pen(size * 0.7f, SEMI, align = align), b, width))
+        return y
+    }
+
+    /** "+2 more" under a cut list. */
+    private fun more(c: Canvas, n: Int, x: Float, top: Float, size: Float) = c.css("+$n more", x, top, thin(size))
+
+    /** "ALL DAY Parcel · Pick up" (or "+1" for more) in a rounded box at [x], [top], [fs] px. Returns the bottom. */
+    private fun allDayChip(c: Canvas, events: List<Event>, x: Float, top: Float, maxW: Float, fs: Float, border: Float = 4f, padV: Float = 10f, padH: Float = 18f, radius: Float = 16f): Float {
+        val e = events.first()
+        val head = pen(fs, HEAVY, align = LEFT); val rest = pen(fs, BOLD, align = LEFT)
+        val more = if (events.size > 1) " +${events.size - 1}" else ""
+        val label = "ALL DAY "
+        val textW = maxW - 2 * (border + padH) - head.measureText(label)
+        val body = ell(rest, e.title + (e.where?.let { " · $it" } ?: ""), textW - rest.measureText(more)) + more
+        val bw = 2 * (border + padH) + head.measureText(label) + rest.measureText(body)
+        val bh = 2 * (border + padV) + fs * 1.2f
+        c.drawRoundRect(RectF(x + border / 2, top + border / 2, x + bw - border / 2, top + bh - border / 2), radius, radius, stroke(border))
+        val ty = top + border + padV
+        c.css(label, x + border + padH, ty, head)
+        c.css(body, x + border + padH + head.measureText(label), ty, rest)
+        return top + bh
+    }
+
+    // A: big clock, compact next-3 rows --------------------------------------------------------------
+
+    private fun bigClock(c: Canvas, w: Int, h: Int, d: Data) {
+        val ev = Agenda.upcoming(d.events.orEmpty(), d.now)
+        if (w > h) {
+            val half = w * 0.48f
+            c.drawRect(half - 4, 48f, half, h - 48f, fill)
+            val big = clockPen(230f, d, half - 60)
+            val day = fit(pen(40f, BOLD), dayLong(d), half - 60)
+            var y = (h - (big.textSize + 6 + day.textSize * 1.2f + 16 + 26.4f)) / 2
+            y = c.css(time(d), half / 2, y, big, 1f) + 6
+            y = c.css(dayLong(d), half / 2, y, day) + 16
+            bat(c, half / 2, y + 13.2f, d.battery)
+            val left = half + 50; val width = w - 50 - left
+            val listH = 28.8f + 14 + (if (ev.isEmpty()) 4 + 34 + 70f else ev.size * 152f + 4)
+            nextRows(c, d, ev, left, width, maxOf((h - listH) / 2, 30f))
+            return
+        }
+        var y = c.css(time(d), w / 2f, 64f, clockPen(230f, d, w - 60f), 1f) + 6
+        y = c.css(dayLong(d), w / 2f, y, fit(pen(44f, BOLD), dayLong(d), w - 60f)) + 18
+        bat(c, w / 2f, y + 13.2f, d.battery)
+        nextRows(c, d, ev, 40f, w - 80f, y + 26.4f + 50)
+    }
+
+    /** "NEXT 3" and the rows: time (or ALL DAY, with the weekday if not today) | title over "until 12:00". */
+    private fun nextRows(c: Canvas, d: Data, ev: List<Event>, left: Float, width: Float, top: Float) {
+        var y = c.css("NEXT ${ev.size.coerceAtLeast(3)}", left, top, cap(24f)) + 14
+        c.drawRect(left, y, left + width, y + 4, fill)
+        if (ev.isEmpty()) { notice(c, d, "Nothing in the next 7 days", left, y + 38, width); return }
+        val name = pen(40f, BOLD, align = LEFT); val sub = thin(25f)
+        val tw = width - 170
+        for (e in ev) {
+            y += 4 + 34
+            val mid = y + 40
+            val day = if (today(d, e.begin) || e.begin <= d.now) null else fmt("EEE", e.begin).uppercase()
+            val t = if (e.allDay) "ALL DAY" else hm(d, e.begin)
+            val tp = if (e.allDay) cap(22f, spacing = 0.04f) else pen(34f, HEAVY, align = LEFT)
+            if (day != null) {
+                val dp = cap(20f)
+                c.css(day, left, mid - (dp.textSize * 1.2f + tp.textSize * 1.1f) / 2, dp)
+                c.css(t, left, mid - (dp.textSize * 1.2f + tp.textSize * 1.1f) / 2 + dp.textSize * 1.2f, fit(tp, t, 160f), 1.1f)
+            } else c.css(t, left, mid - tp.textSize * 0.6f, fit(tp, t, 160f))
+            val s = subOf(d, e)
+            if (s.isEmpty()) c.css(ell(name, e.title, tw), left + 170, mid - 22, name, 1.1f)
+            else c.css(ell(sub, s, tw), left + 170, c.css(ell(name, e.title, tw), left + 170, y, name, 1.1f) + 6, sub)
+            y += 80 + 34
+            c.drawRect(left, y, left + width, y + 4, fill)
+        }
+    }
+
+    // B: day rail by hour ----------------------------------------------------------------------------
+
+    private fun dayRail(c: Canvas, w: Int, h: Int, d: Data) {
+        val t0 = Agenda.midnight(d.now)
+        val todays = Agenda.onDay(d.events.orEmpty(), t0, Agenda.midnight(d.now, 1))
+        val allDay = todays.filter { it.allDay }
+        val rail: RectF
+        if (w > h) {
+            val lw = w * 0.36f
+            var y = c.css(time(d), 38f, 44f, clockPen(150f, d, lw - 60, LEFT), 1f) + 6
+            y = c.css(dayLong(d), 44f, y, fit(pen(34f, BOLD, align = LEFT), dayLong(d), lw - 60)) + 16
+            bat(c, 44f, y + 13.2f, d.battery, LEFT)
+            if (allDay.isNotEmpty()) allDayChip(c, allDay, 44f, limit(d, h) - 54.4f, lw - 64, 22f)
+            rail = RectF(lw + 20, 36f, w - 44f, limit(d, h))
+        } else {
+            val big = clockPen(150f, d, w * 0.62f, LEFT)
+            var y = c.css(time(d), 40f, 50f, big, 1f) + 6
+            val day = fit(pen(36f, BOLD, align = LEFT), dayLong(d), w - 80f - 130f)
+            y = c.css(dayLong(d), 40f, y, day)
+            bat(c, w - 40f, y - 12 - 13.2f, d.battery, RIGHT)
+            y += 22
+            if (allDay.isNotEmpty()) y = allDayChip(c, allDay, 40f, y, w - 80f, 26f)
+            rail = RectF(30f, y + 34, w - 36f, minOf(h - 176f, limit(d, h)))
+        }
+        if (d.events == null) { notice(c, d, "", rail.left + 140, rail.top, rail.width() - 140); return }
+        rail(c, d, rail, todays.filter { !it.allDay }, t0, if (todays.isEmpty()) "Nothing on today" else "No timed events today")
+    }
+
+    /** The hours down [r]: labels and ticks, a block per event (≥ 34 px), its label beside it (pushed apart so none
+     *  overlap, [Agenda.stack]), the longest free stretch after now, and a line at now. */
+    private fun rail(c: Canvas, d: Data, r: RectF, timed: List<Event>, t0: Long, empty: String) {
+        val hour = Agenda.HOUR.toFloat()
+        fun hr(t: Long) = ((t - t0).coerceIn(0L, Agenda.DAY) / hour)
+        val nowH = hr(d.now)
+        val (h0, h1) = Agenda.railHours(timed.map { hr(it.begin) to hr(it.end) }, nowH)
+        val px = r.height() / (h1 - h0)
+        fun y(v: Float) = r.top + (v - h0) * px
+        val x = r.left
+        val hp = pen(22f, BOLD, align = RIGHT)
+        fun hourLabel(v: Int) = if (d.h24) "%02d".format(v % 24) else fmt("h a", t0 + v * Agenda.HOUR)
+        fit(hp, if (d.h24) "00" else hourLabel(12), 70f)
+        val step = Agenda.hourStep(px, hp.textSize * 1.6f)
+        for (v in h0..h1) {
+            c.drawRect(x + 84, y(v.toFloat()) - 1.5f, x + 128, y(v.toFloat()) + 1.5f, fill)
+            if ((v - h0) % step == 0) c.line(hourLabel(v), x + 74, y(v.toFloat()) - hp.textSize / 2, hp)
+        }
+        for (e in timed) {
+            val top = y(hr(e.begin))
+            c.drawRoundRect(RectF(x + 92, top, x + 122, minOf(top + maxOf((hr(e.end) - hr(e.begin)) * px, 34f), r.bottom + 17)), 6f, 6f, fill)
+        }
+        // Labels: one 44 px slot each, from the first not over yet when they can't all fit.
+        val slot = 44f
+        val lx = x + 140; val lw = r.right - lx
+        val shown = Agenda.window(timed.size, Agenda.fitting(slot, 0f, r.top - 6, r.bottom + 17), timed.indexOfFirst { it.end > d.now }.coerceAtLeast(0)).map { timed[it] }
+        val gap = Agenda.freeGap(timed.map { it.begin to it.end }, d.now)
+        val free = gap?.let { (a, b) -> (y(hr(a)) + y(hr(b))) / 2 - slot / 2 }
+        val wants = shown.map { y(hr(it.begin)) - 6 }
+        // The free stretch takes its place among the labels when they still fit with it.
+        val withFree = free?.let { f -> (wants + f).sorted().let { all -> Agenda.stack(all, slot, 0f, r.top - 6, r.bottom + 17)?.let { all to it } } }
+        val tops = withFree?.second ?: Agenda.stack(wants, slot, 0f, r.top - 6, r.bottom + 17) ?: wants
+        val freeIndex = withFree?.first?.indexOf(free) ?: -1
+        val bold = pen(30f, HEAVY, align = LEFT); val sub = thin(22f)
+        var i = 0
+        tops.forEachIndexed { k, top ->
+            if (k == freeIndex) {
+                val (a, b) = gap!!
+                val label = "FREE ${hm(d, a)} – ${hm(d, b)}"
+                val p = cap(22f)
+                val bw = p.measureText(label) + 28 + 6
+                val box = RectF(lx + 1.5f, top + 1.5f, lx + bw - 1.5f, top + 44 - 1.5f)
+                c.drawRoundRect(box, 10f, 10f, Paint().apply { color = Color.WHITE })
+                c.drawRoundRect(box, 10f, 10f, stroke(3f).apply { pathEffect = android.graphics.DashPathEffect(floatArrayOf(7f, 5f), 0f) })
+                c.css(label, lx + 17, top + 3 + 6, p)
+                return@forEachIndexed
+            }
+            val e = shown[i++]
+            val head = ell(bold, "${hm(d, e.begin)} ${e.title}", lw - 10)
+            val s = e.where ?: "until ${hm(d, e.end)}"
+            val room = lw - 10 - bold.measureText(head) - 10
+            val tail = if (room > 60) ell(sub, s, room) else ""
+            val end = lx + bold.measureText(head) + (if (tail.isNotEmpty()) 10 + sub.measureText(tail) else 0f) + 10
+            c.drawRect(lx, top + 2, minOf(end, r.right), top + 2 + 34.5f, Paint().apply { color = Color.WHITE })
+            val base = baseline(bold, top + 2, 1.15f)
+            c.drawText(head, lx, base, bold)
+            if (tail.isNotEmpty()) c.drawText(tail, lx + bold.measureText(head) + 10, base, sub)
+        }
+        if (timed.isEmpty()) {
+            val top = (y(nowH) + 16).let { if (it + 40 > r.bottom) y(nowH) - 56 else it }
+            c.drawRect(lx, top, lx + bold.measureText(empty) + 10, top + 38, Paint().apply { color = Color.WHITE })
+            c.css(empty, lx, top, fit(bold, empty, lw), 1.15f)
+        }
+        val ny = y(nowH)
+        c.drawRect(x + 74, ny - 3, r.right, ny + 3, fill)
+        c.drawCircle(x + 73, ny, 9f, fill)
+    }
+
+    // C: next-up hero card ---------------------------------------------------------------------------
+
+    private fun nextUp(c: Canvas, w: Int, h: Int, d: Data) {
+        val land = w > h
+        val all = Agenda.upcoming(d.events.orEmpty(), d.now, n = Int.MAX_VALUE)
+        val hero = all.firstOrNull { !it.allDay } ?: all.firstOrNull()
+        val t1 = Agenda.midnight(d.now, 1); val t2 = Agenda.midnight(d.now, 2)
+        val later = Agenda.onDay(d.events.orEmpty(), Agenda.midnight(d.now), t1, d.now).filter { it !== hero }.sortedBy { it.allDay }
+        val tomorrow = Agenda.onDay(d.events.orEmpty(), t1, t2).let { l -> l.firstOrNull { !it.allDay } ?: l.firstOrNull() }?.takeIf { it !== hero }
+        val left: Float; val width: Float; var y: Float
+        if (land) {
+            val lw = (w - 88) * 0.42f
+            val big = clockPen(150f, d, lw, LEFT)
+            val day = fit(pen(36f, BOLD, align = LEFT), dayLong(d), lw)
+            var ly = (h - (big.textSize + 4 + day.textSize * 1.2f + 16 + 26.4f)) / 2
+            ly = c.css(time(d), 38f, ly, big, 1f) + 4
+            ly = c.css(dayLong(d), 44f, ly, day) + 16
+            bat(c, 44f, ly + 13.2f, d.battery, LEFT)
+            left = 44 + lw + 44; width = w - 44 - left
+            val rowsH = minOf(later.size, 4) * 63f
+            y = if (hero == null) (h - 180f) / 2 else maxOf((h - (280f + 14 + rowsH)) / 2, 30f)
+        } else {
+            val big = clockPen(96f, d, w - 80f - 140, LEFT)
+            var ty = c.css(time(d), 40f, 56f, big, 1f) + 4
+            ty = c.css(dayLong(d), 40f, ty, fit(pen(32f, BOLD, align = LEFT), dayLong(d), w - 80f - 140))
+            bat(c, w - 40f, (56f + ty) / 2, d.battery, RIGHT)
+            left = 40f; width = w - 80f; y = ty + 44
+        }
+        if (hero == null) {
+            // An outlined card in the hero's place.
+            val bh = 34 + 28.8f + 14 + 38.4f + (if (d.events == null) 31f else 0f) + 34
+            c.drawRoundRect(RectF(left + 2, y + 2, left + width - 2, y + bh - 2), 22f, 22f, stroke(4f))
+            val ty = c.css("NEXT UP", left + 36, y + 34, cap(24f)) + 14
+            notice(c, d, "Nothing in the next 7 days", left + 36, ty, width - 72)
+            return
+        }
+        // The card.
+        val pad = if (land) 32f else 36f; val padV = if (land) 26f else 34f
+        val head = when {
+            hero.begin <= d.now -> if (hero.allDay) "TODAY · ALL DAY" else "NOW · ENDS ${Agenda.until(hero.end, d.now).uppercase()}"
+            today(d, hero.begin) -> if (hero.allDay) "NEXT UP · TODAY" else "NEXT UP · ${Agenda.until(hero.begin, d.now).uppercase()}"
+            hero.begin < t2 -> "NEXT UP · TOMORROW"
+            else -> "NEXT UP · " + fmt("EEEE d MMM", hero.begin).uppercase()
+        }
+        val inner = width - 2 * pad
+        val hp = cap(24f, color = Color.WHITE)
+        val tp = fit(pen(if (land) 84f else 130f, HEAVY, -0.03f, Color.WHITE, LEFT), "00:00", inner)
+        val np = pen(if (land) 48f else 72f, BOLD, color = Color.WHITE, align = LEFT)
+        while (np.measureText(hero.title) > inner && np.textSize > (if (land) 38f else 54f)) np.textSize *= 0.95f
+        val sp = thin(28f, color = Color.WHITE)
+        val sub = subOf(d, hero)
+        val cardH = 2 * padV + hp.textSize * 1.2f + 14 + tp.textSize + 6 + np.textSize * 1.05f + (if (sub.isNotEmpty()) 10 + sp.textSize * 1.2f else 0f)
+        c.drawRoundRect(RectF(left, y, left + width, y + cardH), 22f, 22f, fill)
+        var cy = c.css(ell(hp, head, inner), left + pad, y + padV, hp) + 14
+        cy = c.css(if (hero.allDay) "All day" else hm(d, hero.begin), left + pad, cy, tp, 1f) + 6
+        cy = c.css(ell(np, hero.title, inner), left + pad, cy, np, 1.05f)
+        if (sub.isNotEmpty()) c.css(ell(sp, sub, inner), left + pad, cy + 10, sp)
+        y += cardH
+        // The rest of today, then tomorrow's first.
+        val fs = if (land) 30f else 34f; val rowPad = if (land) 12f else 24f
+        val rowH = 2 * rowPad + fs * 1.2f + 3
+        val boxH = 3 + 18 + 36f + 18 + 3
+        if (!land && later.isNotEmpty()) {
+            y = c.css("LATER TODAY", left, y + 34, cap(22f)) + 6
+            c.drawRect(left, y, left + width, y + 3, fill); y += 3
+        } else y += 14
+        val bottom = limit(d, h) - if (!land && tomorrow != null) boxH + 40 else 0f
+        val rows = later.take(Agenda.rowsShown(later.size, rowH, y, bottom, 44f))
+        val tb = pen(fs, HEAVY, align = LEFT); val nb = pen(fs, BOLD, align = LEFT); val rp = thin(24f, RIGHT)
+        for (e in rows) {
+            val base = baseline(tb, y + rowPad)
+            val t = if (e.allDay) "ALL DAY" else hm(d, e.begin)
+            val right = if (e.allDay) e.where.orEmpty() else Agenda.duration(e.end - e.begin)
+            val rw = if (right.isEmpty()) 0f else minOf(rp.measureText(right), width * 0.3f)
+            c.drawText(t, left + 4, base, tb)
+            val nx = left + 4 + tb.measureText("$t  ")
+            c.drawText(ell(nb, e.title, left + width - 4 - rw - 16 - nx), nx, base, nb)
+            if (right.isNotEmpty()) c.drawText(ell(rp, right, rw), left + width - 4, base, rp)
+            y += rowH
+            c.drawRect(left, y - 3, left + width, y, fill)
+        }
+        if (rows.size < later.size) y = more(c, later.size - rows.size, left + 4, y + 8, 26f)
+        if (!land && tomorrow != null) {
+            y += 40
+            c.drawRoundRect(RectF(left + 1.5f, y + 1.5f, left + width - 1.5f, y + boxH - 1.5f), 14f, 14f, stroke(3f))
+            val cp = cap(22f); val tp2 = pen(30f, BOLD, align = RIGHT)
+            val base = baseline(tp2, y + 21, 1.2f)
+            c.drawText("TOMORROW", left + 29, base, cp)
+            val txt = (if (tomorrow.allDay) "All day " else hm(d, tomorrow.begin) + " ") + tomorrow.title
+            c.drawText(ell(tp2, txt, width - 58 - cp.measureText("TOMORROW") - 24), left + width - 29, base, tp2)
+        }
+    }
+
+    // D: today / tomorrow split ----------------------------------------------------------------------
+
+    private fun twoDays(c: Canvas, w: Int, h: Int, d: Data) {
+        val t0 = Agenda.midnight(d.now); val t1 = Agenda.midnight(d.now, 1); val t2 = Agenda.midnight(d.now, 2)
+        val ev = d.events.orEmpty()
+        val today = Agenda.onDay(ev, t0, t1, d.now); val tomorrow = Agenda.onDay(ev, t1, t2)
+        val tA = today.filter { it.allDay }; val tT = today.filter { !it.allDay }
+        val mA = tomorrow.filter { it.allDay }; val mT = tomorrow.filter { !it.allDay }
+        val bottom = limit(d, h)
+        if (w > h) {
+            val big = clockPen(120f, d, w * 0.4f, LEFT)
+            c.css(time(d), 50f, 36f, big, 1f)
+            val bb = baseline(big, 36f, 1f)
+            val dp = fit(pen(34f, BOLD, align = LEFT), dayLong(d), w - 56 - 200 - big.measureText(time(d)) - 30 - 56)
+            c.drawText(dayLong(d), 56 + big.measureText(time(d)) + 30, bb, dp)
+            bat(c, w - 56f, 36f + 60, d.battery, RIGHT)
+            c.drawRect(56f, 174f, w - 56f, 178f, fill)
+            val colW = (w - 112) / 2f
+            if (d.events == null) { notice(c, d, "", 56f, 204f, w - 112f); return }
+            c.drawRect(56 + colW - 4, 204f, 56 + colW, bottom, fill)
+            dayColumn(c, d, "TODAY", fmt("EEE d MMM", t0), tT, tA, 56f, 204f, colW - 44, 28f, 8f, bottom, null, "Nothing else today")
+            dayColumn(c, d, "TOMORROW", fmt("EEE d MMM", t1), mT, mA, 56 + colW + 44, 204f, colW - 44, 28f, 8f, bottom, null, "Nothing yet")
+            return
+        }
+        val big = clockPen(120f, d, w - 80f - 140, LEFT)
+        c.css(time(d), 40f, 56f, big, 1f)
+        bat(c, w - 40f, 56f + big.textSize / 2, d.battery, RIGHT)
+        var y = 56f + big.textSize + 30
+        c.drawRect(40f, y, w - 40f, y + 4, fill); y += 4 + 34
+        if (d.events == null) { notice(c, d, "", 40f, y, w - 80f); return }
+        // Rows shared between the days by the room left (each gets half, and what one doesn't use goes to the other).
+        val fs = 38f; val rowH = 3 + 32 + 2 * fs * 1.15f
+        fun headH(allDay: List<Event>) = 30 * 1.2f + 2 + 22 * 1.2f + 14 + (if (allDay.isNotEmpty()) 3 + 8 + (fs - 8) * 1.2f + 8 + 3 + 12 else 0f)
+        val fixed = headH(tA) + 34 + 3 + 30 + headH(mA)
+        val room = ((bottom - y - fixed) / rowH).toInt().coerceAtLeast(0)
+        // A cut list gives a row to its "+2 more".
+        val (a, b) = Agenda.share(tT.size, mT.size, room).let { (a, b) -> if (a + b < tT.size + mT.size) Agenda.share(tT.size, mT.size, (room - 1).coerceAtLeast(0)) else a to b }
+        y = dayColumn(c, d, "TODAY", fmt("EEE d MMM", t0), tT, tA, 40f, y, w - 80f, fs, 16f, bottom, a, "Nothing else today") + 34
+        c.drawRect(40f, y, w - 40f, y + 3, fill); y += 3 + 30
+        dayColumn(c, d, "TOMORROW", fmt("EEE d MMM", t1), mT, mA, 40f, y, w - 80f, fs, 16f, bottom, b, "Nothing yet")
+    }
+
+    /** "TODAY" / "Fri 24 Oct", the all-day box, then a row per event (time over title), as many as [rows] (null: as
+     *  fit above [bottom]); a cut list ends with "+2 more". Returns the bottom. */
+    private fun dayColumn(c: Canvas, d: Data, title: String, sub: String, timed: List<Event>, allDay: List<Event>, x: Float, top: Float, width: Float,
+                          fs: Float, rowPad: Float, bottom: Float, rows: Int?, empty: String): Float {
+        var y = c.css(title, x, top, cap(30f)) + 2
+        y = c.css(sub, x, y, thin(22f)) + 14
+        if (allDay.isNotEmpty()) y = allDayChip(c, allDay, x, y, width, fs - 8, 3f, 8f, 14f, 12f).let { b ->
+            // The box spans the column, as in the mockup.
+            b + 12
+        }
+        if (timed.isEmpty()) return if (allDay.isEmpty()) c.css(empty, x, y, thin(fs * 0.8f)) else y
+        val rowH = 3 + 2 * rowPad + 2 * fs * 1.15f
+        val shown = timed.take(rows ?: Agenda.rowsShown(timed.size, rowH, y, bottom, fs * 0.7f * 1.2f + 13))
+        val tp = pen(fs, HEAVY, align = LEFT); val np = pen(fs, BOLD, align = LEFT)
+        for (e in shown) {
+            c.drawRect(x, y, x + width, y + 3, fill)
+            var ry = c.css(hm(d, e.begin), x, y + 3 + rowPad, tp, 1.15f)
+            ry = c.css(ell(np, e.title, width), x, ry, np, 1.15f)
+            y = ry + rowPad
+        }
+        if (shown.size < timed.size) { c.drawRect(x, y, x + width, y + 3, fill); y = more(c, timed.size - shown.size, x, y + 10, fs * 0.7f) }
+        return y
+    }
+
+    // E: week strip + today --------------------------------------------------------------------------
+
+    private fun week(c: Canvas, w: Int, h: Int, d: Data) {
+        val land = w > h
+        val bounds = Agenda.weekBounds(d.now)
+        val counts = Agenda.perDay(d.events.orEmpty(), bounds)
+        val sx = if (land) 44f else 40f; val sy = if (land) 30f else 44f
+        val cellW = (w - 2 * sx - 6 * 8) / 7
+        val cellH = 128.4f
+        for (i in 0 until 7) {
+            val cx = sx + i * (cellW + 8)
+            val now = d.now >= bounds[i] && d.now < bounds[i + 1]
+            val r = RectF(cx, sy, cx + cellW, sy + cellH)
+            if (now) c.drawRoundRect(r, 14f, 14f, fill)
+            else c.drawRoundRect(RectF(r.left + 1.5f, r.top + 1.5f, r.right - 1.5f, r.bottom - 1.5f), 14f, 14f, stroke(3f))
+            val ink = if (now) Color.WHITE else Color.BLACK
+            val mid = cx + cellW / 2
+            var y = c.css(fmt("EEEEE", bounds[i]), mid, sy + 3 + 14, pen(22f, BOLD, color = ink))
+            y = c.css(fmt("d", bounds[i]), mid, y, pen(40f, HEAVY, color = ink), 1.15f) + 4
+            val n = if (d.events == null) 0 else minOf(counts[i], 4)
+            val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink }
+            for (k in 0 until n) c.drawCircle(mid - (n - 1) * 9f + k * 18f, y + 8, 6f, dot)
+        }
+        val t0 = Agenda.midnight(d.now)
+        val list = Agenda.onDay(d.events.orEmpty(), t0, Agenda.midnight(d.now, 1), d.now)
+        val bottom = limit(d, h)
+        if (land) {
+            val top = sy + cellH
+            val lw = (w - 88) * 0.46f
+            val big = clockPen(190f, d, lw)
+            val day = fit(pen(36f, BOLD), dayLong(d), lw)
+            var y = top + (h - top - (big.textSize + 4 + day.textSize * 1.2f + 14 + 26.4f)) / 2
+            y = c.css(time(d), 44 + lw / 2, y, big, 1f) + 4
+            y = c.css(dayLong(d), 44 + lw / 2, y, day) + 14
+            bat(c, 44 + lw / 2, y + 13.2f, d.battery)
+            val left = 44 + lw + 44
+            // Centred in the room under the strip, with as many rows as fit.
+            val head = 22 * 1.2f + 10 + 3
+            val n = Agenda.rowsShown(list.size, ROW_E, top + 20 + head, bottom, 40f)
+            val listH = head + maxOf(n, 1) * ROW_E + (if (n < list.size) 40f else 0f)
+            todayRows(c, d, list, left, w - 44 - left, (top + (h - top - listH) / 2).coerceIn(top + 20, maxOf(top + 20, bottom - listH)), bottom, 22f)
+            return
+        }
+        var y = c.css(time(d), w / 2f, sy + cellH + 50, clockPen(200f, d, w - 60f), 1f) + 6
+        y = c.css(dayLong(d), w / 2f, y, fit(pen(40f, BOLD), dayLong(d), w - 60f)) + 16
+        bat(c, w / 2f, y + 13.2f, d.battery)
+        todayRows(c, d, list, 40f, w - 80f, y + 26.4f + 44, bottom, 24f)
+    }
+
+    private const val ROW_E = 22 + 38 * 1.2f + 22 + 3
+
+    /** "TODAY" and its rows: time (or ALL DAY) | title | how long (or where). */
+    private fun todayRows(c: Canvas, d: Data, list: List<Event>, left: Float, width: Float, top: Float, bottom: Float, capSize: Float) {
+        var y = c.css("TODAY", left, top, cap(capSize)) + 10
+        c.drawRect(left, y, left + width, y + 3, fill); y += 3
+        if (d.events == null || list.isEmpty()) { notice(c, d, "Nothing else today", left, y + 22, width); return }
+        val rowH = ROW_E
+        val shown = list.take(Agenda.rowsShown(list.size, rowH, y, bottom, 40f))
+        val tp = pen(38f, HEAVY, align = LEFT); val ap = cap(22f, spacing = 0.05f); val np = pen(38f, BOLD, align = LEFT); val rp = thin(22f, RIGHT)
+        for (e in shown) {
+            val base = baseline(np, y + 22)
+            if (e.allDay) c.drawText("ALL DAY", left, base, ap) else c.drawText(hm(d, e.begin), left, base, fit(tp, hm(d, e.begin), 140f))
+            val right = if (e.allDay) e.where.orEmpty() else Agenda.duration(e.end - e.begin)
+            val rw = if (right.isEmpty()) 0f else minOf(rp.measureText(right), width * 0.3f)
+            if (right.isNotEmpty()) c.drawText(ell(rp, right, rw), left + width, base, rp)
+            c.drawText(ell(np, e.title, width - 162 - rw - 16), left + 162, base, np)
+            y += rowH
+            c.drawRect(left, y - 3, left + width, y, fill)
+        }
+        if (shown.size < list.size) more(c, list.size - shown.size, left, y + 8, 24f)
     }
 
     /** The cover: the book's own picture, else a drawn book with its title and author (as in the mockup). */

@@ -92,12 +92,23 @@ The InkPalm keeps a picture on the screen while it sleeps, at no cost: e-ink hol
 | **Clock** | The time, huge |
 | **Clock + date** | The time, the date and the battery |
 | **Analog** | A clock face with hands, the date and the battery |
-| **Agenda** | The time and your next 3 events (asks for calendar access the first time; without it the face says "Calendar access needed") |
+| **Agenda** | The time and your events, in one of six styles (asks for calendar access the first time; without it the face says "Calendar access needed") |
 | **Reading** | The cover, title and how far you are in the last book of your reader app (covers come from EPUB files, with All files access) |
 | **Photo** | Your picture, with a small clock in the corner (**Choose picture…**; without one it shows Clock + date) |
 | **Minimal** | Just the day and date, so it's never out of date |
 | **Picture** | Your picture as it is |
 | **Default** | Moaan's own picture |
+
+With Agenda picked, **Agenda style** (under the faces) changes how it lays out your day; each style has a preview:
+
+| Style | What it shows |
+|---|---|
+| **Classic** (default) | The time, then your next 3 events in boxes |
+| **Big clock** | A large time and date, then your next 3 events as rows |
+| **Day rail** | Today by the hour: a block per event, a line at now and your longest free stretch |
+| **Next up** | Your next event in a large black card, the rest of today below and tomorrow's first event |
+| **Two days** | Today and tomorrow, one under the other (side by side in landscape) |
+| **Week** | This week's days with a dot per event, the time, then the rest of today |
 
 **Update** sets how the drawn faces keep up while the phone sleeps:
 
@@ -230,7 +241,7 @@ Per-app settings work without Shizuku. If InkPalm+ can't reach them on your firm
   - **Shizuku:** the Clear Memory whitelist, and a fallback for Animations off and for reaching Moaan's settings.
   - **Kill background processes:** used by ✕, **Clear all** and **Save + reopen**.
   - **Exact alarms** (KompaktOS): auto power-off at the time you chose, and the sleep screen's updates, even in Doze.
-  - **Calendar** (only if you pick the Agenda sleep screen): your next 3 events, read on the phone.
+  - **Calendar** (only if you pick the Agenda sleep screen): your events for this week and the next 7 days, read on the phone.
   - **Key events** (KompaktOS, only while "Hold for a full refresh" is on): the service sees the Home key to tell a hold from a touch. Other keys pass straight through.
   - **Run at startup:** checks after a restart that the panel is back on.
 - The recent-apps list and your choices stay on the phone. **Clear recent apps** empties the list.

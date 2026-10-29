@@ -607,7 +607,7 @@ open class MainActivity : Activity() {
         body.addView(hbox().apply {
             setPadding(dp(12), dp(4), dp(12), dp(4))
             gravity = Gravity.TOP
-            for (s in Dither.Style.entries) addView(thumbTile(s.title, s == style, t?.get(s), 190, description = "Photo style ${s.title}") {
+            for (s in Dither.Style.entries) addView(thumbTile(s.title, s == style, t?.get(s), 190, description = "Photo style ${s.title}", keepShape = true) {
                 work({ Aod.setPhotoStyle(this@MainActivity, s) }, "Photo style: ${s.title}")
             }, lp(0, WRAP, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
         })
@@ -632,15 +632,16 @@ open class MainActivity : Activity() {
     private fun faceTile(f: Aod.Face, selected: Boolean, thumb: Bitmap?): View =
         thumbTile(f.title, selected, thumb, 150, if (f == Aod.Face.DEFAULT) "Moaan" else if (f == Aod.Face.PICTURE) "Choose…" else "…", "Face ${f.title}") { pickFace(f) }
 
-    /** A thumbnail [heightDp] tall over its [title]; a thick frame and a ✓ when [selected]. */
+    /** A thumbnail [heightDp] tall over its [title]; a thick frame and a ✓ when [selected]. [keepShape]: not stretched
+     *  to the frame (pictures). */
     private fun thumbTile(title: String, selected: Boolean, thumb: Bitmap?, heightDp: Int, placeholder: String = "…",
-                          description: String = title, onClick: () -> Unit): View = vbox().apply {
+                          description: String = title, keepShape: Boolean = false, onClick: () -> Unit): View = vbox().apply {
         gravity = Gravity.CENTER_HORIZONTAL
         val frame = FrameLayout(this@MainActivity).apply {
             background = outline(if (selected) 4 else 2, Radius.SMALL)
             val pad = dp(if (selected) 4 else 2)
             setPadding(pad, pad, pad, pad)
-            if (thumb != null) addView(ImageView(this@MainActivity).apply { setImageBitmap(thumb); scaleType = ImageView.ScaleType.FIT_XY },
+            if (thumb != null) addView(ImageView(this@MainActivity).apply { setImageBitmap(thumb); scaleType = if (keepShape) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.FIT_XY },
                 FrameLayout.LayoutParams(MATCH, MATCH))
             else addView(text(placeholder, Type.M, bold = true).apply { gravity = Gravity.CENTER },
                 FrameLayout.LayoutParams(MATCH, MATCH))

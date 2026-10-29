@@ -135,10 +135,10 @@ class AodLogicTest {
         assertNull(Aod.rotationFromGravity(0.1f, 0.4f, -9.8f))   // face down
         assertNull(Aod.rotationFromGravity(6.9f, 6.9f, 0f))      // 45°
         assertNull(Aod.rotationFromGravity(4f, 1f, 8.9f))        // tilted a little off flat: too weak
-        assertNull(Aod.rotationFromGravity(6.5f, 1f, 7.4f))      // z still dominant
-        // The margins: 6 m/s² on the dominant axis, 2.5 over the other.
-        assertNull(Aod.rotationFromGravity(5.9f, 0f, 7.9f))
-        assertEquals(1, Aod.rotationFromGravity(6.1f, 0f, 5.7f))
+        assertEquals(1, Aod.rotationFromGravity(6.5f, 0.7f, 7.3f)) // leaning back on a stand (device log)
+        // The margins: 4.5 m/s² on the dominant axis, 2.5 over the other.
+        assertNull(Aod.rotationFromGravity(4.3f, 0f, 8.8f))
+        assertEquals(1, Aod.rotationFromGravity(4.7f, 0f, 8.6f))
         assertNull(Aod.rotationFromGravity(7.4f, 5.0f, 4.4f))    // 2.4 over the other
         assertEquals(1, Aod.rotationFromGravity(7.6f, 5.0f, 4.0f)) // 2.6 over
         assertEquals(3, Aod.rotationFromGravity(-7.6f, -5.0f, 4.0f))

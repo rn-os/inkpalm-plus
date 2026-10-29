@@ -104,21 +104,23 @@ object Aod {
         else -> 0
     }
 
-    /** Gravity along the dominant screen axis must reach this (m/s²) for an orientation to be decided ... */
-    const val GRAVITY_MIN = 6f
+    /** Gravity along the dominant screen axis must reach this (m/s²) for an orientation to be decided: the screen
+     *  tilted up at least ~27° from flat. A phone leaning back on a stand still counts (2026-10-29: propped at ~45°,
+     *  x=6.5 z=7.3, was kept as before when z had to be smaller) ... */
+    const val GRAVITY_MIN = 4.5f
     /** ... and beat the other screen axis by this much (no decision near 45°). */
     const val GRAVITY_MARGIN = 2.5f
 
     /**
      * The display rotation that shows a face upright for the accelerometer's gravity reading ([x], [y], [z], m/s²), or
-     * null when it can't be told: flat (|z| dominant), tilted near 45°, or too weak. Android's sensor axes, in the
+     * null when it can't be told: (near) flat, or turned near 45° between portrait and landscape. Android's sensor axes, in the
      * panel's natural portrait: x to the right edge, y to the top edge, z out of the screen; at rest a reading is +g
      * along the axis pointing up. So y up is ROTATION_0, x up (the top edge turned to the left) ROTATION_90, y down
      * ROTATION_180, x down ROTATION_270: as Android's own WindowOrientationListener (angle = -atan2(-x, y)).
      */
     fun rotationFromGravity(x: Float, y: Float, z: Float): Int? {
         val ax = abs(x); val ay = abs(y); val big = max(ax, ay)
-        if (big < GRAVITY_MIN || big - min(ax, ay) < GRAVITY_MARGIN || abs(z) > big) return null
+        if (big < GRAVITY_MIN || big - min(ax, ay) < GRAVITY_MARGIN) return null
         return if (ax > ay) { if (x > 0) Surface.ROTATION_90 else Surface.ROTATION_270 }
         else { if (y > 0) Surface.ROTATION_0 else Surface.ROTATION_180 }
     }

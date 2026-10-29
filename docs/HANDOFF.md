@@ -151,7 +151,7 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - Asleep the window manager reports rotation 0 whatever the phone does, so `Aod.reorient` (in `update`, before
   drawing, under the alarm's wake lock) reads TYPE_ACCELEROMETER directly: up to 600 ms or until 4 steady samples
   (`steady`: each axis within 1.5 m/s² of the mean), then `rotationFromGravity`: |x| vs |y|, decided only when the
-  dominant axis is ≥ 6 m/s², beats the other by ≥ 2.5 and beats |z|; flat, ~45° or moving keeps the held one.
+  dominant axis is ≥ 4.5 m/s² (screen tilted up ≥ ~27°; a phone leaning back on a stand counts) and beats the other by ≥ 2.5; near-flat, ~45° or moving keeps the held one. (Requiring it to beat |z| too kept a propped phone at ~45° from turning, 2026-10-29.)
   Mapping is Android's (x up → ROTATION_90, -x up → 270, -y up → 180), as WindowOrientationListener.
 - `Orientation.turned(r)` moves the held (frozen) rotation; the user's wake still clears it. The face and
   `WakeCover` (orientationFor + turnFor) both read the same held rotation, so the cover and panel buffer agree.

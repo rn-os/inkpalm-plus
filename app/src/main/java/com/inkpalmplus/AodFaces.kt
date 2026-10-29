@@ -320,7 +320,8 @@ object AodFaces {
     private fun hm(d: Data, t: Long) = fmt(if (d.h24) "HH:mm" else "h:mm", t)
 
     /** Where a style's content must end: above the "Updated" stamp when Live. */
-    private fun limit(d: Data, h: Int) = h - if (d.live) 90f else 44f
+    /** The bottom of a face's content: with the "Updated 10:15" footer (top at h - 70), a clear 40 px above it. */
+    private fun limit(d: Data, h: Int) = h - if (d.live) 110f else 44f
 
     private fun today(d: Data, t: Long) = t >= Agenda.midnight(d.now) && t < Agenda.midnight(d.now, 1)
 
@@ -375,7 +376,7 @@ object AodFaces {
         val ev = Agenda.upcoming(d.events.orEmpty(), d.now)
         if (w > h) {
             val half = w * 0.48f
-            c.drawRect(half - 4, 48f, half, h - 48f, fill)
+            c.drawRect(half - 4, 48f, half, minOf(h - 48f, limit(d, h)), fill)
             val big = clockPen(230f, d, half - 60)
             val day = fit(pen(40f, BOLD), dayLong(d), half - 60)
             var y = (h - (big.textSize + 6 + day.textSize * 1.2f + 16 + 26.4f)) / 2
@@ -432,7 +433,7 @@ object AodFaces {
             y = c.css(dayLong(d), 44f, y, fit(pen(34f, BOLD, align = LEFT), dayLong(d), lw - 60)) + 16
             bat(c, 44f, y + 13.2f, d.battery, LEFT)
             if (allDay.isNotEmpty()) allDayChip(c, allDay, 44f, limit(d, h) - 54.4f, lw - 64, 22f)
-            rail = RectF(lw + 20, 36f, w - 44f, limit(d, h))
+            rail = RectF(lw + 20, 36f, w - 44f, limit(d, h) - RAIL_SPILL)
         } else {
             val big = clockPen(150f, d, w * 0.62f, LEFT)
             var y = c.css(time(d), 40f, 50f, big, 1f) + 6
@@ -441,11 +442,14 @@ object AodFaces {
             bat(c, w - 40f, y - 12 - 13.2f, d.battery, RIGHT)
             y += 22
             if (allDay.isNotEmpty()) y = allDayChip(c, allDay, 40f, y, w - 80f, 26f)
-            rail = RectF(30f, y + 34, w - 36f, minOf(h - 176f, limit(d, h)))
+            rail = RectF(30f, y + 34, w - 36f, minOf(h - 176f, limit(d, h) - RAIL_SPILL))
         }
         if (d.events == null) { notice(c, d, "", rail.left + 140, rail.top, rail.width() - 140); return }
         rail(c, d, rail, todays.filter { !it.allDay }, t0, if (todays.isEmpty()) "Nothing on today" else "No timed events today")
     }
+
+    /** How far the rail's blocks and labels may reach below its last hour. */
+    private const val RAIL_SPILL = 17f
 
     /** The hours down [r]: labels and ticks, a block per event (≥ 34 px), its label beside it (pushed apart so none
      *  overlap, [Agenda.stack]), the longest free stretch after now, and a line at now. */
@@ -453,7 +457,7 @@ object AodFaces {
         val hour = Agenda.HOUR.toFloat()
         fun hr(t: Long) = ((t - t0).coerceIn(0L, Agenda.DAY) / hour)
         val nowH = hr(d.now)
-        val (h0, h1) = Agenda.railHours(timed.map { hr(it.begin) to hr(it.end) }, nowH)
+        val (h0, h1) = Agenda.railHours(timed.map { hr(it.begin) to hr(it.end) })
         val px = r.height() / (h1 - h0)
         fun y(v: Float) = r.top + (v - h0) * px
         val x = r.left
@@ -505,11 +509,13 @@ object AodFaces {
             c.drawText(head, lx, base, bold)
             if (tail.isNotEmpty()) c.drawText(tail, lx + bold.measureText(head) + 10, base, sub)
         }
+        val nowOn = nowH >= h0 && nowH <= h1
         if (timed.isEmpty()) {
-            val top = (y(nowH) + 16).let { if (it + 40 > r.bottom) y(nowH) - 56 else it }
+            val top = if (!nowOn) r.top else (y(nowH) + 16).let { if (it + 40 > r.bottom) y(nowH) - 56 else it }
             c.drawRect(lx, top, lx + bold.measureText(empty) + 10, top + 38, Paint().apply { color = Color.WHITE })
             c.css(empty, lx, top, fit(bold, empty, lw), 1.15f)
         }
+        if (!nowOn) return
         val ny = y(nowH)
         c.drawRect(x + 74, ny - 3, r.right, ny + 3, fill)
         c.drawCircle(x + 73, ny, 9f, fill)

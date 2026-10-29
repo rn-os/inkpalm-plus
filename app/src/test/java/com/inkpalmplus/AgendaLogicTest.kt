@@ -64,16 +64,16 @@ class AgendaLogicTest {
     }
 
     @Test fun railHoursFollowTheDay() {
-        // Nothing on: 8 to 19 (now inside).
-        assertEquals(8 to 19, Agenda.railHours(emptyList(), 10.5f))
-        // An early event and a late one widen it.
-        assertEquals(6 to 23, Agenda.railHours(listOf(6.5f to 7f, 21f to 22.25f), 10f))
-        // Now outside: taken in, with the hour after it.
-        assertEquals(8 to 23, Agenda.railHours(emptyList(), 22f))
-        assertEquals(0 to 19, Agenda.railHours(emptyList(), 0.2f))
+        // Nothing on: 7 to 19, whatever the time (now isn't taken in).
+        assertEquals(7 to 19, Agenda.railHours(emptyList()))
+        // Starts at the first timed event when that's earlier than 7; a late one widens the end.
+        assertEquals(6 to 23, Agenda.railHours(listOf(6.5f to 7f, 21f to 22.25f)))
+        assertEquals(5 to 19, Agenda.railHours(listOf(5.25f to 6f)))
+        // A first event after 7 still starts the rail at 7.
+        assertEquals(7 to 19, Agenda.railHours(listOf(10f to 11f, 14f to 15f)))
         // Until midnight at most; a short day is padded to 11 hours.
-        assertEquals(13 to 24, Agenda.railHours(emptyList(), 23.5f, from = 20, to = 21))
-        assertEquals(8 to 24, Agenda.railHours(listOf(23f to 24f), 10f))
+        assertEquals(13 to 24, Agenda.railHours(emptyList(), from = 20, to = 21))
+        assertEquals(7 to 24, Agenda.railHours(listOf(23f to 24f)))
     }
 
     @Test fun hourLabelsDontTouch() {

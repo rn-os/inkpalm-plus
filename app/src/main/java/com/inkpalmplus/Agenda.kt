@@ -74,13 +74,14 @@ object Agenda {
     // ---- Day rail (style B) --------------------------------------------------------------------------
 
     /**
-     * The rail's whole hours [first, last]: 8 to 19 by default, widened to take in [spans] (hours of the day, from
-     * midnight, e.g. 9.5 to 10.25) and [now], and at least [minSpan] hours long (widened later first, then earlier).
+     * The rail's whole hours [first, last]: from the first timed event's hour or [from] (7), whichever is earlier, to
+     * [to] (19), widened to take in [spans] (hours of the day, from midnight, e.g. 9.5 to 10.25), and at least
+     * [minSpan] hours long (widened later first, then earlier). Now isn't taken in: at night an empty day keeps its
+     * daytime rail, and the line at now is drawn only when it falls on the rail.
      */
-    fun railHours(spans: List<Pair<Float, Float>>, now: Float, from: Int = 8, to: Int = 19, minSpan: Int = 11): Pair<Int, Int> {
+    fun railHours(spans: List<Pair<Float, Float>>, from: Int = 7, to: Int = 19, minSpan: Int = 11): Pair<Int, Int> {
         var lo = from; var hi = to
         for ((b, e) in spans) { lo = min(lo, floor(b).toInt()); hi = max(hi, ceil(max(e, b)).toInt()) }
-        lo = min(lo, floor(now).toInt()); hi = max(hi, ceil(now).toInt().let { if (it.toFloat() == now) it + 1 else it })
         lo = lo.coerceIn(0, 23); hi = hi.coerceIn(lo + 1, 24)
         while (hi - lo < minSpan && hi < 24) hi++
         while (hi - lo < minSpan && lo > 0) lo--

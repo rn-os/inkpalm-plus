@@ -158,6 +158,21 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - Only with `accelerometer_rotation` = 1; off, the sleep orientation is kept as before.
 - Log line per update: `aod: orient: <sensor> n=… in … ms xyz=… → <rotation|keep>, held A → B`.
 
+## Agenda styles (branch `agenda-styles`, from `aod-reorient`, 2026-10-29)
+- Mockups: docs/mockups/aod/agenda-variants/ (sheet.png; Current, A big clock, B day rail, C next up, D today /
+  tomorrow, E week strip). All five built next to Classic (the default): `Agenda.Style`, drawn in `AodFaces`
+  (portrait and landscape; the mockups' CSS px are panel px). Sleep screen → Agenda style (shown when Agenda is the
+  face): thumbnails with today's events, a tap installs it (pref `aod_agenda_style`).
+- The calendar read now covers the start of this week (or today) to a week ahead / the week's end (≤ 200 events);
+  each style picks from it (`Agenda.upcoming`, `onDay`, `perDay`). Pure layout parts in `Agenda` (rail hours,
+  hour-label step, label stacking, longest free stretch, row sharing, "+2 more") with AgendaLogicTest.
+- Debug hooks: `aod_agenda <STYLE>`, `aod_agenda_dump` (every style, both orientations, to files/agenda_*.png).
+  Dense / empty / no-access / 24 h layouts were checked that way on an emulator with test events.
+- Verified on the device (1.1.0-branch.42): every style picked through the UI in landscape and portrait, the
+  installed files/standby.png pulled for each; a Live update asleep (Week) matched. Left on Agenda · Classic.
+- Known: Day rail pushes labels apart when events crowd, so a label can sit below its block; at night the rail
+  runs from midnight (it always takes in now). 12 h times have no AM/PM (as Classic).
+
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown
   landed; the release APK itself was checked: signed with the release key, not debuggable, SectionActivity not

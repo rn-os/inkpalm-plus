@@ -191,6 +191,19 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   rail from 12 AM); the now line only when now is on the rail. Every Agenda style now stops 40 px above the
   "Updated" footer (`limit`; the landscape Big clock divider and the rail's spill below its last hour included).
 
+## Rotation lock toggle (branch `rotation-lock`, 2026-11-16)
+- Screen & light panel, top row: [Wi-Fi] [Bluetooth] [Airplane] [Rotate] ⚙ (✕ in landscape). Mockup:
+  `docs/mockups/rotation-lock/rotation-sheet.png`, section A (the icon-over-state variant there was dropped for the
+  other toggles' "Name / State" text; no long press).
+- `RotationLock`: tap toggles Settings.System.accelerometer_rotation (1 Auto ↔ 0 Locked, filled black); locking
+  first sets user_rotation to the display's rotation, like Android's QS tile. WRITE_SETTINGS appop, Shizuku
+  fallback. A ContentObserver keeps the toggle in sync while the panel is open.
+- Per-app Rotate modes (`Rotation`'s overlay) still win over the lock; the sleep screen's reorient only reads the
+  accelerometer while auto-rotate is on, so a locked phone keeps its face's orientation.
+- One text size per row (`ToggleFit.sharedSp`, 12 → 10 sp, from the widest steady label); when "Bluetooth" can't fit
+  at 10 sp (portrait, ~98 px per toggle) the row uses the short name "BT". Passing states (Turning on…) may shrink
+  their own toggle only.
+
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown
   landed; the release APK itself was checked: signed with the release key, not debuggable, SectionActivity not

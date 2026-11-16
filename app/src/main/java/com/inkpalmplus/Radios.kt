@@ -14,7 +14,10 @@ import android.provider.Settings
  * Reading the state needs only ACCESS_WIFI_STATE (Bluetooth's on/off state needs no permission).
  */
 object Radios {
-    enum class Radio(val title: String, val key: String) { WIFI("Wi-Fi", "wifi"), BT("Bluetooth", "bt"), AIRPLANE("Airplane", "airplane") }
+    /** [short]: the name on a toggle too narrow for [title] at a legible size (portrait, with four toggles in a row). */
+    enum class Radio(val title: String, val key: String, val short: String = title) {
+        WIFI("Wi-Fi", "wifi"), BT("Bluetooth", "bt", "BT"), AIRPLANE("Airplane", "airplane")
+    }
     enum class State { OFF, ON, TURNING_ON, TURNING_OFF, NONE }
 
     /** On, or on its way up. A tap on this switches it off. */
@@ -40,8 +43,8 @@ object Radios {
         }
     }.getOrDefault(State.NONE)
 
-    /** The button's two short lines: the name, then On / Off / Turning on… */
-    fun label(r: Radio, s: State): String = "${r.title}\n" + when (s) {
+    /** The button's two short lines: the name ([short]: its short form), then On / Off / Turning on… */
+    fun label(r: Radio, s: State, short: Boolean = false): String = "${if (short) r.short else r.title}\n" + when (s) {
         State.ON -> "On"
         State.OFF -> "Off"
         State.TURNING_ON -> "Turning on…"

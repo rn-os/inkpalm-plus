@@ -30,7 +30,7 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
   rebuilds the strip and panel when the screen turns.
 - KompaktOS (InkControl merged in, mockup 19): `Eink` (backends: stock binder / direct / root bridge request
   files), `ScreenModes` (`ScreenMode` presets, per-app / KompaktOS / everywhere, repaint, contrast, `KompaktSync`),
-  `ScreenPanel` (the other edge's strip: modes, Full refresh, contrast, `LightBlock`), `Light` (LEDs via the bridge),
+  `ScreenPanel` (the other edge's strip: Wi-Fi/Bluetooth/Airplane/Rotate toggles (`Radios`, `RotationLock`), modes, Full refresh, contrast, `LightBlock`), `Light` (LEDs via the bridge),
   `AutoOff`, `SleepImages` (sleep and power-off screens), `Tiles` (QS tiles, `TextIcon`). The service also does edge
   Back (inward swipe) and touch-button hold = full refresh (key filter). `App` gives `Eink` its files dir.
 - `Shell`: Shizuku shell commands and a background helper. `Ui`: e-ink view helpers copied from SuperBoox.

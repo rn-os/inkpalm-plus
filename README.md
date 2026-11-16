@@ -66,7 +66,7 @@ Swipe up or down along the **other** edge (the left one, unless recent apps are 
 
 | Part | What it does |
 |---|---|
-| **Wi-Fi, Bluetooth, Airplane** | Three toggles at the top, filled black while on (they show *Turning on…* while they switch). Airplane turns both radios off at once, and Android restores them when it ends. They use the KompaktOS root helper, or Shizuku, or open Android's own screen for it |
+| **Wi-Fi, Bluetooth, Airplane, Rotate** | Four toggles at the top, filled black while on (they show *Turning on…* while they switch). Airplane turns both radios off at once, and Android restores them when it ends. They use the KompaktOS root helper, or Shizuku, or open Android's own screen for it. **Rotate** is Android's auto-rotate: *Auto*, or *Locked* (filled black) in the orientation the screen is in when you tap it; an app with its own Rotate setting still turns. In portrait Bluetooth reads *BT* so all four labels stay one readable size |
 | **Screen mode** | Six big buttons, KompaktOS's presets: **Fast** (black and white, quickest), **Soft** (black and white, gentler), **Dither** (fast, dotted grays for pictures), **Text** (crisp text, fewer flashes), **Quality** (all 16 grays, cleanest), **Auto** (the screen picks for each update). The screen redraws once in the new mode |
 | **Use for this app / Use everywhere** | Where your pick goes. The line below says where the mode in use comes from: the app's own, KompaktOS's per-app setting, or everywhere. **Use everywhere** also drops the app's own |
 | **Full refresh** | One full, clean refresh |

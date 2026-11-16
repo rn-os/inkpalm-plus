@@ -999,11 +999,11 @@ object AodFaces {
     /** How a countdown's text sits: [inline] beside the number (else under it), in [lines]; [height] of the body. */
     private class CountLayout(val lines: List<String>, val inline: Boolean, val height: Float)
 
-    private fun countLayout(ct: Home.CountdownText, inner: Float, num: Paint, text: Paint): CountLayout {
-        val n = ct.number ?: return wrap(text, ct.text, inner, 2).let { CountLayout(it, false, it.size * text.textSize * 1.1f) }
-        // Beside the number when it fits there on one line (as in the mockups), else under it in up to 2 lines.
+    private fun countLayout(ct: Home.CountdownText, inner: Float, num: Paint, text: Paint, maxLines: Int = 2): CountLayout {
+        val n = ct.number ?: return wrap(text, ct.text, inner, maxLines).let { CountLayout(it, false, it.size * text.textSize * 1.1f) }
+        // Beside the number when it fits there on one line (as in the mockups), else under it in up to [maxLines].
         if (text.measureText(ct.text) <= inner - num.measureText(n) - 18) return CountLayout(listOf(ct.text), true, num.textSize)
-        val under = wrap(text, ct.text, inner, 2)
+        val under = wrap(text, ct.text, inner, maxLines)
         return CountLayout(under, false, num.textSize + 4 + under.size * text.textSize * 1.1f)
     }
 
@@ -1017,7 +1017,8 @@ object AodFaces {
         val bottom = r.bottom - 4 - padV
         var y = cardHead(c, Icon.CAL, "COUNTDOWN", x, r.top + 4 + padV, Color.BLACK) + 6
         val np = pen(numSize, HEAVY, -0.045f, align = LEFT); val tp = pen(textSize, HEAVY, align = LEFT)
-        val lay = countLayout(ct, inner, np, tp)
+        // A tall card (the Dashboard's) takes a third line before cutting a long title.
+        val lay = countLayout(ct, inner, np, tp, if (bottom - y > numSize + 3 * textSize * 1.1f + 8 + 26 * 1.2f) 3 else 2)
         if (ct.number == null) for (l in lay.lines) y = c.css(l, x, y, tp, 1.1f)
         else if (lay.inline) {
             val base = baseline(np, y, 1f)

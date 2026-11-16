@@ -11,7 +11,7 @@ Swipe up or down along the edge of the screen, in any app, and a panel slides in
 
 You can also set each app's size, refresh mode and contrast, pick a font, and change what the touch button does.
 
-No internet permission. Not affiliated with Moaan.
+Internet only for the optional Home sleep screen's weather (see [Permissions and privacy](#permissions-and-privacy)). Not affiliated with Moaan.
 
 <p>
   <img src="docs/launch/1-panel.png" width="720" alt="The side panel over a book: the previous app one tap away, pages you swipe, ✕ to close apps, and e-ink settings for the app in front">
@@ -93,6 +93,7 @@ The InkPalm keeps a picture on the screen while it sleeps, at no cost: e-ink hol
 | **Clock + date** | The time, the date and the battery |
 | **Analog** | A clock face with hands, the date and the battery |
 | **Agenda** | The time and your events, in one of six styles (asks for calendar access the first time; without it the face says "Calendar access needed") |
+| **Home** | The time, your next events, the weather, countdowns to your trips and big days, and trash day, in one of two styles (see below) |
 | **Reading** | The cover, title and how far you are in the last book of your reader app (covers come from EPUB files, with All files access) |
 | **Photo** | Your picture, with a small clock in the corner (**Choose picture…**; without one it shows Clock + date) |
 | **Minimal** | Just the day and date, so it's never out of date |
@@ -109,6 +110,16 @@ With Agenda picked, **Agenda style** (under the faces) changes how it lays out y
 | **Next up** | Your next event in a large black card, the rest of today below and tomorrow's first event |
 | **Two days** | Today and tomorrow, one under the other (side by side in landscape) |
 | **Week** | This week's days with a dot per event, the time, then the rest of today |
+
+With Home picked, its settings appear under the faces:
+
+| Setting | What it does |
+|---|---|
+| **Home style** | **Dashboard** (default): the clock, your next 3 events, then cards for the weather (with the chance of rain by hour, 8 AM to 7 PM), countdowns and trash day. **Calm**: a big clock, your next event, the weather in one line ("9° · Rain 3–6 PM · H 14 L 6") and one or two large cards |
+| **Weather location** | Search for your city once (no location permission). The weather comes from [Open-Meteo](https://open-meteo.com) (free, no account), at most every 30 minutes, during the sleep screen's updates and only when Wi-Fi is already on. Offline or more than 90 minutes old, the face says "as of 6:40" |
+| **Units** | Auto (°F in the US, else °C), °C or °F |
+| **Countdowns** | Picked from your calendar: all-day, multi-day and 4-hour-or-longer events in the next 60 days, nearest first ("12 days to Lisbon trip", "Tomorrow: …"). **Pin** one to always show it first, **Hide** one to never show it |
+| **Trash day** | Off by default. Pick the weekdays for recycling and for trash: the face shows "Recycling tomorrow" the day before and "Trash today" on the day |
 
 With Photo or Picture picked, **Photo style** (under the faces) sets how your picture is drawn. The panel shows 16 greys, so a photo's soft gradients fall into blotchy grey steps; the dithered styles trade those for fine dots, drawn one per screen pixel. Each style has a preview; the clock and date on the Photo face stay clean.
 
@@ -241,7 +252,7 @@ Per-app settings work without Shizuku. If InkPalm+ can't reach them on your firm
 
 ## Permissions and privacy
 
-- **No internet permission.** Nothing leaves the phone.
+- **Internet, for the Home sleep screen's weather only.** Nothing is sent unless you pick the Home face and set a city: then the name you search for goes to Open-Meteo's geocoding, and the city's coordinates to Open-Meteo's forecast, at most every 30 minutes and only on a network that's already on (InkPalm+ never turns Wi-Fi on). No account, no location permission. Nothing else leaves the phone.
 - **Required:** the accessibility service, **InkPalm+ quick panel**. It receives which app is in front, and that a page scrolled, text was typed or the screen changed. It doesn't read screen content or what you type.
 - **Optional:**
   - **Modify system settings:** live size changes, and the font and text size.
@@ -249,7 +260,7 @@ Per-app settings work without Shizuku. If InkPalm+ can't reach them on your firm
   - **Shizuku:** the Clear Memory whitelist, and a fallback for Animations off and for reaching Moaan's settings.
   - **Kill background processes:** used by ✕, **Clear all** and **Save + reopen**.
   - **Exact alarms** (KompaktOS): auto power-off at the time you chose, and the sleep screen's updates, even in Doze.
-  - **Calendar** (only if you pick the Agenda sleep screen): your events for this week and the next 7 days, read on the phone.
+  - **Calendar** (only if you pick the Agenda or Home sleep screen): your events for this week and the next 7 days, and for Home's countdowns all-day and long events up to 60 days ahead (a year for pinned ones), read on the phone.
   - **Key events** (KompaktOS, only while "Hold for a full refresh" is on): the service sees the Home key to tell a hold from a touch. Other keys pass straight through.
   - **Run at startup:** checks after a restart that the panel is back on.
 - The recent-apps list and your choices stay on the phone. **Clear recent apps** empties the list.

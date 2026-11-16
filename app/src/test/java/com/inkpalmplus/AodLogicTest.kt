@@ -256,4 +256,27 @@ class AodLogicTest {
         assertFalse(off.withHome(null, null).footer)
         assertTrue(data(true, true).key(Aod.Face.CLOCK) != off.key(Aod.Face.CLOCK))
     }
+
+    @Test fun redrawWaitsForTheScreenToSettle() {
+        val g = Aod.RedrawGate
+        fun d(now: Long, interactive: Boolean = false, off: Boolean = true, asked: Int? = 3, gen: Int = 3, transition: Long = 1_000L,
+              redraw: Long = 0L, busy: Boolean = false) = g.decide(now, interactive, off, asked, gen, transition, redraw, busy)
+        // Screen-off at 1 s: asked then, fires at 7.25 s.
+        assertEquals(6_000L, g.wait(1_000L, 1_000L))
+        assertEquals(0L, g.wait(9_000L, 1_000L))
+        assertEquals(0L, g.wait(9_000L, 0L))
+        assertEquals(Aod.RedrawGate.Verdict.GO, d(7_250L))
+        // The user pressed power in between (generation moved), even if the screen is off again.
+        assertEquals(Aod.RedrawGate.Verdict.WOKE, d(7_250L, gen = 5, transition = 6_000L))
+        assertEquals(Aod.RedrawGate.Verdict.AWAKE, d(7_250L, interactive = true))
+        assertEquals(Aod.RedrawGate.Verdict.AWAKE, d(7_250L, off = false))       // display still on / turning on
+        assertEquals(Aod.RedrawGate.Verdict.RECENT, d(6_999L))
+        assertEquals(Aod.RedrawGate.Verdict.BUSY, d(7_250L, busy = true))
+        assertEquals(Aod.RedrawGate.Verdict.TOO_SOON, d(20_000L, redraw = 12_000L))
+        assertEquals(Aod.RedrawGate.Verdict.GO, d(22_000L, redraw = 12_000L))
+        // A Live update (no generation to compare): the alarm right after a power press is dropped.
+        assertEquals(Aod.RedrawGate.Verdict.RECENT, d(300_000L, asked = null, gen = 9, transition = 297_000L))
+        assertEquals(Aod.RedrawGate.Verdict.GO, d(300_000L, asked = null, gen = 9, transition = 200_000L))
+        assertEquals(Aod.RedrawGate.Verdict.GO, d(300_000L, asked = null, transition = 0L))  // no transition seen yet
+    }
 }

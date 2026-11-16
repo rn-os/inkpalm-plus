@@ -60,6 +60,8 @@ class QuickPanelService : AccessibilityService() {
     /** The light follows the screen (off at sleep, back at wake); auto power-off runs only asleep on battery. */
     private val power = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
+            if (i.action == Intent.ACTION_SCREEN_OFF || i.action == Intent.ACTION_SCREEN_ON || i.action == Intent.ACTION_USER_PRESENT)
+                Aod.screenTransition()
             when (i.action) {
                 // The always-on display's redraw wakes and sleeps the screen: not the user's, so the light stays
                 // off and auto power-off keeps counting.
@@ -126,7 +128,7 @@ class QuickPanelService : AccessibilityService() {
         // Uninstalled apps leave the recent list (so the panel never has to check while drawing).
         registerReceiver(packageGone, IntentFilter(Intent.ACTION_PACKAGE_FULLY_REMOVED).apply { addDataScheme("package") })
         registerReceiver(power, IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT)
             addAction(Intent.ACTION_POWER_CONNECTED); addAction(Intent.ACTION_POWER_DISCONNECTED)
             addAction(Intent.ACTION_TIME_TICK); addAction(Intent.ACTION_TIME_CHANGED); addAction(Intent.ACTION_TIMEZONE_CHANGED)
         }, notExported)

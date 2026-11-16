@@ -351,3 +351,21 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   draws them). All landscape layouts checked that way on the device: fine. Picture has no landscape layout (it's
   installed as the portrait picture), so its landscape preview is the portrait picture, upright; Day rail in
   landscape is narrow with wide margins (as before).
+- "Show update time" (asked): Sleep screen → Update, a switch under the interval (on by default). Off, no face draws
+  the "Updated HH:MM" footer (`AodFaces.Data.stamp`/`footer`: the bottom line and Photo's clock box); faces ending at
+  `limit`/`homeBottom` get the room back. Home's stale-weather "as of" stays. Pref `aod_show_stamp`.
+
+## Redraws wait for the screen to settle (branch `face-picker`, 2026-11-16)
+- Incident: the phone froze (PowerManagerService blocked, display stuck) and was rebooted. Saved logs
+  (scratchpad freeze-20261116/logd/) at 02:43:19: "Waking up from Dozing … POWER_BUTTON", the screen-off broadcast
+  taking 5.7 s, InkPalm+ "aod: sleep orient: … installed 1, redraw now", then "Blocked in handler on
+  PowerManagerService for 15s". The immediate sleep-orientation redraw (`fixAtSleep`: bridge `redraw=1` →
+  KEYCODE_WAKEUP/SLEEP) is suspected of racing the user's power press.
+- Rule now (`Aod.RedrawGate`, AodLogicTest): an invisible redraw goes only when the screen has been off for ≥ 6 s
+  (`SETTLE_MS`) since the last SCREEN_ON/SCREEN_OFF/USER_PRESENT (`Aod.screenTransition`, from the service's power
+  receiver, bumps `generation`), the display state is OFF/DOZE and not interactive, nothing changed since it was
+  asked (sleep fix: same generation), no redraw is in flight (`redrawing()`), and the last bridge redraw was ≥ 10 s
+  ago (`GAP_MS`). The sleep fix is scheduled 6 s after the screen-off under a short wake lock and dropped otherwise
+  (the next Live update draws the right face); Live updates use the same gate (an alarm right after a power press is
+  dropped and the next one armed). Logs: "aod: sleep orient: … redraw in 6 s if still asleep", "aod: sleep redraw:
+  settled, …", "aod: sleep redraw skipped: woke …/recent transition/busy …", "aod: live update skipped: …".

@@ -204,9 +204,68 @@ object Aod {
         fun reset() { window.clear(); any = false; latest = null; settled = null; mean = null }
     }
 
-    /** The face the HWC took at the power-off transition ([installed] rotation, null: unknown) needs one immediate
-     *  redraw when it isn't drawn for the rotation frozen at the sleep ([held]). */
+    /** The face the HWC took at the power-off transition ([installed] rotation, null: unknown) needs one redraw
+     *  (deferred, [RedrawGate]) when it isn't drawn for the rotation frozen at the sleep ([held]). */
     fun sleepNeedsRedraw(installed: Int?, held: Int): Boolean = installed != null && installed != held
+
+    /**
+     * When an invisible redraw (the bridge's `redraw=1`: KEYCODE_WAKEUP, then SLEEP) may go. On 2026-11-16 02:43 an
+     * immediate redraw at the user's screen-off ("aod: sleep orient: … installed 1, redraw now") came right after
+     * "Waking up from Dozing … POWER_BUTTON" and a 5.7 s screen-off broadcast, then "Blocked in handler on
+     * PowerManagerService for 15s": the redraw's wake/sleep raced the user's power press. So a redraw goes only when
+     * the screen has been off and untouched for [SETTLE_MS], nothing changed since it was asked ([generation] of
+     * SCREEN_ON/OFF/USER_PRESENT), no other redraw is in flight, and the last one was [GAP_MS] ago or more.
+     */
+    object RedrawGate {
+        const val SETTLE_MS = 6_000L
+        const val GAP_MS = 10_000L
+
+        enum class Verdict(val why: String) {
+            GO("go"), AWAKE("woke (screen on)"), WOKE("woke (screen turned on/off since)"), RECENT("recent transition"),
+            BUSY("busy (a redraw in flight)"), TOO_SOON("another redraw under 10 s ago")
+        }
+
+        /** [askedGen]: the [generation] when the redraw was asked (null: a Live update, asked by its alarm). Times are
+         *  elapsedRealtime; [lastTransition] / [lastRedraw] 0 when none yet. */
+        fun decide(now: Long, interactive: Boolean, displayOff: Boolean, askedGen: Int?, gen: Int, lastTransition: Long,
+                   lastRedraw: Long, busy: Boolean): Verdict = when {
+            interactive || !displayOff -> Verdict.AWAKE
+            askedGen != null && askedGen != gen -> Verdict.WOKE
+            lastTransition > 0 && now - lastTransition < SETTLE_MS -> Verdict.RECENT
+            busy -> Verdict.BUSY
+            lastRedraw > 0 && now - lastRedraw < GAP_MS -> Verdict.TOO_SOON
+            else -> Verdict.GO
+        }
+
+        /** How long to wait from [now] until the screen has been settled for [SETTLE_MS]. */
+        fun wait(now: Long, lastTransition: Long): Long = if (lastTransition <= 0) 0 else (SETTLE_MS - (now - lastTransition)).coerceAtLeast(0)
+    }
+
+    /** Bumped on every SCREEN_ON, SCREEN_OFF and USER_PRESENT ([screenTransition]). */
+    @Volatile var generation = 0; private set
+    /** elapsedRealtime of the last screen transition, and of the last redraw handed to the bridge. */
+    @Volatile private var lastTransition = 0L
+    @Volatile private var lastRedraw = 0L
+
+    /** SCREEN_ON, SCREEN_OFF or USER_PRESENT (the user's or a redraw's own): before anything else handles it. */
+    fun screenTransition() { generation++; lastTransition = SystemClock.elapsedRealtime() }
+
+    /** The display is off or dozing (not on, not turning on). */
+    private fun displayOff(c: Context): Boolean = runCatching {
+        when (c.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY).state) {
+            Display.STATE_OFF, Display.STATE_DOZE, Display.STATE_DOZE_SUSPEND -> true
+            else -> false
+        }
+    }.getOrDefault(false)
+
+    /** [RedrawGate.decide] now; logs a skip as "aod: <what> skipped: <why>". */
+    private fun gate(c: Context, what: String, askedGen: Int?): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        val v = RedrawGate.decide(now, interactive(c), displayOff(c), askedGen, generation, lastTransition, lastRedraw, redrawing())
+        if (v != RedrawGate.Verdict.GO) Log.i(TAG, "aod: $what skipped: ${v.why}" +
+            " (last transition ${if (lastTransition > 0) "${(now - lastTransition) / 1000} s" else "never"}, last redraw ${if (lastRedraw > 0) "${(now - lastRedraw) / 1000} s" else "never"} ago)")
+        return v == RedrawGate.Verdict.GO
+    }
 
     fun isLow(level: Int, plugged: Boolean) = !plugged && level in 0 until LOW_BATTERY
 
@@ -424,7 +483,7 @@ object Aod {
         if (!redraw) bmp.recycle()
         val sent = Eink.bridgeWrite("standby.req", if (redraw) "apply=1\nredraw=1\n" else "apply=1\n")
         if (covered && !sent) WakeCover.hide("request failed")
-        if (sent) { lastKey = key; installedRotation = data.rotation }
+        if (sent) { lastKey = key; installedRotation = data.rotation; if (redraw) lastRedraw = SystemClock.elapsedRealtime() }
         Log.i(TAG, "aod: ${face.name} ${if (redraw) "redraw" else "installed"} rot=${data.rotation} low=${data.low} in ${SystemClock.uptimeMillis() - t0} ms")
         return sent
     }
@@ -813,7 +872,7 @@ object Aod {
     /**
      * Screen off (the user's): freeze the orientation the phone was held in ([Gravity.atSleep], else the display's),
      * arm the next Live update, and if the face the HWC just took was drawn for another rotation (turned just before
-     * the press, or its render still queued), redraw it at once ([fixAtSleep]). Main thread.
+     * the press, or its render still queued), redraw it once the screen has settled off ([fixAtSleep]). Main thread.
      */
     fun onScreenOff(c: Context) {
         val now = SystemClock.elapsedRealtime()
@@ -830,24 +889,31 @@ object Aod {
         val fix = sleepNeedsRedraw(shown, held) && !poweringOff()
         fun f(v: FloatArray?) = v?.joinToString(",") { "%.1f".format(Locale.US, it) } ?: "-"
         Log.i(TAG, "aod: sleep orient: ${if (watched) "xyz=${f(mean)} ${age?.let { "$it ms ago" } ?: "no reading"}" else "not watched"}" +
-            " → ${phys ?: "undecided"} → $held (display ${rotations.display}), installed $shown${if (fix) ", redraw now" else ""}")
+            " → ${phys ?: "undecided"} → $held (display ${rotations.display}), installed $shown${if (fix) ", redraw in ${RedrawGate.SETTLE_MS / 1000} s if still asleep" else ""}")
         if (fix) fixAtSleep(c)
     }
 
-    /** One immediate invisible redraw at the user's sleep (the Live update's path: [WakeCover], the bridge's
-     *  `redraw=1`), under a wake lock: the CPU may otherwise suspend right after the screen goes off. */
+    /** One invisible redraw after the user's sleep (the Live update's path: [WakeCover], the bridge's `redraw=1`),
+     *  never at once: [RedrawGate.SETTLE_MS] later, under a short wake lock (the CPU may otherwise suspend), and only
+     *  if [RedrawGate] still allows it then; else dropped (the next Live update draws the right face). */
     private fun fixAtSleep(c: Context) {
         val app = c.applicationContext
+        val asked = generation
         val wl = app.getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "InkPalmPlus:aod-sleep")
-        wl.acquire(12_000L)
-        Eink.post {
-            try {
-                if (!interactive(app) && !poweringOff() && face(app).drawn) {
-                    expectWake(15_000L)
-                    if (!install(app, redraw = true, force = true)) redrawUntil = 0
-                }
-            } finally { if (wl.isHeld) wl.release() }
-        }
+        wl.acquire(RedrawGate.SETTLE_MS + 15_000L)
+        val delay = RedrawGate.wait(SystemClock.elapsedRealtime(), lastTransition) + 250L
+        Shell.main.postDelayed({
+            Eink.post {
+                try {
+                    if (poweringOff() || !face(app).drawn) Log.i(TAG, "aod: sleep redraw skipped: powering off or no drawn face")
+                    else if (gate(app, "sleep redraw", asked)) {
+                        Log.i(TAG, "aod: sleep redraw: settled, redrawing for ${rotations.held}")
+                        expectWake(15_000L)
+                        if (!install(app, redraw = true, force = true)) redrawUntil = 0
+                    }
+                } finally { if (wl.isHeld) wl.release() }
+            }
+        }, delay)
     }
 
     /** Screen on (the user's): no updates while it's on; the face is drawn fresh for the next sleep. */
@@ -940,6 +1006,8 @@ object Aod {
             wl.acquire(Weather.DEADLINE_MS + 1_000L)
             try { Weather.fetchIfDue(c) } finally { if (wl.isHeld) wl.release() }
         }
+        // Not right after a power press (the alarm can fire just then), nor twice within 10 s: dropped, the next one comes.
+        if (!gate(c, "live update", null)) { if (interval(c) > 0) schedule(c); return }
         // The bridge wakes the screen for ~5 s; until its SCREEN_OFF, the wake is ours.
         expectWake(15_000L)
         if (!install(c, redraw = true, force = true, low = low)) { redrawUntil = 0; return }

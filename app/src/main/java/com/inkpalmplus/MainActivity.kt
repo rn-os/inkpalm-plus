@@ -513,7 +513,7 @@ open class MainActivity : Activity() {
         val face = Aod.face(this)
         body.addView(sectionTitle("Face"))
         val t = thumbs
-        if (t == null) Shell.background({ Aod.Face.entries.associateWith { Aod.thumbnail(this, it) } }) { thumbs = it; renderAod() }
+        if (t == null) Shell.background({ Aod.Face.entries.associateWith { Aod.thumbnail(this, it, land = land) } }) { thumbs = it; renderAod() }
         val faces = Aod.Face.entries
         faces.chunked(4).forEach { row ->
             body.addView(hbox().apply {
@@ -587,12 +587,12 @@ open class MainActivity : Activity() {
         if (!Aod.supported()) { body.addView(note("Needs KompaktOS's bridge.")); return }
         val style = Aod.agendaStyle(this)
         val t = styleThumbs
-        if (t == null) Shell.background({ Agenda.Style.entries.associateWith { Aod.thumbnail(this, Aod.Face.AGENDA, it) } }) { styleThumbs = it; renderAgenda() }
+        if (t == null) Shell.background({ Agenda.Style.entries.associateWith { Aod.thumbnail(this, Aod.Face.AGENDA, it, land = land) } }) { styleThumbs = it; renderAgenda() }
         Agenda.Style.entries.chunked(3).forEach { row ->
             body.addView(hbox().apply {
                 setPadding(dp(12), dp(4), dp(12), dp(4))
                 gravity = Gravity.TOP
-                for (s in row) addView(thumbTile(s.title, s == style, t?.get(s), 190) {
+                for (s in row) addView(thumbTile(s.title, s == style, t?.get(s), if (land) 120 else 190) {
                     work({ Aod.setAgendaStyle(this@MainActivity, s) }, "Agenda style: ${s.title}")
                 }, lp(0, WRAP, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
             })
@@ -644,11 +644,11 @@ open class MainActivity : Activity() {
         if (!Aod.supported()) { body.addView(note("Needs KompaktOS's bridge.")); return }
         val style = Aod.homeStyle(this)
         val t = homeThumbs
-        if (t == null) Shell.background({ Home.Style.entries.associateWith { Aod.thumbnail(this, Aod.Face.HOME, home = it) } }) { homeThumbs = it; renderHomeStyle() }
+        if (t == null) Shell.background({ Home.Style.entries.associateWith { Aod.thumbnail(this, Aod.Face.HOME, home = it, land = land) } }) { homeThumbs = it; renderHomeStyle() }
         body.addView(hbox().apply {
             setPadding(dp(12), dp(4), dp(12), dp(4))
             gravity = Gravity.TOP
-            for (s in Home.Style.entries) addView(thumbTile(s.title, s == style, t?.get(s), 260, description = "Home style ${s.title}") {
+            for (s in Home.Style.entries) addView(thumbTile(s.title, s == style, t?.get(s), if (land) 170 else 260, description = "Home style ${s.title}") {
                 work({ Aod.setHomeStyle(this@MainActivity, s) }, "Home style: ${s.title}")
             }, lp(0, WRAP, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
         })
@@ -814,11 +814,11 @@ open class MainActivity : Activity() {
         val style = Aod.photoStyle(this)
         val face = Aod.face(this).takeIf { it == Aod.Face.PICTURE } ?: Aod.Face.PHOTO
         val t = photoThumbs
-        if (t == null) Shell.background({ Dither.Style.entries.associateWith { Aod.thumbnail(this, face, photoStyle = it) } }) { photoThumbs = it; renderPhotoStyle() }
+        if (t == null) Shell.background({ Dither.Style.entries.associateWith { Aod.thumbnail(this, face, photoStyle = it, land = land) } }) { photoThumbs = it; renderPhotoStyle() }
         body.addView(hbox().apply {
             setPadding(dp(12), dp(4), dp(12), dp(4))
             gravity = Gravity.TOP
-            for (s in Dither.Style.entries) addView(thumbTile(s.title, s == style, t?.get(s), 190, description = "Photo style ${s.title}", keepShape = true) {
+            for (s in Dither.Style.entries) addView(thumbTile(s.title, s == style, t?.get(s), if (land) 120 else 190, description = "Photo style ${s.title}") {
                 work({ Aod.setPhotoStyle(this@MainActivity, s) }, "Photo style: ${s.title}")
             }, lp(0, WRAP, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
         })
@@ -841,18 +841,21 @@ open class MainActivity : Activity() {
     }
 
     private fun faceTile(f: Aod.Face, selected: Boolean, thumb: Bitmap?): View =
-        thumbTile(f.title, selected, thumb, 150, if (f == Aod.Face.DEFAULT) "Moaan" else if (f == Aod.Face.PICTURE) "Choose…" else "…", "Face ${f.title}") { pickFace(f) }
+        thumbTile(f.title, selected, thumb, if (land) 96 else 150, if (f == Aod.Face.DEFAULT) "Moaan" else if (f == Aod.Face.PICTURE) "Choose…" else "…", "Face ${f.title}") { pickFace(f) }
 
-    /** A thumbnail [heightDp] tall over its [title]; a thick frame and a ✓ when [selected]. [keepShape]: not stretched
-     *  to the frame (pictures). */
+    /** The screen is held in landscape: previews show the faces' landscape layouts. */
+    private val land get() = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    /** A thumbnail [heightDp] tall over its [title]; a thick frame and a ✓ when [selected]. The preview keeps the
+     *  face's shape (720:1440, or 1440:720 in landscape): fitted in and centred, never stretched. */
     private fun thumbTile(title: String, selected: Boolean, thumb: Bitmap?, heightDp: Int, placeholder: String = "…",
-                          description: String = title, keepShape: Boolean = false, onClick: () -> Unit): View = vbox().apply {
+                          description: String = title, onClick: () -> Unit): View = vbox().apply {
         gravity = Gravity.CENTER_HORIZONTAL
         val frame = FrameLayout(this@MainActivity).apply {
             background = outline(if (selected) 4 else 2, Radius.SMALL)
             val pad = dp(if (selected) 4 else 2)
             setPadding(pad, pad, pad, pad)
-            if (thumb != null) addView(ImageView(this@MainActivity).apply { setImageBitmap(thumb); scaleType = if (keepShape) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.FIT_XY },
+            if (thumb != null) addView(ImageView(this@MainActivity).apply { setImageBitmap(thumb); scaleType = ImageView.ScaleType.FIT_CENTER },
                 FrameLayout.LayoutParams(MATCH, MATCH))
             else addView(text(placeholder, Type.M, bold = true).apply { gravity = Gravity.CENTER },
                 FrameLayout.LayoutParams(MATCH, MATCH))

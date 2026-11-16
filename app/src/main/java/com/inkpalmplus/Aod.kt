@@ -394,14 +394,17 @@ object Aod {
      *  in [style] (else the one picked); for Photo and Picture, in [photoStyle] (else the one picked). The picture is
      *  dithered at the thumbnail's size, so its dots show on screen as they will on the sleep screen (a scaled-down
      *  dither would blur back to grey). Blocking. */
-    fun thumbnail(c: Context, face: Face, style: Agenda.Style? = null, photoStyle: Dither.Style? = null, home: Home.Style? = null): Bitmap? {
+    fun thumbnail(c: Context, face: Face, style: Agenda.Style? = null, photoStyle: Dither.Style? = null, home: Home.Style? = null, land: Boolean = false): Bitmap? {
         val dots = photoStyle ?: photoStyle(c)
         val big = when {
             face == Face.DEFAULT -> return null
             face == Face.PICTURE -> { photo(c); BitmapFactory.decodeFile(picture(c).path) ?: return null }
-            else -> AodFaces.render(face, collect(c, face, false).copy(rotation = Surface.ROTATION_0, agenda = style, photoStyle = Dither.Style.PLAIN, home = home))
+            // [land]: the landscape layout, turned back upright (1440×720), as the settings screen is held.
+            else -> AodFaces.render(face, collect(c, face, false).copy(rotation = if (land) Surface.ROTATION_90 else Surface.ROTATION_0,
+                agenda = style, photoStyle = Dither.Style.PLAIN, home = home)).let { if (land) AodFaces.turnBack(it, 90) else it }
         }
-        val small = Bitmap.createScaledBitmap(big, AodFaces.W / 4, AodFaces.H / 4, true).also { if (it !== big) big.recycle() }
+        // A quarter of the face's own size, so its shape is kept (the tiles fit it in, never stretch it).
+        val small = Bitmap.createScaledBitmap(big, big.width / 4, big.height / 4, true).also { if (it !== big) big.recycle() }
         if ((face == Face.PICTURE || face == Face.PHOTO) && dots != Dither.Style.PLAIN)
             return (if (small.isMutable) small else small.copy(Bitmap.Config.ARGB_8888, true).also { small.recycle() }).also { Dither.apply(it, dots) }
         return small

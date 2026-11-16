@@ -20,7 +20,6 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.CalendarContract
-import android.provider.Settings
 import android.text.format.DateFormat
 import android.util.Log
 import android.view.Display
@@ -51,8 +50,8 @@ import kotlin.math.min
  * screen or the last app. Updates continue while charging (the cost is then free). Below [LOW_BATTERY] % on battery the
  * face becomes the low-battery box, drawn once, and the updates stop.
  *
- * The face keeps the orientation the phone was held in at the user's sleep ([Orientation]); with auto-rotate on, each
- * Live update first reads the accelerometer ([reorient]) and turns the face if the phone was turned while asleep.
+ * The face keeps the orientation the phone was held in at the user's sleep ([Orientation]); each Live update first
+ * reads the accelerometer ([reorient]) and turns the face if the phone was turned while asleep, rotation lock or not.
  */
 object Aod {
     private const val TAG = "InkPalmPlus"
@@ -599,21 +598,18 @@ object Aod {
         if (interval(c) > 0) schedule(c)
     }
 
-    /** Auto-rotate (Settings.System.accelerometer_rotation) is on. */
-    private fun autoRotate(c: Context) =
-        runCatching { Settings.System.getInt(c.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1 }.getOrDefault(false)
-
     /**
      * Asleep, before a Live update: the phone may have been turned since the user's sleep. Asleep the window manager
      * reports rotation 0 whatever the phone does, so the accelerometer is read directly (up to [SENSOR_MS], until 4
      * steady samples) and, when the gravity decides it ([rotationFromGravity]), that orientation is held from now on:
      * the face and [WakeCover] (its counter-turn and held orientation) both take it from [Orientation]. Flat, near 45°,
-     * moving, or no samples: the held one stays. Only with auto-rotate on. Blocking (on [Eink.worker], under the
-     * alarm's wake lock).
+     * moving, or no samples: the held one stays. Also with rotation lock on (accelerometer_rotation 0): the sleep face
+     * isn't the locked UI, and nothing here writes Settings (user_rotation / accelerometer_rotation stay as they are);
+     * the cover holds the display at the face's rotation only for the redraw wake, by its window's screenOrientation,
+     * as [Rotation]'s per-app modes do under the lock. Blocking (on [Eink.worker], under the alarm's wake lock).
      */
     private fun reorient(c: Context) {
         val was = rotations.held
-        if (!autoRotate(c)) { Log.i(TAG, "aod: orient: auto-rotate off, keep $was"); return }
         val sm = c.getSystemService(SensorManager::class.java)
         val sensor = sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         if (sensor == null) { Log.w(TAG, "aod: orient: no accelerometer, keep $was"); return }

@@ -132,9 +132,25 @@ class RadiosTest {
         assertEquals("airplane=1\n", Radios.request(Radios.Radio.AIRPLANE, true))
     }
 
-    @Test fun labelsAreShort() {
-        assertEquals("Wi-Fi\nOn", Radios.label(Radios.Radio.WIFI, Radios.State.ON))
-        assertEquals("Bluetooth\nTurning on…", Radios.label(Radios.Radio.BT, Radios.State.TURNING_ON))
+    @Test fun descriptionsNameTheRadioAndState() {
+        assertEquals("Wi-Fi, off", Radios.describe(Radios.Radio.WIFI, Radios.State.OFF))
+        assertEquals("Bluetooth, turning on", Radios.describe(Radios.Radio.BT, Radios.State.TURNING_ON))
+        assertEquals("Airplane, unavailable", Radios.describe(Radios.Radio.AIRPLANE, Radios.State.NONE))
+    }
+
+    @Test fun iconShowsWhereTheRadioIsGoing() {
+        assertEquals(R.drawable.ic_wifi, Radios.icon(Radios.Radio.WIFI, Radios.State.ON))
+        assertEquals(R.drawable.ic_wifi, Radios.icon(Radios.Radio.WIFI, Radios.State.TURNING_ON))
+        assertEquals(R.drawable.ic_wifi_off, Radios.icon(Radios.Radio.WIFI, Radios.State.TURNING_OFF))
+        assertEquals(R.drawable.ic_bluetooth_disabled, Radios.icon(Radios.Radio.BT, Radios.State.NONE))
+        assertEquals(R.drawable.ic_airplanemode_active, Radios.icon(Radios.Radio.AIRPLANE, Radios.State.ON))
+        assertEquals(R.drawable.ic_airplanemode_inactive, Radios.icon(Radios.Radio.AIRPLANE, Radios.State.OFF))
+        with(Radios) {
+            assertEquals(listOf(false, false, true, true, false), Radios.State.entries.map { it.passing() })
+        }
+    }
+
+    @Test fun commandsPerRadio() {
         assertEquals("svc bluetooth disable", Radios.shell(Radios.Radio.BT, false))
         assertEquals("cmd connectivity airplane-mode enable", Radios.shell(Radios.Radio.AIRPLANE, true))
     }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols Outlined "airplanemode_active" (weight 600, filled), Apache License 2.0. See NOTICE. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <group android:translateY="960">
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M264.17-60.78v-124.31l122.26-84.56v-121.39L60.78-261.35v-146l325.65-226.82v-171.48q0-38.65 27.46-66.11T480-899.22q38.65 0 66.11 27.46t27.46 66.11v171.48l325.65 226.82v146L573.57-391.04v121.39l121.69 84.56v124.31L480-125.3 264.17-60.78Z" />
+    </group>
+</vector>

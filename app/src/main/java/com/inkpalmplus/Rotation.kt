@@ -8,10 +8,10 @@ import android.view.View
 import android.view.WindowManager
 
 /**
- * Manual screen rotation. The InkPalm has no accelerometer, so Android never rotates on its
- * own. A 1-pixel invisible overlay window that asks for an orientation makes the display
- * turn (the trick Orientation Faker uses), overriding what the app in front asks for.
- * Removing the window gives control back to the app and the system.
+ * Manual screen rotation, per app. A 1-pixel invisible overlay window that asks for an orientation makes the display
+ * turn (the trick Orientation Faker uses), overriding what the app in front asks for and Android's own rotation lock
+ * ([RotationLock]). Removing the window gives control back to the app and the system (auto-rotate, or the locked
+ * user_rotation).
  */
 class Rotation(private val context: Context, private val wm: WindowManager) {
     enum class Mode(val code: Int, val title: String) {

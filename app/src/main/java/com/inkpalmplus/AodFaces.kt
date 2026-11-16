@@ -907,7 +907,7 @@ object AodFaces {
         val cards = ArrayList<(RectF) -> Unit>()
         cards += { r -> weatherCard(c, d, r, pad) }
         d.trash?.let { t -> cards += { r -> trashCard(c, t, r, inv = true, size = if (land) 36f else 42f, padH = pad, padV = pad, wrapLines = 2) } }
-        for (ct in d.countdowns.take(2)) cards += { r -> countdownCard(c, ct, r, if (land) 64f else 80f, if (land) 30f else 34f, pad, pad) }
+        for (ct in d.countdowns.take(2)) cards += { r -> countdownCard(c, ct, r, if (land) 64f else 96f, if (land) 30f else 34f, pad, pad) }
         val colW = (g.width() - gap) / 2
         fun col(i: Int, top: Float, bottom: Float) = RectF(g.left + i * (colW + gap), top, g.left + i * (colW + gap) + colW, bottom)
         val rowMax = if (land) g.height() else minOf(g.height(), 440f)
@@ -943,6 +943,7 @@ object AodFaces {
             val p = pen(30f, BOLD, align = LEFT)
             y += 10
             for (l in wrap(p, v?.message ?: "No weather", inner, 3)) y = c.css(l, x, y, p, 1.1f)
+            if (v?.message?.startsWith("Set a city") == true) for (l in wrap(thin(24f), "Sleep screen → Weather location", inner, 2)) y = c.css(l, x, y + 4, thin(24f))
             return
         }
         val tp = pen(if (r.height() < 300 || inner < 240) 72f else 96f, HEAVY, -0.045f, align = LEFT)
@@ -1000,10 +1001,8 @@ object AodFaces {
 
     private fun countLayout(ct: Home.CountdownText, inner: Float, num: Paint, text: Paint): CountLayout {
         val n = ct.number ?: return wrap(text, ct.text, inner, 2).let { CountLayout(it, false, it.size * text.textSize * 1.1f) }
-        val rest = inner - num.measureText(n) - 18
-        val one = wrap(text, ct.text, rest, 2)
-        if (rest >= inner * 0.45f && (one.size == 1 || text.measureText(ct.text) > inner))
-            return CountLayout(one, true, maxOf(num.textSize, num.textSize * 0.8f + (one.size - 1) * text.textSize * 1.1f + text.textSize * 0.3f))
+        // Beside the number when it fits there on one line (as in the mockups), else under it in up to 2 lines.
+        if (text.measureText(ct.text) <= inner - num.measureText(n) - 18) return CountLayout(listOf(ct.text), true, num.textSize)
         val under = wrap(text, ct.text, inner, 2)
         return CountLayout(under, false, num.textSize + 4 + under.size * text.textSize * 1.1f)
     }

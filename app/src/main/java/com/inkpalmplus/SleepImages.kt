@@ -37,11 +37,15 @@ object SleepImages {
 
     /** The user's picture ([Aod.picture]): the Photo face draws a clock on it, else it becomes the Picture face.
      *  Null when done, else what went wrong. Blocking (decodes and writes a PNG). */
-    fun setSleep(c: Context, uri: Uri): String? {
+    fun setSleep(c: Context, uri: Uri): String? =
+        savePicture(c, uri) ?: Aod.setFace(c, if (Aod.face(c) == Aod.Face.PHOTO) Aod.Face.PHOTO else Aod.Face.PICTURE)
+
+    /** Keeps [uri] as the user's picture without picking a face (the picker's "Pick a photo"). Error or null. Blocking. */
+    fun savePicture(c: Context, uri: Uri): String? {
         writePicked(c, uri, Aod.picture(c).name)?.let { return it }
         // The whole picture too, so a landscape face crops it to its own shape (not a band of the portrait crop).
         writeSource(c, uri, Aod.pictureSource(c))
-        return Aod.setFace(c, if (Aod.face(c) == Aod.Face.PHOTO) Aod.Face.PHOTO else Aod.Face.PICTURE)
+        return null
     }
 
     /** Back to Moaan's sleep screen. Blocking. */

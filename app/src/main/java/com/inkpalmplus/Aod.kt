@@ -75,13 +75,26 @@ object Aod {
     val INTERVALS = listOf(0, 5, 15, 30, 60)
     const val DEFAULT_INTERVAL = 5
 
-    /** [DEFAULT] is Moaan's own picture, [PICTURE] the user's picture as it is; the rest are drawn ([drawn]). */
-    enum class Face(val title: String, val drawn: Boolean = true) {
-        CLOCK("Clock"), CLOCK_DATE("Clock + date"), ANALOG("Analog"), AGENDA("Agenda"), HOME("Home"), READING("Reading"),
-        PHOTO("Photo"), MINIMAL("Minimal"), PICTURE("Picture", false), DEFAULT("Default", false);
+    /** [DEFAULT] is Moaan's own picture, [PICTURE] the user's picture as it is; the rest are drawn ([drawn]). The
+     *  order is the sleep-screen picker's ([FacePicker]); [group] is its "All" grid's heading, [detail] its one line
+     *  for a face without styles. */
+    enum class Face(val title: String, val group: Group, val detail: String, val drawn: Boolean = true) {
+        CLOCK("Clock", Group.CLOCK, "The time, large"),
+        CLOCK_DATE("Clock + date", Group.CLOCK, "The time, the date and the battery"),
+        ANALOG("Analog", Group.CLOCK, "A clock with hands, the date and the battery"),
+        HOME("Home", Group.HOME, ""),
+        AGENDA("Agenda", Group.AGENDA, ""),
+        READING("Reading", Group.OTHER, "Your current book: cover, title and how far you are"),
+        PHOTO("Photo", Group.PHOTO, "Your photo with the time in a corner"),
+        PICTURE("Picture", Group.PHOTO, "Your photo on the whole screen, no clock", false),
+        MINIMAL("Minimal", Group.OTHER, "The weekday, a big date and the month"),
+        DEFAULT("Default", Group.OTHER, "Moaan's own sleep picture", false);
 
         companion object { fun of(s: String?): Face? = entries.firstOrNull { it.name == s } }
     }
+
+    /** The picker's "All" grid headings, in this order. */
+    enum class Group(val title: String) { CLOCK("Clock"), HOME("Home"), AGENDA("Agenda"), PHOTO("Photo"), OTHER("Other") }
 
     // ---- Pure parts (unit tested) -------------------------------------------------------------------
 
@@ -301,6 +314,21 @@ object Aod {
 
     fun needsCalendar(c: Context) = c.checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED
 
+    /** The picker's "Use this": [entry]'s style (Agenda, Home or Photo) saved first, then its face picked and
+     *  installed once ([setFace]). Error or null. Blocking (on [Eink.worker]). */
+    fun choose(c: Context, entry: FacePicker.Entry): String? {
+        val e = Prefs(c).sp.edit()
+        entry.agenda?.let { e.putString(K_AGENDA, it.name) }
+        entry.home?.let { e.putString(K_HOME, it.name) }
+        entry.photo?.let { e.putString(K_PHOTO_STYLE, it.name) }
+        e.apply()
+        lastKey = null
+        return setFace(c, entry.face)
+    }
+
+    /** What the picker shows as in use: the face with its Agenda, Home and Photo styles. */
+    fun current(c: Context) = FacePicker.Current(face(c), agendaStyle(c), homeStyle(c), photoStyle(c))
+
     /** Picks [face] and installs it. Error or null. Blocking (on [Eink.worker]). */
     fun setFace(c: Context, face: Face): String? {
         migrate(c)
@@ -390,11 +418,12 @@ object Aod {
         return sent
     }
 
-    /** A small picture of [face] with today's data, portrait, for the settings grid (null for Moaan's); for Agenda,
+    /** A small picture of [face] with today's data, for the picker (null for Moaan's); for Agenda,
      *  in [style] (else the one picked); for Photo and Picture, in [photoStyle] (else the one picked). The picture is
      *  dithered at the thumbnail's size, so its dots show on screen as they will on the sleep screen (a scaled-down
      *  dither would blur back to grey). Blocking. */
-    fun thumbnail(c: Context, face: Face, style: Agenda.Style? = null, photoStyle: Dither.Style? = null, home: Home.Style? = null, land: Boolean = false): Bitmap? {
+    fun thumbnail(c: Context, face: Face, style: Agenda.Style? = null, photoStyle: Dither.Style? = null, home: Home.Style? = null, land: Boolean = false,
+                  divisor: Int = 4): Bitmap? {
         val dots = photoStyle ?: photoStyle(c)
         val big = when {
             face == Face.DEFAULT -> return null
@@ -403,8 +432,9 @@ object Aod {
             else -> AodFaces.render(face, collect(c, face, false).copy(rotation = if (land) Surface.ROTATION_90 else Surface.ROTATION_0,
                 agenda = style, photoStyle = Dither.Style.PLAIN, home = home)).let { if (land) AodFaces.turnBack(it, 90) else it }
         }
-        // A quarter of the face's own size, so its shape is kept (the tiles fit it in, never stretch it).
-        val small = Bitmap.createScaledBitmap(big, big.width / 4, big.height / 4, true).also { if (it !== big) big.recycle() }
+        // A [divisor]th of the face's own size (a quarter for tiles, half for the picker's page), so its shape is kept
+        // (the views fit it in, never stretch it).
+        val small = Bitmap.createScaledBitmap(big, big.width / divisor, big.height / divisor, true).also { if (it !== big) big.recycle() }
         if ((face == Face.PICTURE || face == Face.PHOTO) && dots != Dither.Style.PLAIN)
             return (if (small.isMutable) small else small.copy(Bitmap.Config.ARGB_8888, true).also { small.recycle() }).also { Dither.apply(it, dots) }
         return small
@@ -460,6 +490,21 @@ object Aod {
             }
         Log.i(TAG, "aod: home dumped: ${real.events?.size ?: "no access"} events, countdowns ${real.countdowns.joinToString(" | ")}, " +
             "weather ${real.weather?.line()} ${real.weather?.age ?: ""}")
+    }
+
+    /** Every picker entry ([FacePicker.entries]), portrait and landscape, as the picker draws it (half size, upright),
+     *  to files/faces/<n>_<entry>_<port|land>.png, for checking the layouts without turning the phone. Root's
+     *  `--es dump faces` on [Alarm]. Nothing is changed. Blocking. */
+    fun dumpFaces(c: Context) {
+        val dir = File(c.filesDir, "faces").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+        FacePicker.entries().forEachIndexed { i, e ->
+            for (land in listOf(false, true)) {
+                val bmp = thumbnail(c, e.face, e.agenda, e.photo, e.home, land, divisor = 2) ?: continue
+                File(dir, "%02d_%s_%s.png".format(Locale.US, i + 1, e.key, if (land) "land" else "port")).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                bmp.recycle()
+            }
+        }
+        Log.i(TAG, "aod: faces dumped to ${dir.path}")
     }
 
     /** A made-up day: 9°, light rain, rain likely 3–6 PM, H 14 L 6 (for [dumpHome]). */
@@ -937,7 +982,7 @@ object Aod {
      *  InkPalm+'s own PendingIntent reaches it (and root: `am broadcast -n com.inkpalmplus/.Aod\$Alarm` is one
      *  update now, for checks on release builds, which have no test hooks; with `--es cover poweroff`, auto power-off's
      *  cover and wake bookkeeping for 30 s without the power-off itself, for a dry run of the bridge's predraw; with
-     *  `--es dump home`, [dumpHome] only: no update, nothing changed or fetched). */
+     *  `--es dump home`, [dumpHome] only: no update, nothing changed or fetched; `--es dump faces`, [dumpFaces]). */
     class Alarm : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             val app = c.applicationContext
@@ -951,6 +996,7 @@ object Aod {
                     // The dry run: as auto power-off does it (the bridge's predraw wake is ours), minus power.req.
                     if (i.getStringExtra("cover") == "poweroff") { Aod.poweringOff(app, holdMs = 30_000L); AutoOff.showCover(app) }
                     else if (i.getStringExtra("dump") == "home") dumpHome(app)
+                    else if (i.getStringExtra("dump") == "faces") dumpFaces(app)
                     else update(app)
                 } finally { done.finish() }
             }

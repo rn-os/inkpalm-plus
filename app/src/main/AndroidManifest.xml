@@ -89,6 +89,11 @@
             android:name=".SectionActivity"
             android:exported="${sectionExported}" />
 
+        <!-- The sleep-screen picker (Sleep screen → "Sleep screen: …"). Exported only in debug builds, for the device checks. -->
+        <activity
+            android:name=".FacePickerActivity"
+            android:exported="${sectionExported}" />
+
         <!-- "Browse files…": Android's file picker, then the picked file opens in NeoReader. No window of its own. -->
         <activity
             android:name=".BrowseActivity"

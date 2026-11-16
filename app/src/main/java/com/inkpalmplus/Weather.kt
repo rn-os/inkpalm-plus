@@ -240,6 +240,39 @@ object Weather {
     fun microgPrecise(c: Context): Boolean =
         c.packageManager.checkPermission(android.Manifest.permission.ACCESS_FINE_LOCATION, GMS) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
+    /** microG Services has background location (with precise, what it needs to scan Wi-Fi from the background). */
+    fun microgBackground(c: Context): Boolean =
+        c.packageManager.checkPermission(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION, GMS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /** "Fix microG location" is worth offering. */
+    fun microgNeedsFix(c: Context): Boolean = Home.microgFixNeeded(microg(c), microgPrecise(c), microgBackground(c))
+
+    /**
+     * Grants microG precise + background location (and the FINE_LOCATION app op): the root bridge's perm.req first
+     * (re-checked ~2 s later; older images ignore it), then Shizuku. True when granted; false: the user does it in
+     * [microgAppSettings]. Blocking.
+     */
+    fun fixMicrog(c: Context): Boolean {
+        var triedBridge = false; var triedShizuku = false
+        while (true) {
+            val granted = microgPrecise(c) && microgBackground(c)
+            when (Home.microgNextStep(granted, Eink.bridgeAvailable(), triedBridge, Shell.allowed(), triedShizuku)) {
+                Home.MicrogStep.DONE -> { Log.i(TAG, "home: microg fix: granted"); return true }
+                Home.MicrogStep.BRIDGE -> {
+                    triedBridge = true
+                    val ok = Eink.bridgeWrite("perm.req", Home.MICROG_REQUEST)
+                    Log.i(TAG, "home: microg fix: bridge perm.req written=$ok, checking again in 2 s")
+                    if (ok) Thread.sleep(2_000)
+                }
+                Home.MicrogStep.SHIZUKU -> {
+                    triedShizuku = true
+                    for (cmd in Home.MICROG_COMMANDS) Log.i(TAG, "home: microg fix: shizuku '$cmd' -> ${Shell.run(cmd).first}")
+                }
+                Home.MicrogStep.SETTINGS -> { Log.i(TAG, "home: microg fix: not granted, opening microG's app settings"); return false }
+            }
+        }
+    }
+
     /** microG Services' app info (its Permissions → Location). */
     fun microgAppSettings() = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$GMS"))
 

@@ -137,6 +137,37 @@ object Home {
     /** microG Services itself has only approximate location: it can't read Wi-Fi networks. */
     const val MICROG_PRECISE = "No location from microG: microG Services has only approximate location, so it can't read nearby Wi\u2011Fi networks. In its app settings \u2192 Permissions \u2192 Location, choose \"Allow all the time\" and turn on \"Use precise location\". Wi\u2011Fi location must also be on in microG Settings \u2192 Location."
 
+    // ---- Fix microG location ----------------------------------------------------------------------------
+
+    /** microG (com.google.android.gms) reads Wi-Fi scans only with precise location allowed all the time; Android's
+     *  own permission page doesn't offer "all the time" for it. Offered when microG is there and lacks either. */
+    fun microgFixNeeded(installed: Boolean, fine: Boolean, background: Boolean): Boolean = installed && !(fine && background)
+
+    enum class MicrogStep { BRIDGE, SHIZUKU, SETTINGS, DONE }
+
+    /** The next way to grant it, in order: the root bridge (`perm.req`, newer system images), Shizuku, else microG's
+     *  app permission page for the user. */
+    fun microgNextStep(granted: Boolean, bridge: Boolean, triedBridge: Boolean, shizuku: Boolean, triedShizuku: Boolean): MicrogStep = when {
+        granted -> MicrogStep.DONE
+        bridge && !triedBridge -> MicrogStep.BRIDGE
+        shizuku && !triedShizuku -> MicrogStep.SHIZUKU
+        else -> MicrogStep.SETTINGS
+    }
+
+    const val MICROG = "com.google.android.gms"
+
+    /** The bridge request (files/perm.req) and the same grant as shell commands (Shizuku). Only microG, only location. */
+    const val MICROG_REQUEST = "microg_location=1\n"
+    val MICROG_COMMANDS = listOf(
+        "pm grant $MICROG android.permission.ACCESS_FINE_LOCATION",
+        "pm grant $MICROG android.permission.ACCESS_BACKGROUND_LOCATION",
+        "appops set $MICROG FINE_LOCATION allow",
+    )
+
+    const val MICROG_CONFIRM = "microG provides Wi‑Fi location on this phone. It needs precise location, allowed all the time, to read nearby Wi‑Fi networks. InkPalm+ will grant only that, to microG only."
+    const val MICROG_DONE = "microG can now find your location."
+    const val MICROG_BY_HAND = "Couldn't grant it from here. In microG Services' permissions → Location, choose \"Allow all the time\" and turn on \"Use precise location\"."
+
     /** With only approximate location granted, Android lets an app ask about once every 10 minutes, so microG
      *  postpones the Wi-Fi scan past the wait. */
     const val APPROXIMATE_NOTE = "InkPalm+ may use only your approximate location. Android limits how often approximate lookups run, so the answer can come too late. Precise location is used once and rounded to about 1 km all the same."

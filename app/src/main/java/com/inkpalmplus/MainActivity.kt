@@ -626,6 +626,7 @@ open class MainActivity : Activity() {
             places?.firstOrNull()?.let { addView(placeRow(it)); addView(divider()) }
         }
         places?.drop(1)?.forEach { p -> group().apply { addView(placeRow(p)); addView(divider()) } }
+        microgGroup()
         group().apply {
             addView(inkButton(if (locating) "Finding your location… (up to ${Weather.LOCATE_MS / 1000} s)" else "Use my location") { if (!locating) useLocation() },
                 lp(MATCH, WRAP).apply { setMargins(g, dp(8), g, dp(2)) })
@@ -674,9 +675,8 @@ open class MainActivity : Activity() {
         val microg = Weather.microg(this@MainActivity)
         val microgPrecise = !microg || Weather.microgPrecise(this@MainActivity)
         addView(text(Home.locateMessage(f.fail, microg, Weather.LOCATE_MS / 1000, microgPrecise), Type.M, bold = true))
-        if (!microgPrecise) addView(inkButton("microG Services permissions") {
-            if (runCatching { startActivity(Weather.microgAppSettings()) }.isFailure) toast("Couldn't open microG's app settings")
-        }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
+        if (Weather.microgNeedsFix(this@MainActivity) && !microgConfirm) addView(inkButton("Fix microG location") { microgConfirm = true; renderWeather() },
+            lp(WRAP, WRAP).apply { topMargin = dp(8) })
         val noFix = f.fail == Home.LocateFail.NO_FIX || f.fail == Home.LocateFail.NO_PROVIDER || f.fail == Home.LocateFail.LOCATION_OFF
         if (noFix) addView(inkButton(if (microg && f.fail != Home.LocateFail.LOCATION_OFF) "microG location settings" else "Location settings") {
             val intents = Weather.locationSettingsIntents().let { if (microg && f.fail != Home.LocateFail.LOCATION_OFF) it else it.takeLast(1) }
@@ -689,6 +689,46 @@ open class MainActivity : Activity() {
         if (f.fail != Home.LocateFail.NO_PERMISSION && !ipConfirm) {
             addView(text("Or guess the city from your internet connection.", Type.S, color = Ink.MUTED).apply { setPadding(0, dp(10), 0, 0) })
             addView(inkButton("Estimate from internet connection") { ipConfirm = true; renderWeather() }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
+        }
+    }
+
+    /** "Fix microG location" asked, waiting for Grant. */
+    private var microgConfirm = false
+    private var microgBusy = false
+    /** How the last fix went. */
+    private var microgNote: String? = null
+
+    /** microG lacks precise or background location (it then can't read Wi-Fi scans): a row offering the fix, its
+     *  confirmation, and how it went. Hidden when microG has both or isn't installed. */
+    private fun microgGroup() {
+        val needed = Weather.microgNeedsFix(this)
+        if (!needed && microgNote == null) return
+        group().apply {
+            if (needed && !microgConfirm) addView(buttonRow("microG can't use Wi\u2011Fi location", "It needs precise location, allowed all the time", "Fix\u2026") {
+                microgConfirm = true; microgNote = null; renderWeather()
+            })
+            if (microgConfirm) addView(vbox().apply {
+                background = outline(3)
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                addView(text("Fix microG location", Type.L, bold = true))
+                addView(text(Home.MICROG_CONFIRM, Type.S, color = Ink.MUTED).apply { setPadding(0, dp(4), 0, 0) })
+                addView(hbox().apply {
+                    addView(inkButton(if (microgBusy) "Granting\u2026" else "Grant") { if (!microgBusy) fixMicrog() })
+                    addView(inkButton("Cancel") { microgConfirm = false; renderWeather() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
+                }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
+            }, boxLp())
+            microgNote?.let { addView(text(it, Type.S, bold = true).apply { setPadding(g, dp(2), g, dp(6)) }) }
+        }
+    }
+
+    private fun fixMicrog() {
+        microgBusy = true; renderWeather()
+        Shell.background({ Weather.fixMicrog(this) }) { ok ->
+            microgBusy = false; microgConfirm = false
+            microgNote = if (ok) Home.MICROG_DONE else Home.MICROG_BY_HAND
+            if (ok) locateFail = null
+            else if (runCatching { startActivity(Weather.microgAppSettings()) }.isFailure) toast("Couldn't open microG's app settings")
+            if (!isDestroyed) renderWeather()
         }
     }
 

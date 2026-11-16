@@ -395,3 +395,10 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   "Frontlight" info rows became notes. Stock firmware: Screen & light opens the old e-ink screen (scrolls).
 - Old section names still open the screen they moved to, at their page (`aod`, `light`, `keep_on`, `touch`,
   `reading`); FacePicker's setup links (weather, reading) and the screen panel's ⚙ (screen) unchanged.
+- "Fix microG location" (asked; separate commit): on this phone "Use my location" only works once microG Services has
+  FINE + BACKGROUND location and appops FINE_LOCATION allow; Android's page doesn't offer "all the time" for it. A
+  row on Weather location (and a button in the failure box) when microG lacks either; confirm box; then bridge
+  `perm.req` (`microg_location=1`; only the next KompaktOS image's eink-apply.sh handles it, so success is
+  re-checked after 2 s), Shizuku `pm grant`/`appops set`, else microG's app settings with instructions.
+  `Home.microgFixNeeded`/`microgNextStep` tested (MicrogFixTest). The user's phone was fixed by hand, so on the
+  device the row is hidden; the grant path itself is untested on the device.

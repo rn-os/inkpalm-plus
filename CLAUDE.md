@@ -83,6 +83,11 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
   fix; 45 s, else a last known fix < 1 h), rounded to 0.01°, stored as the city. FINE is there because Android limits
   coarse-only requests to ~1 per 10 min, so microG postpones its Wi-Fi scan past the wait. Never a listener left
   running, no background location. Logs "home: locate: …".
+- "Fix microG location" (`Weather.fixMicrog`, `Home.microgNextStep`): offered on Weather location when microG
+  (com.google.android.gms) lacks ACCESS_FINE_LOCATION or ACCESS_BACKGROUND_LOCATION; after a confirm, grants those two
+  and appops FINE_LOCATION to microG only: the root bridge's `files/perm.req` (`microg_location=1`, handled by the
+  KompaktOS repo's eink-apply.sh from the next system image; re-checked after 2 s), then Shizuku (`pm grant`/`appops
+  set`), else microG's app permission page. Logs "home: microg fix: …".
 - "Estimate from internet connection" (`Weather.estimateFromIp`, ipinfo.io/json over HTTPS, no key): only on tap,
   after `Home.IP_NOTE` says it sends the public IP address; city + rounded coordinates stored like a searched city.
 

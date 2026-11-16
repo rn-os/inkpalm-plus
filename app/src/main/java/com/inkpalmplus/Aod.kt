@@ -434,9 +434,10 @@ object Aod {
 
     /**
      * Both Home styles, portrait and landscape, as files/home_<STYLE>_<rotation>.png (upright) with SAMPLE weather and
-     * a sample trash day (so every card shows without a city or network), and as files/home_real_<STYLE>_<rotation>.png
-     * with what the face would show now (the user's city, cache, trash setting). The countdowns and events are the real
-     * calendar's in both. Nothing is changed or fetched. Debug hook, and root's `--es dump home` on [Alarm]. Blocking.
+     * a sample trash day (so every card shows without a city or network); files/home_stale_… with the same forecast
+     * fetched 2 h ago and the phone offline (its age shows; no trash card); and files/home_real_… with what the face
+     * would show now (the user's city, cache, trash setting). The countdowns and events are the real calendar's in all.
+     * Nothing is changed or fetched. Debug hook, and root's `--es dump home` on [Alarm]. Blocking.
      */
     fun dumpHome(c: Context) {
         val real = collect(c, Face.HOME, false)
@@ -444,7 +445,10 @@ object Aod {
         val sample = real.withHome(
             weather = Home.weatherView(sampleForecast(now), now, now - 20 * 60_000L, true, Weather.fahrenheit(c), real.h24) { hm(c, it) },
             trash = Home.TrashDay("Recycling tomorrow", false, Agenda.midnight(now, 1)))
-        for ((prefix, data) in listOf("home" to sample, "home_real" to real))
+        val stale = real.withHome(
+            weather = Home.weatherView(sampleForecast(now), now, now - 2 * 60 * 60_000L, false, Weather.fahrenheit(c), real.h24) { hm(c, it) },
+            trash = null)
+        for ((prefix, data) in listOf("home" to sample, "home_stale" to stale, "home_real" to real))
             for (style in Home.Style.entries) for (rot in listOf(Surface.ROTATION_0, Surface.ROTATION_90)) {
                 val bmp = AodFaces.render(Face.HOME, data.copy(rotation = rot, home = style))
                 val up = if (rot == Surface.ROTATION_0) bmp else AodFaces.turnBack(bmp, degreesFor(rot))

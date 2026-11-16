@@ -234,3 +234,25 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   SuperBoox's were recommended for public users.
 - Name: "InkPalm" is Moaan's product name; a trademark complaint is possible.
 - Optional: same-device speed comparison with SuperBoox (needs the user to enable its accessibility service).
+
+## Sleep face in the phone's physical orientation (branch `sleep-physical-orientation`, 2026-11-16)
+- Asked: InkOS (launcher, locked portrait) held in landscape → the sleep face was portrait until the first Live
+  update re-oriented it. The face now follows how the phone is held, not the display; InkOS stays portrait.
+- Awake: `Aod.Gravity` follows TYPE_ACCELEROMETER at SENSOR_DELAY_UI (~15 Hz) only while the screen is on (the
+  user's, not a redraw wake) and a drawn face is picked (`watchGravity` at the user's wake / service start / face
+  pick, `stopGravity` at the sleep). Same rules as `reorient` (`steady` over the last 4 samples, `rotationFromGravity`).
+  A decision that holds 500 ms (`SETTLE_MS`) becomes `Orientation.physical`; the pre-render (`collect` →
+  `rotations.current`) draws `physical ?: display`, so the right face is usually installed before the press.
+  Log: `aod: physical orient → 1, face 0 → 1 (display 0)`.
+- At the user's SCREEN_OFF: `Gravity.atSleep` = the latest steady decision if it ended within 5 s (`STALE_MS`),
+  else undecided (flat, ~45°, moving) → the display's rotation; frozen by `Orientation.sleep(atSleep)`. If the face
+  the HWC just took (`installedRotation`, set when the bridge got it) was drawn for another rotation
+  (`sleepNeedsRedraw`: turned < ~0.5 s before the press, or its render still queued), one immediate redraw
+  (`fixAtSleep`: wake lock, `expectWake`, `install(redraw = true)` with the `WakeCover`, as a Live update; also with
+  Frozen updates). Log: `aod: sleep orient: xyz=… N ms ago → 1|undecided → 1 (display 0), installed 0, redraw now`.
+- Never writes user_rotation / accelerometer_rotation; works with the lock on or off. `Rotation`'s per-app overlay is
+  untouched (the physical orientation wins for the face only). The user's wake clears the held and physical rotation;
+  the cover (which holds the face's rotation during a redraw wake) is gone 1 s after that wake's sleep, so the display
+  turns back while asleep and the user's wake shows the display's own orientation.
+- Battery: the accelerometer only while the screen is on (with auto-rotate on Android runs it then anyway); ~15
+  trivial callbacks a second on an awake CPU; a re-render when the phone is turned; rarely one redraw wake at a sleep.

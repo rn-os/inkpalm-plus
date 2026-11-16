@@ -140,6 +140,7 @@ class QuickPanelService : AccessibilityService() {
         syncLightSensor()
         syncKeyFilter()
         Aod.prepare(this)
+        Aod.watchGravity(this)   // the sleep face follows the phone's physical orientation while the screen is on
         recents.warm()
         showStrip()
         // The app in front isn't known until the next window change: the service doesn't read window
@@ -156,6 +157,7 @@ class QuickPanelService : AccessibilityService() {
         Shell.main.removeCallbacks(endPreview); Shell.main.removeCallbacks(prepare); Shell.main.removeCallbacks(homeHold)
         Shell.main.removeCallbacks(redrawStuck)
         WakeCover.hide("service gone")
+        Aod.stopGravity(this)
         removeStrip()
         closePanel()
         closeSide()

@@ -182,4 +182,67 @@ class AodLogicTest {
         o.wake()
         assertEquals(1, o.current { 1 })
     }
+
+    /** InkOS locked in portrait (display 0), phone held in landscape: the awake face follows the phone, the sleep
+     *  freezes it, and the user's wake goes back to the display's own orientation. */
+    @Test fun theFaceFollowsThePhoneNotTheDisplay() {
+        val o = Aod.Orientation()
+        assertEquals(0, o.current { 0 })
+        o.physical = 1
+        assertEquals(1, o.current { 0 })
+        assertEquals(0, o.display)
+        o.sleep(1)
+        assertEquals(1, o.current { 0 })
+        assertTrue(o.asleep)
+        o.wake()
+        assertEquals(0, o.current { 0 })        // physical cleared at the wake until gravity decides again
+        // Undecided at the sleep: the display's rotation.
+        o.awake(3); o.physical = 1; o.sleep(null)
+        assertEquals(3, o.held)
+    }
+
+    private fun Aod.Gravity.feed(x: Float, y: Float, z: Float, from: Long, until: Long, step: Long = 66): Boolean {
+        var changed = false
+        var t = from
+        while (t <= until) { changed = add(x, y, z, t) || changed; t += step }
+        return changed
+    }
+
+    @Test fun gravitySettlesBeforeTheFaceTurns() {
+        val g = Aod.Gravity()
+        assertNull(g.atSleep(0))                                  // no reading yet: undecided
+        assertFalse(g.feed(9.8f, 0f, 0.5f, 0, 300))              // landscape, steady but not settled yet
+        assertNull(g.settled)
+        assertEquals(1, g.atSleep(300))                           // ... though at a sleep it already counts
+        assertTrue(g.feed(9.8f, 0f, 0.5f, 366, 800))
+        assertEquals(1, g.settled)
+        // A brief turn to portrait doesn't move the settled one.
+        g.feed(0f, 9.8f, 0.5f, 866, 1100)
+        assertEquals(1, g.settled)
+        assertEquals(0, g.atSleep(1100))
+        // Laid flat: undecided (the display's rotation at a sleep).
+        assertTrue(g.feed(0.1f, 0.2f, 9.8f, 1166, 2000))
+        assertNull(g.settled)
+        assertNull(g.atSleep(2000))
+    }
+
+    @Test fun movingKeepsTheLastStillReadingForAWhile() {
+        val g = Aod.Gravity()
+        g.feed(9.8f, 0f, 0.5f, 0, 1000)
+        // Shaken: no steady window.
+        var t = 1066L
+        repeat(10) { i -> g.add(if (i % 2 == 0) 4f else 9.8f, if (i % 2 == 0) 5f else 0f, 3f, t); t += 66 }
+        assertEquals(1, g.atSleep(t))
+        assertEquals(1, g.atSleep(990 + Aod.STALE_MS))  // the last still window ended at 990
+        assertNull(g.atSleep(990 + Aod.STALE_MS + 1))           // moving too long: undecided
+        g.reset()
+        assertNull(g.atSleep(t))
+    }
+
+    @Test fun aWrongFaceAtTheSleepIsRedrawnOnce() {
+        assertFalse(Aod.sleepNeedsRedraw(1, 1))
+        assertTrue(Aod.sleepNeedsRedraw(0, 1))
+        assertTrue(Aod.sleepNeedsRedraw(1, 0))
+        assertFalse(Aod.sleepNeedsRedraw(null, 1))               // nothing installed by this process: left alone
+    }
 }

@@ -50,8 +50,13 @@ import kotlin.math.min
  * screen or the last app. Updates continue while charging (the cost is then free). Below [LOW_BATTERY] % on battery the
  * face becomes the low-battery box, drawn once, and the updates stop.
  *
- * The face keeps the orientation the phone was held in at the user's sleep ([Orientation]); each Live update first
- * reads the accelerometer ([reorient]) and turns the face if the phone was turned while asleep, rotation lock or not.
+ * The face is drawn in the phone's PHYSICAL orientation, not the display's (an app or launcher locked in portrait, held
+ * in landscape, still gets a landscape face): while the screen is on [Gravity] follows the accelerometer and the
+ * pre-rendered face turns with the phone; at the user's sleep that orientation is frozen ([Orientation], [onScreenOff]),
+ * falling back to the display's when gravity is undecided (flat, ~45°, moving). If the installed face doesn't match it
+ * (turned just before the press), one immediate invisible redraw ([fixAtSleep]) puts the right one up. Each Live update
+ * first reads the accelerometer again ([reorient]) and turns the face if the phone was turned while asleep, rotation
+ * lock or not. Settings (user_rotation, accelerometer_rotation) are never written.
  */
 object Aod {
     private const val TAG = "InkPalmPlus"
@@ -134,6 +139,54 @@ object Aod {
         val mean = FloatArray(3) { a -> last.map { it[a] }.average().toFloat() }
         return mean.takeIf { last.all { s -> (0..2).all { a -> abs(s[a] - mean[a]) <= spread } } }
     }
+
+    /** How long a new steady orientation must last before the awake pre-render turns to it (no churn near the
+     *  thresholds). */
+    const val SETTLE_MS = 500L
+    /** At the sleep, the last steady reading counts only if it ended within this (moving longer: undecided). */
+    const val STALE_MS = 5_000L
+
+    /**
+     * The phone's physical orientation while the screen is on, from accelerometer samples (~15 a second). Each sample
+     * ends a window of the last 4; a [steady] window decides [rotationFromGravity] (null: flat or ~45°), a moving
+     * one decides nothing. [settled] is the decision once it has held [SETTLE_MS] (the awake pre-render follows it);
+     * [atSleep] the latest steady decision, when one ended within [STALE_MS] (else null: undecided).
+     */
+    class Gravity(private val settleMs: Long = SETTLE_MS, private val staleMs: Long = STALE_MS) {
+        private val window = ArrayDeque<FloatArray>()
+        private var any = false
+        private var latest: Int? = null
+        private var since = 0L
+        private var steadyAt = 0L
+        /** The mean of the last steady window (for the log). */
+        var mean: FloatArray? = null; private set
+        /** The decision that has held [SETTLE_MS]; null until one has, or when that is undecided. */
+        var settled: Int? = null; private set
+
+        /** A sample (m/s²) at [at] ms. True when [settled] changed. */
+        fun add(x: Float, y: Float, z: Float, at: Long): Boolean {
+            window.addLast(floatArrayOf(x, y, z))
+            while (window.size > 4) window.removeFirst()
+            val m = steady(window.toList()) ?: return false
+            mean = m; steadyAt = at
+            val d = rotationFromGravity(m[0], m[1], m[2])
+            if (!any || d != latest) { any = true; latest = d; since = at }
+            if (d != settled && at - since >= settleMs) { settled = d; return true }
+            return false
+        }
+
+        /** At the user's sleep ([now] ms): how the phone was held, or null when undecided (flat, ~45°, moving, no reading). */
+        fun atSleep(now: Long): Int? = if (any && now - steadyAt <= staleMs) latest else null
+
+        /** Milliseconds since the last steady window, or null without one. */
+        fun age(now: Long): Long? = if (any) now - steadyAt else null
+
+        fun reset() { window.clear(); any = false; latest = null; settled = null; mean = null }
+    }
+
+    /** The face the HWC took at the power-off transition ([installed] rotation, null: unknown) needs one immediate
+     *  redraw when it isn't drawn for the rotation frozen at the sleep ([held]). */
+    fun sleepNeedsRedraw(installed: Int?, held: Int): Boolean = installed != null && installed != held
 
     fun isLow(level: Int, plugged: Boolean) = !plugged && level in 0 until LOW_BATTERY
 
@@ -218,6 +271,7 @@ object Aod {
         Prefs(c).sp.edit().putString(K_FACE, face.name).putBoolean("sleep_screen", face != Face.DEFAULT).apply()
         lastKey = null
         if (face.drawn) install(c, redraw = false, force = true)
+        Shell.main.post { watchGravity(c.applicationContext) }
         return null
     }
 
@@ -248,6 +302,8 @@ object Aod {
 
     /** What the installed face shows; drawn again only when it changes. */
     @Volatile private var lastKey: String? = null
+    /** The rotation the installed face (files → /data/misc/standby.png) was drawn for; null until one is installed. */
+    @Volatile private var installedRotation: Int? = null
 
     /** The screen is on: draw the face again if what it shows changed (the minute, battery, events, …). */
     fun tick(c: Context) {
@@ -283,7 +339,7 @@ object Aod {
         if (!redraw) bmp.recycle()
         val sent = Eink.bridgeWrite("standby.req", if (redraw) "apply=1\nredraw=1\n" else "apply=1\n")
         if (covered && !sent) WakeCover.hide("request failed")
-        if (sent) lastKey = key
+        if (sent) { lastKey = key; installedRotation = data.rotation }
         Log.i(TAG, "aod: ${face.name} ${if (redraw) "redraw" else "installed"} rot=${data.rotation} low=${data.low} in ${SystemClock.uptimeMillis() - t0} ms")
         return sent
     }
@@ -312,6 +368,7 @@ object Aod {
         File(c.filesDir, "standby.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bmp.recycle()
         lastKey = null
+        installedRotation = rot
         Eink.bridgeWrite("standby.req", "apply=1\n")
         Log.i(TAG, "aod: arrow face installed for rotation $rot")
     }
@@ -468,28 +525,33 @@ object Aod {
     }
 
     /**
-     * The orientation the faces are drawn in. Awake it is the display's; the last one seen is kept, and at the user's
-     * sleep it is frozen for every render until the user wakes: asleep (and in the bridge's redraw wake) Android reports
-     * rotation 0, which would turn a landscape face to portrait. A Live update may move it to the phone's physical
-     * orientation ([turned], from the accelerometer).
+     * The orientation the faces are drawn in. Awake it is the phone's [physical] one when gravity decides it, else the
+     * display's (the last one seen is kept); at the user's sleep it is frozen for every render until the user wakes:
+     * asleep (and in the bridge's redraw wake) Android reports rotation 0, which would turn a landscape face to
+     * portrait. A Live update may move it to the phone's physical orientation ([turned], from the accelerometer).
      */
     class Orientation {
         @Volatile private var last = Surface.ROTATION_0
         @Volatile private var frozen: Int? = null
+        /** Awake: the phone's physical orientation ([Gravity.settled]); null when undecided or not known. */
+        @Volatile var physical: Int? = null
         val asleep: Boolean get() = frozen != null
+        /** The display's rotation last seen awake. */
+        val display: Int get() = last
         /** Awake, the display's rotation [r]. Ignored while frozen. */
         fun awake(r: Int) { if (frozen == null) last = r }
-        /** The user's sleep: freeze the orientation they were holding the phone in. */
-        fun sleep() { frozen = last }
-        /** The user's wake: back to the display's rotation. */
-        fun wake() { frozen = null }
+        /** The user's sleep: freeze how the phone was held then ([atSleep], [Gravity.atSleep]), or the display's
+         *  rotation when that is undecided. */
+        fun sleep(atSleep: Int? = null) { frozen = atSleep ?: last; physical = null }
+        /** The user's wake: back to the display's rotation (until gravity decides again). */
+        fun wake() { frozen = null; physical = null }
         /** The rotation held now. */
-        val held: Int get() = frozen ?: last
+        val held: Int get() = frozen ?: physical ?: last
         /** Asleep, the phone was found turned to [r] ([reorient]): held from now on (the user's wake still clears it).
          *  True when it changed. */
         fun turned(r: Int): Boolean { val was = held; frozen = r; last = r; return was != r }
         /** The rotation to draw with, [live] being the display's now (called only when needed). */
-        fun current(live: () -> Int): Int = frozen ?: live().also { last = it }
+        fun current(live: () -> Int): Int = frozen ?: live().also { last = it }.let { physical ?: it }
         fun current(c: Context): Int = current { displayRotation(c) }
     }
 
@@ -544,11 +606,44 @@ object Aod {
 
     // ---- Live updates ------------------------------------------------------------------------------
 
-    /** Screen off (the user's): arm the next Live update. */
+    /**
+     * Screen off (the user's): freeze the orientation the phone was held in ([Gravity.atSleep], else the display's),
+     * arm the next Live update, and if the face the HWC just took was drawn for another rotation (turned just before
+     * the press, or its render still queued), redraw it at once ([fixAtSleep]). Main thread.
+     */
     fun onScreenOff(c: Context) {
-        rotations.sleep()
+        val now = SystemClock.elapsedRealtime()
+        val watched = sensing != null
+        val phys = gravity.atSleep(now)
+        val mean = gravity.mean; val age = gravity.age(now)
+        stopGravity(c)
+        rotations.sleep(phys)
         Prefs(c).sp.edit().putBoolean(K_LOW_SHOWN, false).apply()
         schedule(c)
+        if (!supported() || !face(c).drawn) return
+        val held = rotations.held
+        val shown = installedRotation
+        val fix = sleepNeedsRedraw(shown, held) && !poweringOff()
+        fun f(v: FloatArray?) = v?.joinToString(",") { "%.1f".format(Locale.US, it) } ?: "-"
+        Log.i(TAG, "aod: sleep orient: ${if (watched) "xyz=${f(mean)} ${age?.let { "$it ms ago" } ?: "no reading"}" else "not watched"}" +
+            " → ${phys ?: "undecided"} → $held (display ${rotations.display}), installed $shown${if (fix) ", redraw now" else ""}")
+        if (fix) fixAtSleep(c)
+    }
+
+    /** One immediate invisible redraw at the user's sleep (the Live update's path: [WakeCover], the bridge's
+     *  `redraw=1`), under a wake lock: the CPU may otherwise suspend right after the screen goes off. */
+    private fun fixAtSleep(c: Context) {
+        val app = c.applicationContext
+        val wl = app.getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "InkPalmPlus:aod-sleep")
+        wl.acquire(12_000L)
+        Eink.post {
+            try {
+                if (!interactive(app) && !poweringOff() && face(app).drawn) {
+                    expectWake(15_000L)
+                    if (!install(app, redraw = true, force = true)) redrawUntil = 0
+                }
+            } finally { if (wl.isHeld) wl.release() }
+        }
     }
 
     /** Screen on (the user's): no updates while it's on; the face is drawn fresh for the next sleep. */
@@ -556,7 +651,50 @@ object Aod {
         rotations.wake()
         noteRotation(c)
         cancel(c)
+        watchGravity(c)
         tick(c)
+    }
+
+    // ---- The physical orientation while awake ------------------------------------------------------
+
+    private val gravity = Gravity()
+    /** The awake accelerometer listener, while registered. Main thread. */
+    private var sensing: SensorEventListener? = null
+
+    /**
+     * While the screen is on (the user's) and a drawn face is picked: follow the accelerometer at ~15 Hz
+     * (SENSOR_DELAY_UI) so the pre-rendered face turns with the phone ([Gravity.settled] → [Orientation.physical] →
+     * [prepare]). Stopped at the sleep ([stopGravity]). With auto-rotate on Android already runs this sensor while the
+     * screen is on. Main thread.
+     */
+    fun watchGravity(c: Context) {
+        if (!supported() || !face(c).drawn || !interactive(c) || redrawing()) { stopGravity(c); return }
+        if (sensing != null) return
+        val sm = c.getSystemService(SensorManager::class.java) ?: return
+        val sensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
+        val app = c.applicationContext
+        gravity.reset()
+        val l = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) {
+                if (!gravity.add(e.values[0], e.values[1], e.values[2], SystemClock.elapsedRealtime())) return
+                if (rotations.asleep) return
+                val was = rotations.held
+                rotations.physical = gravity.settled
+                if (rotations.held != was) {
+                    Log.i(TAG, "aod: physical orient → ${gravity.settled ?: "undecided"}, face $was → ${rotations.held} (display ${rotations.display})")
+                    prepare(app)
+                }
+            }
+            override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+        }
+        if (sm.registerListener(l, sensor, SensorManager.SENSOR_DELAY_UI, Shell.main)) sensing = l
+        else Log.w(TAG, "aod: couldn't watch ${sensor.name}")
+    }
+
+    fun stopGravity(c: Context) {
+        val l = sensing ?: return
+        sensing = null
+        runCatching { c.getSystemService(SensorManager::class.java)?.unregisterListener(l) }
     }
 
     fun schedule(c: Context, delayMs: Long? = null) {

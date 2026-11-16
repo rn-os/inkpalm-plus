@@ -16,7 +16,7 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
   `--es section panel|eink|screen|light|sleep|aod|agenda|photo|reading|touch|about`, `keep_on` = panel): the sub-screens; `eink`
   holds the e-ink settings, "Search apps" and the per-app list; `aod` is the sleep-screen picker, `agenda` the Agenda face's style picker, `photo` the Photo style picker.
 - `Aod`, `AodFaces`, `Agenda`, `Dither`: the always-on sleep screen (faces drawn into the HWC's standby.png, Live updates via an alarm
-  and the bridge's `redraw=1`; `Agenda`: the Agenda face's styles and their pure layout parts; `Dither`: the Photo styles); see docs/HANDOFF.md.
+  and the bridge's `redraw=1`; drawn in the phone's physical orientation (`Aod.Gravity`, accelerometer while the screen is on), else the display's; `Agenda`: the Agenda face's styles and their pure layout parts; `Dither`: the Photo styles); see docs/HANDOFF.md.
 - `AppActivity`: one app's settings page.
 - `QuickPanelService` (accessibility service: edge strip, foreground app, debug test hooks). The strip opens `SidePanel`
   (recent apps, paged; a Last read card from `Readers` (NeoReader's provider, KOReader's history.lua) on top; its footer button "E-ink · this app" opens `QuickPanel`, the e-ink overlay). `RecentApps` records

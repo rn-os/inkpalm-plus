@@ -34,6 +34,9 @@ object Paging {
     /** The page holding [group] (0 when it's not there). */
     fun pageOf(pages: List<IntRange>, group: Int): Int = pages.indexOfFirst { group in it }.coerceAtLeast(0)
 
+    /** Pages of [cols] columns each for [columns] columns. */
+    fun screens(columns: Int, cols: Int): Int = maxOf(1, (columns + cols - 1) / cols)
+
     /** "1 / 2". */
     fun label(page: Int, count: Int): String = "${page + 1} / $count"
 }

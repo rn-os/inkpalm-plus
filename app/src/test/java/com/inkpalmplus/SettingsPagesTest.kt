@@ -43,6 +43,11 @@ class SettingsPagesTest {
         assertEquals(2, Paging.pageOf(pages, 2))
         assertEquals(0, Paging.pageOf(pages, 7))
         assertEquals("2 / 3", Paging.label(1, 3))
+        // Landscape: two columns a page.
+        assertEquals(2, Paging.screens(3, 2))
+        assertEquals(1, Paging.screens(2, 2))
+        assertEquals(1, Paging.screens(0, 2))
+        assertEquals(3, Paging.screens(3, 1))
     }
 
     @Test fun summaries() {

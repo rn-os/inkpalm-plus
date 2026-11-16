@@ -54,7 +54,9 @@ open class MainActivity : Activity() {
     private class Group(val box: LinearLayout, val newPage: Boolean, val title: String?, val anchor: String?)
     private val groups = ArrayList<Group>()
     private var pages: List<IntRange> = listOf(IntRange.EMPTY)
+    /** The page shown (a screenful: [cols] columns of [pages]). */
     private var page = 0
+    private var cols = 1
     /** After a rotation: show the page holding this group. */
     private var restoreGroup = -1
     /** A deep link's group ([Group.anchor]), shown on the first layout. */
@@ -128,7 +130,7 @@ open class MainActivity : Activity() {
         } else {
             // The keyboard pans the page instead of resizing it (a resize would page again and drop the field's focus).
             window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
-            pageBox = vbox().apply { setPadding(0, 0, 0, dp(PAGE_BOTTOM)) }
+            pageBox = hbox().apply { gravity = Gravity.TOP; setPadding(0, 0, 0, dp(PAGE_BOTTOM)) }
             pageScroll = ScrollView(this).apply { isVerticalScrollBarEnabled = true; addView(pageBox, lp(MATCH, WRAP)) }
             pager = hbox().apply { setPadding(g, dp(4), g, dp(8)); visibility = View.GONE }
             area = vbox()
@@ -146,7 +148,7 @@ open class MainActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        pages.getOrNull(page)?.takeIf { !it.isEmpty() }?.let { outState.putInt(STATE_GROUP, it.first) }
+        pages.getOrNull(page * cols)?.takeIf { !it.isEmpty() }?.let { outState.putInt(STATE_GROUP, it.first) }
     }
 
     override fun onDestroy() {
@@ -213,37 +215,43 @@ open class MainActivity : Activity() {
     private fun group(newPage: Boolean = false, title: String? = null, anchor: String? = null): LinearLayout =
         vbox().also { groups += Group(it, newPage, title, anchor) }
 
-    /** Measures the groups at the page's width, splits them into pages and shows the current one. */
+    /** Measures the groups at a column's width, splits them into columns no taller than the page (one column a
+     *  page; two side by side in landscape, like a book) and shows the current page. */
     private fun show() {
         if (section == SECTION_EINK || isDestroyed) return
         val w = area.width; val h = area.height
         if (w == 0 || h == 0) return   // the layout listener calls again once there's a size
         for (gr in groups) (gr.box.parent as? ViewGroup)?.removeView(gr.box)
-        val ws = View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY)
+        cols = if (w > h && w >= dp(TWO_COLUMNS)) 2 else 1
+        val ws = View.MeasureSpec.makeMeasureSpec(w / cols, View.MeasureSpec.EXACTLY)
         val hs = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         val heights = groups.map { it.box.measure(ws, hs); it.box.measuredHeight }
         val breaks = groups.indices.filter { groups[it].newPage }.toSet()
         val bottom = dp(PAGE_BOTTOM)
-        val paged = !Paging.fitsOne(heights, h - bottom, breaks)
-        pages = if (paged) Paging.split(heights, h - dp(PAGER) - bottom, breaks) else listOf(groups.indices)
+        pages = Paging.split(heights, h - bottom, breaks)
+        val paged = Paging.screens(pages.size, cols) > 1
+        if (paged) pages = Paging.split(heights, h - dp(PAGER) - bottom, breaks)
+        val screens = Paging.screens(pages.size, cols)
         anchorPending?.let { a ->
-            groups.indexOfFirst { it.anchor == a }.takeIf { it >= 0 }?.let { page = Paging.pageOf(pages, it) }
+            groups.indexOfFirst { it.anchor == a }.takeIf { it >= 0 }?.let { page = Paging.pageOf(pages, it) / cols }
             anchorPending = null
         }
-        if (restoreGroup >= 0) { page = Paging.pageOf(pages, restoreGroup); restoreGroup = -1 }
-        page = page.coerceIn(0, pages.size - 1)
+        if (restoreGroup >= 0) { page = Paging.pageOf(pages, restoreGroup) / cols; restoreGroup = -1 }
+        page = page.coerceIn(0, screens - 1)
         pageBox.removeAllViews()
-        for (i in pages[page]) pageBox.addView(groups[i].box, lp(MATCH, WRAP))
+        for (c in 0 until cols) pageBox.addView(vbox().apply {
+            pages.getOrNull(page * cols + c)?.forEach { addView(groups[it].box, lp(MATCH, WRAP)) }
+        }, lp(0, WRAP, 1f))
         pageScroll.scrollTo(0, 0)
-        val first = pages[page].let { if (it.isEmpty()) -1 else it.first }
+        val first = pages[page * cols].let { if (it.isEmpty()) -1 else it.first }
         val sub = (first downTo 0).firstNotNullOfOrNull { groups[it].title }
         titleView.text = if (sub != null) "${baseTitle()} › $sub" else baseTitle()
         pager.removeAllViews()
         pager.visibility = if (paged) View.VISIBLE else View.GONE
         if (!paged) return
         pager.addView(inkIconButton(R.drawable.ic_back, "Previous page", 48, enabled = page > 0) { page--; show() }, lp(dp(88), dp(48)))
-        pager.addView(text(Paging.label(page, pages.size), Type.L, bold = true).apply { gravity = Gravity.CENTER }, lp(0, WRAP, 1f))
-        pager.addView(inkIconButton(R.drawable.ic_back, "Next page", 48, enabled = page < pages.size - 1) { page++; show() }.apply {
+        pager.addView(text(Paging.label(page, screens), Type.L, bold = true).apply { gravity = Gravity.CENTER }, lp(0, WRAP, 1f))
+        pager.addView(inkIconButton(R.drawable.ic_back, "Next page", 48, enabled = page < screens - 1) { page++; show() }.apply {
             (this as ViewGroup).getChildAt(0).scaleX = -1f
         }, lp(dp(88), dp(48)))
     }
@@ -1366,7 +1374,9 @@ open class MainActivity : Activity() {
         private const val ANCHOR_RESULTS = "results"
         private const val STATE_GROUP = "page_group"
         /** The pager's height, and room left under a page's last group (dp). */
-        private const val PAGER = 64
+        private const val PAGER = 60
+        /** Landscape at least this wide (dp) shows two columns a page. */
+        private const val TWO_COLUMNS = 560
         private const val PAGE_BOTTOM = 8
 
         private const val PICK_SLEEP = 51

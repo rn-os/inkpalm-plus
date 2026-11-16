@@ -245,4 +245,15 @@ class AodLogicTest {
         assertTrue(Aod.sleepNeedsRedraw(1, 0))
         assertFalse(Aod.sleepNeedsRedraw(null, 1))               // nothing installed by this process: left alone
     }
+
+    @Test fun updateTimeFooterFollowsLiveAndTheSwitch() {
+        fun data(live: Boolean, stamp: Boolean) = AodFaces.Data(0L, true, 80, false, live, null, null, null, 0, stamp = stamp)
+        assertTrue(data(live = true, stamp = true).footer)
+        assertFalse(data(live = true, stamp = false).footer)     // "Show update time" off
+        assertFalse(data(live = false, stamp = true).footer)     // Frozen: never a stamp
+        val off = data(live = true, stamp = false)
+        assertFalse(off.copy(rotation = 1).footer)               // kept through the picker's copies
+        assertFalse(off.withHome(null, null).footer)
+        assertTrue(data(true, true).key(Aod.Face.CLOCK) != off.key(Aod.Face.CLOCK))
+    }
 }

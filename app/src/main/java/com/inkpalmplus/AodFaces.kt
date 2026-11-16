@@ -44,17 +44,22 @@ object AodFaces {
         val weather: Home.WeatherView? = null,
         val countdowns: List<Home.CountdownText> = emptyList(),
         val trash: Home.TrashDay? = null,
+        /** Live faces show the small "Updated 10:34" footer (Sleep screen → "Show update time"). */
+        val stamp: Boolean = true,
     ) {
+        /** The "Updated HH:MM" footer is drawn: Live and "Show update time" on. */
+        val footer: Boolean get() = live && stamp
+
         fun copy(rotation: Int, agenda: Agenda.Style? = null, photoStyle: Dither.Style? = null, home: Home.Style? = null) =
             Data(now, h24, battery, low, live, events, book, photo, rotation, agenda ?: this.agenda, photoStyle ?: this.photoStyle,
-                home ?: this.home, weather, countdowns, trash)
+                home ?: this.home, weather, countdowns, trash, stamp)
 
         fun withHome(weather: Home.WeatherView?, trash: Home.TrashDay?) =
-            Data(now, h24, battery, low, live, events, book, photo, rotation, agenda, photoStyle, home, weather, countdowns, trash)
+            Data(now, h24, battery, low, live, events, book, photo, rotation, agenda, photoStyle, home, weather, countdowns, trash, stamp)
 
         /** Everything the face shows: the minute, battery, events, book, photo, orientation, Agenda, Photo and Home style,
          *  the Home cards. */
-        fun key(face: Aod.Face): String = listOf(face.name, agenda.name, photoStyle.name, home.name, minute(now), battery, low, live, rotation,
+        fun key(face: Aod.Face): String = listOf(face.name, agenda.name, photoStyle.name, home.name, minute(now), battery, low, live, stamp, rotation,
             events?.joinToString("|") { "${it.title}${it.begin}${it.end}" } ?: "no-access",
             book?.let { "${it.title}${it.progress}${it.cover != null}" }, photo?.generationId,
             weather?.let { "${it.line()}${it.age}${it.strip}" }, countdowns.joinToString("|"), trash).joinToString(";")
@@ -121,7 +126,7 @@ object AodFaces {
             Aod.Face.MINIMAL -> minimal(c, w, h, d)
             else -> clockDate(c, w, h, d)
         }
-        if (d.live && !d.low && !(face == Aod.Face.PHOTO && d.photo != null))
+        if (d.footer && !d.low && !(face == Aod.Face.PHOTO && d.photo != null))
             c.line("Updated ${time(d)}", w / 2f, h - u(22) - u(13), pen(u(13)))
         return turn(bmp, deg)
     }
@@ -334,9 +339,8 @@ object AodFaces {
 
     private fun hm(d: Data, t: Long) = fmt(if (d.h24) "HH:mm" else "h:mm", t)
 
-    /** Where a style's content must end: above the "Updated" stamp when Live. */
     /** The bottom of a face's content: with the "Updated 10:15" footer (top at h - 70), a clear 40 px above it. */
-    private fun limit(d: Data, h: Int) = h - if (d.live) 110f else 44f
+    private fun limit(d: Data, h: Int) = h - if (d.footer) 110f else 44f
 
     private fun today(d: Data, t: Long) = t >= Agenda.midnight(d.now) && t < Agenda.midnight(d.now, 1)
 
@@ -830,7 +834,7 @@ object AodFaces {
 
     /** Where the Home face's content ends: portrait as [limit]; landscape a little lower (the cards' grid), still
      *  clear of the "Updated" footer. */
-    private fun homeBottom(d: Data, h: Int, land: Boolean) = if (land) h - (if (d.live) 92f else 40f) else limit(d, h)
+    private fun homeBottom(d: Data, h: Int, land: Boolean) = if (land) h - (if (d.footer) 92f else 40f) else limit(d, h)
 
     /** The time column of an event row: "09:00", "All day", "Tue 9:00", "Tue". */
     private fun whenLabel(d: Data, e: Event): String = when {
@@ -1207,7 +1211,7 @@ object AodFaces {
         val tp = pen(u(40), HEAVY, -0.02f, align = Paint.Align.RIGHT)
         val dp = pen(u(13), BOLD, align = Paint.Align.RIGHT)
         val sp = pen(u(11), SEMI, align = Paint.Align.RIGHT)
-        val stamp = if (d.live) "Updated ${time(d)}" else null
+        val stamp = if (d.footer) "Updated ${time(d)}" else null
         val cw2 = maxOf(tp.measureText(time(d)), dp.measureText(dayShort(d)), stamp?.let { sp.measureText(it) } ?: 0f) + u(28)
         val chH = u(8) + tp.textSize + u(2) + dp.textSize * 1.2f + (if (stamp != null) sp.textSize * 1.2f else 0f) + u(8)
         val box = RectF(w - u(18) - cw2, h - u(22) - chH, w - u(18), h - u(22))

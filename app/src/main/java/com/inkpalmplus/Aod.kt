@@ -66,6 +66,7 @@ object Aod {
     private const val K_AGENDA = "aod_agenda_style"
     private const val K_PHOTO_STYLE = "aod_photo_style"
     private const val K_HOME = "aod_home_style"
+    private const val K_STAMP = "aod_show_stamp"
     private const val K_PINS = "home_pins"
     private const val K_HIDES = "home_hides"
     private const val K_TRASH_ON = "home_trash_on"
@@ -295,6 +296,16 @@ object Aod {
             Face.PICTURE -> setFace(c, Face.PICTURE)
             else -> null
         }
+    }
+
+    /** Live faces draw the small "Updated 10:34" footer; on until turned off. */
+    fun showStamp(c: Context): Boolean = Prefs(c).sp.getBoolean(K_STAMP, true)
+
+    /** "Show update time": saved, and the face drawn and installed again. */
+    fun setShowStamp(c: Context, on: Boolean) {
+        Prefs(c).sp.edit().putBoolean(K_STAMP, on).apply()
+        lastKey = null
+        prepare(c, force = true)
     }
 
     fun setInterval(c: Context, minutes: Int) {
@@ -531,6 +542,7 @@ object Aod {
             now = now, h24 = DateFormat.is24HourFormat(c), battery = level,
             low = lowOverride ?: isLow(level, plugged),
             live = live,
+            stamp = showStamp(c),
             events = if (face == Face.AGENDA || face == Face.HOME) events(c, now) else null,
             agenda = agendaStyle(c),
             home = homeStyle(c),

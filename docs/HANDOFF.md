@@ -402,3 +402,10 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   re-checked after 2 s), Shizuku `pm grant`/`appops set`, else microG's app settings with instructions.
   `Home.microgFixNeeded`/`microgNextStep` tested (MicrogFixTest). The user's phone was fixed by hand, so on the
   device the row is hidden; the grant path itself is untested on the device.
+- Network blocked vs offline (asked; separate commit): LineageOS's restricted networking mode
+  (`restricted_networking_mode`=1) blocked InkPalm+ (blockedReasons=8) while Wi‑Fi was up; `Weather.online` said
+  offline, so nothing was fetched or logged. `NetCheck` (tested) tells blocked from offline (our activeNetwork vs the
+  phone's networks, plus the setting); blocked + a city: a box "InkPalm+ has no network access…" with "Allow network
+  access" (App info) on Weather location and the Home face page; the face says "Weather: no network access for
+  InkPalm+" when it has no data (old data keeps "as of"). The user has since allowed it, so on the device the box is
+  hidden; the blocked path is untested there.

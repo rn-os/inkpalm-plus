@@ -1,8 +1,6 @@
 package com.inkpalmplus
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.os.SystemClock
 import android.util.Log
 import java.io.File
@@ -67,11 +65,10 @@ object Weather {
     fun cached(c: Context): Home.Forecast? = runCatching { cache(c).takeIf { it.isFile }?.readText()?.let { Home.parseForecast(it) } }.getOrNull()
 
     /** A network is up that reaches the internet (never turns one on). */
-    fun online(c: Context): Boolean = runCatching {
-        val cm = c.getSystemService(ConnectivityManager::class.java)
-        val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
-        caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-    }.getOrDefault(false)
+    fun online(c: Context): Boolean = NetCheck.state(c) == NetCheck.State.ONLINE
+
+    /** The phone is online but Android blocks InkPalm+'s network access ([NetCheck]). */
+    fun blocked(c: Context): Boolean = NetCheck.state(c) == NetCheck.State.BLOCKED
 
     /** A fetch is due: a city is set, the last try was 30 min ago or more, and a network is up. */
     fun due(c: Context): Boolean = city(c) != null && Home.due(System.currentTimeMillis(), Prefs(c).sp.getLong(K_ATTEMPT, 0L)) && online(c)

@@ -536,6 +536,7 @@ open class MainActivity : Activity() {
         group(newPage = true, title = "Home face").apply {
             addView(sectionTitle("Home face"))
             val city = Weather.city(this@MainActivity)
+            if (city != null && Weather.blocked(this@MainActivity)) addView(netBlockedBox(), boxLp())
             addView(navRow("Weather location", city?.name ?: "Not set · search for your city", SECTION_WEATHER))
             addView(divider())
             val units = Home.Units.entries
@@ -598,6 +599,7 @@ open class MainActivity : Activity() {
                 })
             })
         }
+        if (city != null && Weather.blocked(this)) group().addView(netBlockedBox(), boxLp())
         group().apply {
             addView(sectionTitle("Search"))
             val field = EditText(this@MainActivity).apply {
@@ -650,6 +652,17 @@ open class MainActivity : Activity() {
         }
         group().addView(note("Weather by Open-Meteo (open-meteo.com): free, no account. Only the city's coordinates are sent, at most every 30 minutes, and only when Wi-Fi is already on; the face shows the forecast's age when it's old or the phone is offline. \"Estimate from internet connection\" sends your public IP address to ${Home.IP_SERVICE}, only when you tap it. Nothing else leaves the phone."))
         show()
+    }
+
+    /** Android blocks InkPalm+'s network (LineageOS's restricted networking mode, see [NetCheck]): where to allow it. */
+    private fun netBlockedBox(): View = vbox().apply {
+        background = outline(3)
+        setPadding(dp(14), dp(12), dp(14), dp(12))
+        addView(text("InkPalm+ has no network access. Your phone limits internet for new apps.", Type.M, bold = true))
+        addView(text("In App info → Mobile data & Wi\u2011Fi, turn on Network access.", Type.S, color = Ink.MUTED).apply { setPadding(0, dp(4), 0, 0) })
+        addView(inkButton("Allow network access") {
+            runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) }
+        }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
     }
 
     private fun placeRow(p: Home.Place): View = hbox().apply {

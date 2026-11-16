@@ -83,6 +83,10 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
   fix; 45 s, else a last known fix < 1 h), rounded to 0.01°, stored as the city. FINE is there because Android limits
   coarse-only requests to ~1 per 10 min, so microG postpones its Wi-Fi scan past the wait. Never a listener left
   running, no background location. Logs "home: locate: …".
+- `NetCheck`: online / offline / blocked (the phone has a connected network but InkPalm+'s `activeNetwork` is null,
+  e.g. LineageOS's `restricted_networking_mode`=1 → blockedReasons=8 until App info → Mobile data & Wi‑Fi → Network
+  access). `Weather.online` uses it; blocked shows a box on Weather location / Home face page and the face says
+  `Home.BLOCKED`. Logs "home: weather: online|offline|blocked by restricted networking" once per change.
 - "Fix microG location" (`Weather.fixMicrog`, `Home.microgNextStep`): offered on Weather location when microG
   (com.google.android.gms) lacks ACCESS_FINE_LOCATION or ACCESS_BACKGROUND_LOCATION; after a confirm, grants those two
   and appops FINE_LOCATION to microG only: the root bridge's `files/perm.req` (`microg_location=1`, handled by the

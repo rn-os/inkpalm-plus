@@ -674,7 +674,9 @@ object Aod {
     /** The Home face's weather now: the cached forecast with its age, or why there's none. */
     private fun weather(c: Context, now: Long): Home.WeatherView {
         if (Weather.city(c) == null) return Home.WeatherView.message("Set a city in InkPalm+")
-        return Home.weatherView(Weather.cached(c), now, Weather.fetchedAt(c), Weather.online(c), Weather.fahrenheit(c), DateFormat.is24HourFormat(c)) { hm(c, it) }
+        val net = NetCheck.state(c)
+        return Home.weatherView(Weather.cached(c), now, Weather.fetchedAt(c), net == NetCheck.State.ONLINE, Weather.fahrenheit(c), DateFormat.is24HourFormat(c),
+            blocked = net == NetCheck.State.BLOCKED) { hm(c, it) }
     }
 
     /** The countdowns the Home face shows (2 at most), from [countdownCandidates]. */

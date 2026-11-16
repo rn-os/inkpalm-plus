@@ -244,6 +244,9 @@ object Home {
     /** Whether a fetch is due: [lastAttempt] (ms, 0: never) this long ago. Never more than once per [REFRESH_MS]. */
     fun due(now: Long, lastAttempt: Long): Boolean = lastAttempt <= 0 || now - lastAttempt >= REFRESH_MS || now < lastAttempt
 
+    /** The face's weather line while Android blocks InkPalm+'s network access ([NetCheck]). */
+    const val BLOCKED = "Weather: no network access for InkPalm+"
+
     /** Show the forecast's age ("as of 6:40") when it is stale or the phone is offline. */
     fun showAge(now: Long, fetchedAt: Long, online: Boolean): Boolean = !online || now - fetchedAt > STALE_MS
 
@@ -271,11 +274,12 @@ object Home {
      * The weather as shown at [now] (ms) from [f] fetched at [fetchedAt] (ms); [online]: the phone has a network now.
      * A forecast without today in it (days old) shows no temperature, only that it's old. [hm] formats a time.
      */
-    fun weatherView(f: Forecast?, now: Long, fetchedAt: Long, online: Boolean, fahrenheit: Boolean, h24: Boolean, hm: (Long) -> String): WeatherView {
-        if (f == null) return WeatherView.message(if (online) "Weather on the next update" else "No weather yet: offline")
+    fun weatherView(f: Forecast?, now: Long, fetchedAt: Long, online: Boolean, fahrenheit: Boolean, h24: Boolean, blocked: Boolean = false,
+                    hm: (Long) -> String): WeatherView {
+        if (f == null) return WeatherView.message(if (online) "Weather on the next update" else if (blocked) BLOCKED else "No weather yet: offline")
         val nowS = now / 1000
         val i = f.today(nowS)
-        if (i < 0) return WeatherView.message("No recent weather (offline)")
+        if (i < 0) return WeatherView.message(if (blocked) BLOCKED else "No recent weather (offline)")
         val hourly = f.hourly(nowS)
         val hi = f.max.getOrNull(i); val lo = f.min.getOrNull(i)
         val hiLo = if (hi != null && lo != null) "H ${degrees(hi, fahrenheit)} · L ${degrees(lo, fahrenheit)}" else null

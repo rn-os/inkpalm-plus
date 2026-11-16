@@ -264,6 +264,7 @@ Per-app settings work without Shizuku. If InkPalm+ can't reach them on your firm
 
 - Tested only on the **InkPalm Plus**: stock firmware `MAS_EPD305_L81B804_T44_V09` (Android 11), and the KompaktOS 1.2 port (Android 16). Other Moaan models may differ.
 - The e-ink features use Moaan's firmware. They won't work on other phones. The side panel itself is plain Android, but it hasn't been tried elsewhere.
+- **No weather although Wi‑Fi is on:** the phone may limit internet for new apps (LineageOS's restricted networking mode). InkPalm+ then says "InkPalm+ has no network access" (Weather location, and the Home face's page) and the face shows "Weather: no network access for InkPalm+". Tap **Allow network access**, then App info → Mobile data & Wi‑Fi → **Network access**.
 - Android doesn't let apps read its recents, so the list only has apps that came to the front **after** InkPalm+ was switched on.
 
 ### Before you uninstall

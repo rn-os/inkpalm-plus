@@ -104,6 +104,9 @@ class HomeLogicTest {
         assertTrue(Home.locateMessage(Home.LocateFail.NO_PROVIDER, true, 45).contains("microG"))
         assertEquals("Location is off in Android's settings.", Home.locateMessage(Home.LocateFail.LOCATION_OFF, true, 45))
         assertTrue(Home.IP_NOTE.contains("IP address") && Home.IP_NOTE.contains(Home.IP_SERVICE))
+        // microG without precise location of its own can't read Wi-Fi scans: that's what the note says.
+        assertEquals(Home.MICROG_PRECISE, Home.locateMessage(Home.LocateFail.NO_FIX, microg = true, seconds = 45, microgPrecise = false))
+        assertEquals("Location is off in Android's settings.", Home.locateMessage(Home.LocateFail.LOCATION_OFF, true, 45, microgPrecise = false))
     }
 
     // ---- Rain summary ---------------------------------------------------------------------------------

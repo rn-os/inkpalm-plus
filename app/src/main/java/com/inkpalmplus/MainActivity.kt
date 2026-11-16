@@ -703,7 +703,11 @@ open class MainActivity : Activity() {
         background = outline(3)
         setPadding(dp(14), dp(12), dp(14), dp(12))
         val microg = Weather.microg(this@MainActivity)
-        addView(text(Home.locateMessage(f.fail, microg, Weather.LOCATE_MS / 1000), Type.M, bold = true))
+        val microgPrecise = !microg || Weather.microgPrecise(this@MainActivity)
+        addView(text(Home.locateMessage(f.fail, microg, Weather.LOCATE_MS / 1000, microgPrecise), Type.M, bold = true))
+        if (!microgPrecise) addView(inkButton("microG Services permissions") {
+            if (runCatching { startActivity(Weather.microgAppSettings()) }.isFailure) toast("Couldn't open microG's app settings")
+        }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
         val noFix = f.fail == Home.LocateFail.NO_FIX || f.fail == Home.LocateFail.NO_PROVIDER || f.fail == Home.LocateFail.LOCATION_OFF
         if (noFix) addView(inkButton(if (microg && f.fail != Home.LocateFail.LOCATION_OFF) "microG location settings" else "Location settings") {
             val intents = Weather.locationSettingsIntents().let { if (microg && f.fail != Home.LocateFail.LOCATION_OFF) it else it.takeLast(1) }

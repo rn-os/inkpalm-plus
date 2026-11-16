@@ -301,13 +301,21 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   COARSE (either may be given); precise → one QUALITY_HIGH_ACCURACY `getCurrentLocation` (LocationRequest,
   duration 45 s) on network and fused at once, a provider answering null gets a minTime-0 listener removed on the
   first fix; 45 s overall, "Finding your location…" shown. Failure box (`Home.locateMessage`): "No location from
-  microG. Turn on Wi‑Fi location in microG Settings → Location." + "microG location settings" (action
-  com.google.android.gms.location.settings.GOOGLE_LOCATION_SETTINGS → org.microg.gms.location.settings.
-  GoogleLocationSettingsActivity; then org.microg.gms.ui.SettingsActivity; then ACTION_LOCATION_SOURCE_SETTINGS),
+  microG. Turn on Wi‑Fi location in microG Settings → Location." + "microG location settings" (VIEW
+  x-gms-settings://location in com.google.android.gms → org.microg.gms.ui.MainSettingsActivity, microG's Location
+  page; then org.microg.gms.ui.SettingsActivity; then ACTION_LOCATION_SOURCE_SETTINGS. The GOOGLE_LOCATION_SETTINGS
+  action only forwards to Android's Location page),
   approximate-only → `Home.APPROXIMATE_NOTE` + "Allow precise (used once, rounded to ~1 km)", and "Estimate from
   internet connection" (also a small "Estimate…" under the button): explains first (`Home.IP_NOTE`), then one GET
   https://ipinfo.io/json (429 → "busy"), `Home.parseIpPlace` (city, else region; rounded; bogon/error → null).
   microG's Wi-Fi location (location_wifi_mls=1) must be on for any fix; the user turned it on.
+- Device test (build 68, precise granted "Only this time"): microG now scans at once ("Schedule high-power scan
+  now", "Start network scan for WorkSource{… com.inkpalmplus}") but still no fix in 45 s: microG Services itself
+  has ACCESS_COARSE_LOCATION only (FINE not granted, appop FINE_LOCATION ignore, no background), so it can't read
+  Wi-Fi scan results; it also logged "Started AskPermissionActivity" (its own permission request, not visible).
+  The failure note now says so when `Weather.microgPrecise` is false (`Home.MICROG_PRECISE`) with a "microG
+  Services permissions" button (its app info). The user has to grant microG precise location (all the time);
+  InkPalm+ doesn't change other apps' permissions.
 - Face previews (all pickers) keep the face's shape: a quarter of the face's size, FIT_CENTER; in landscape the
   settings show the landscape layouts (asked: "those preview screens look stretched").
 - Checks: HomeLogicTest (JSON, forecast and geocoding parsing, rain spans/summaries, units, throttling/staleness,

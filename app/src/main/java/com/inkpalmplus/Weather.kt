@@ -236,9 +236,17 @@ object Weather {
         c.packageManager.getActivityInfo(android.content.ComponentName(GMS, "org.microg.gms.ui.SettingsActivity"), 0); true
     }.getOrDefault(false)
 
-    /** microG's location settings (Wi-Fi location), else its settings, else Android's location settings. */
+    /** microG has precise location itself (it needs it to read Wi-Fi scan results). */
+    fun microgPrecise(c: Context): Boolean =
+        c.packageManager.checkPermission(android.Manifest.permission.ACCESS_FINE_LOCATION, GMS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /** microG Services' app info (its Permissions → Location). */
+    fun microgAppSettings() = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$GMS"))
+
+    /** microG's Location page (Wi-Fi location; its deep link, org.microg.gms.ui.MainSettingsActivity), else its
+     *  settings, else Android's location settings. (GOOGLE_LOCATION_SETTINGS only forwards to Android's.) */
     fun locationSettingsIntents(): List<android.content.Intent> = listOf(
-        android.content.Intent("com.google.android.gms.location.settings.GOOGLE_LOCATION_SETTINGS").setPackage(GMS),
+        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("x-gms-settings://location")).setPackage(GMS),
         android.content.Intent().setClassName(GMS, "org.microg.gms.ui.SettingsActivity"),
         android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS),
     )

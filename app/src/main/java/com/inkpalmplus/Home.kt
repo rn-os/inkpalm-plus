@@ -119,7 +119,11 @@ object Home {
 
     /** What the weather page says when "Use my location" found nothing. [microg]: microG is the location provider
      *  (its Wi-Fi location is the only source on the InkPalm, which has no GPS). */
-    fun locateMessage(fail: LocateFail, microg: Boolean, seconds: Long): String = when (fail) {
+    fun locateMessage(fail: LocateFail, microg: Boolean, seconds: Long, microgPrecise: Boolean = true): String = when {
+        // microG reads Wi-Fi scans only with precise location (Android's rule for scan results); with approximate it
+        // scans and finds nothing (seen on the InkPalm: COARSE granted, FINE not).
+        microg && !microgPrecise && (fail == LocateFail.NO_FIX || fail == LocateFail.NO_PROVIDER) -> MICROG_PRECISE
+        else -> when (fail) {
         LocateFail.NO_PERMISSION -> "No location permission: search for your city instead."
         LocateFail.NO_SERVICE -> "No location service on this phone. Search for your city instead."
         LocateFail.LOCATION_OFF -> "Location is off in Android's settings."
@@ -127,7 +131,11 @@ object Home {
             else "No location provider is on."
         LocateFail.NO_FIX -> if (microg) "No location from microG. Turn on Wi\u2011Fi location in microG Settings \u2192 Location."
             else "No location found within $seconds s."
+        }
     }
+
+    /** microG Services itself has only approximate location: it can't read Wi-Fi networks. */
+    const val MICROG_PRECISE = "No location from microG: microG Services has only approximate location, so it can't read nearby Wi\u2011Fi networks. In its app settings \u2192 Permissions \u2192 Location, choose \"Allow all the time\" and turn on \"Use precise location\". Wi\u2011Fi location must also be on in microG Settings \u2192 Location."
 
     /** With only approximate location granted, Android lets an app ask about once every 10 minutes, so microG
      *  postpones the Wi-Fi scan past the wait. */

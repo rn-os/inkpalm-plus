@@ -153,6 +153,8 @@ class FacePickerActivity : Activity() {
     /** "Use this" was tapped on a Picture page without a picture: picked once the photo is. */
     private var applyAfterPick: FacePicker.Entry? = null
     private var setupOpen = false
+    /** "Show update time" as the previews were drawn: changed in the meantime, they're drawn again. */
+    private var stampDrawn: Boolean? = null
 
     private val land get() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     private val ratio get() = if (land) 2f else 0.5f
@@ -187,7 +189,9 @@ class FacePickerActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // Back from a setup screen (weather, reader): the faces may look different now.
-        if (setupOpen) { setupOpen = false; forget(); render() }
+        val stamp = Aod.showStamp(this)
+        if (setupOpen || (stampDrawn != null && stampDrawn != stamp)) { setupOpen = false; forget(); render() }
+        stampDrawn = stamp
     }
 
     override fun onDestroy() {

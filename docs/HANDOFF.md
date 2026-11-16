@@ -302,3 +302,10 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   `am broadcast -n com.inkpalmplus/.Aod\$Alarm --es dump home` (release builds too; debug: test hook
   `aod_home_dump`) writes files/home_{,stale_,real_}<STYLE>_<rotation>.png: sample weather + sample trash day,
   the same forecast 2 h old and offline, and the real settings; the calendar is real in all. Nothing is changed.
+
+## Hold a panel toggle for its settings (branch `home-face`, 2026-11-16)
+- Asked: holding Wi-Fi / Bluetooth / Airplane / Rotate in the Screen & light panel opens Android's matching screen
+  (`ScreenPanel.Hold`: ACTION_WIFI_SETTINGS, ACTION_BLUETOOTH_SETTINGS, ACTION_AIRPLANE_MODE_SETTINGS else
+  ACTION_WIRELESS_SETTINGS, android.settings.AUTO_ROTATE_SETTINGS on API 34+ else ACTION_DISPLAY_SETTINGS; the first
+  that resolves, FLAG_ACTIVITY_NEW_TASK from the service), then the panel closes. Tap unchanged. The descriptions
+  end "Hold: Wi-Fi settings", and the long-click accessibility action is labelled the same.

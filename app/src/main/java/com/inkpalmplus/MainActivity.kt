@@ -768,7 +768,13 @@ open class MainActivity : Activity() {
                 runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) }
                 return
             }
-            Prefs(this).sp.edit().putBoolean("location_asked", true).apply()
+            Prefs(this).sp.edit().putBoolean("location_asked", true).putBoolean("location_precise_asked", true).apply()
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), ASK_LOCATION)
+            return
+        }
+        // Approximate given earlier (before precise was asked for): Android's upgrade dialog once; either answer goes on.
+        if (!Weather.precise(this) && !Prefs(this).sp.getBoolean("location_precise_asked", false)) {
+            Prefs(this).sp.edit().putBoolean("location_precise_asked", true).apply()
             requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), ASK_LOCATION)
             return
         }

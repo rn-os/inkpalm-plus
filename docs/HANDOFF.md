@@ -256,3 +256,49 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   turns back while asleep and the user's wake shows the display's own orientation.
 - Battery: the accelerometer only while the screen is on (with auto-rotate on Android runs it then anyway); ~15
   trivial callbacks a second on an awake CPU; a re-render when the phone is turned; rarely one redraw wake at a sleep.
+
+## Home face (branch `home-face`, 2026-11-16)
+- Asked: a "Home" always-on face from docs/mockups/aod/home-face/ (home-sheet.png A Dashboard and B Calm), v1 only:
+  no shopping list, Home Assistant, message board or commute (the user has no smart home; uses Google Calendar via
+  the phone's calendar, and Apple Reminders, which isn't integrated).
+- `Aod.Face.HOME`; style `Home.Style` (DASHBOARD default, CALM), drawn in `AodFaces` (`homeDashboard`, `homeCalm`,
+  portrait and landscape; the mockups' CSS px are panel px). Dashboard: clock, date, battery, NEXT 3 rows, then a
+  grid: Weather, Trash (only when today/tomorrow; black), up to 2 countdowns (1–4 cards; see `homeGrid`). Calm: big
+  clock, date, battery, "NEXT 09:00 Standup", rule, the weather line, then Trash and 1–2 countdowns as large cards
+  (Trash black only on the day, outlined the day before as in mockup B), centred, the last ones dropped if they
+  don't fit. Content stops above the "Updated" footer (portrait `limit`, landscape h−92).
+- Weather (`Weather`, pure parts in `Home`): Open-Meteo /v1/forecast (current temperature + code, hourly
+  precipitation probability, daily max/min/code, sunrise/sunset; `timezone=auto&timeformat=unixtime`, 2 days,
+  always °C, converted for display; Units Auto/°C/°F, Auto = °F for US and the few other °F countries). City from
+  Open-Meteo geocoding (Sleep screen → Weather location; name + lat/lon in prefs; no location permission). Fetched
+  at most every 30 min (`Home.due` on the last ATTEMPT, so failures don't retry sooner), only when
+  `ConnectivityManager` has an internet-capable network (never turns radios on): asleep in `Aod.update` before the
+  redraw (own wake lock ≤ 9 s; `fetchIfDue` waits ≤ 8 s, 4 s connect/read timeouts), awake on the minute tick in a
+  background thread then a forced redraw. Cache: files/weather.json + `home_weather_at`. Shown with "as of 6:40"
+  when > 90 min old or offline; a cache without today in it shows "No recent weather (offline)". Rain summary: the
+  first run of hours ≥ 50% from now on ("Rain 3–6 PM", "Rain until 6 PM", "No (more) rain today"); the Dashboard's
+  strip is 8–19 h, filled bars from 50%.
+- Battery: a fetch is one HTTPS GET of ~4 KB, ~1–2 s awake on Wi‑Fi, ≤ 48 a day (~0.4%/day est.); none in Airplane
+  mode or with Wi‑Fi off, and none with no city set. The weather alone never wakes the phone: it rides the Live alarm.
+- Countdowns: `Aod.countdownCandidates` queries Instances (visible calendars, `allDay=1 OR end−begin ≥ 4 h`) from
+  today to +366 d, keeps ≤ 60 d unless pinned; cached 5 min. `Home.countdowns`: pinned first (by date), then nearest
+  first, hidden never, same title+start shown once; "12 days to …", "Tomorrow: …", "Today: …". Pins/hides persist
+  as "eventId|title" string sets (Sleep screen → Countdowns: Pin / Hide per candidate).
+- Trash day (off by default): Sleep screen → Trash day, weekday chips for Recycling and Trash; "Recycling tomorrow"
+  the day before, "Trash today" on the day, nothing otherwise (`Home.trashDay`).
+- INTERNET + ACCESS_NETWORK_STATE are new, for the weather only (README, About and CLAUDE.md say so).
+- "Use my location" (asked after the first build): next to the city search; ACCESS_COARSE_LOCATION asked on the
+  first tap (once denied for good: app settings). `Weather.locate`: one `getCurrentLocation` per provider in
+  `Home.providerOrder` (network, fused, gps; those on), 20 s budget overall, else the newest last known fix < 1 h
+  (passive included); `Home.roundCoord` to 0.01° before geocoding/storing; named by `Geocoder` when present, else
+  "Current location (lat, lon)". Stored exactly like a searched city. The device (KompaktOS GSI) has microG as
+  user apps: com.google.android.gms provides the network and fused providers
+  (org.microg.gms.location.provider.*), backend org.microg.nlp.backend.nominatim (a geocoder); a passive provider;
+  no gps provider listed by `dumpsys location`; location_mode=3. Not tried on the device (the user taps it).
+- Face previews (all pickers) keep the face's shape: a quarter of the face's size, FIT_CENTER; in landscape the
+  settings show the landscape layouts (asked: "those preview screens look stretched").
+- Checks: HomeLogicTest (JSON, forecast and geocoding parsing, rain spans/summaries, units, throttling/staleness,
+  the view, countdown picking/texts incl. DST, trash day). Off-device pictures: root's
+  `am broadcast -n com.inkpalmplus/.Aod\$Alarm --es dump home` (release builds too; debug: test hook
+  `aod_home_dump`) writes files/home_{,stale_,real_}<STYLE>_<rotation>.png: sample weather + sample trash day,
+  the same forecast 2 h old and offline, and the real settings; the calendar is real in all. Nothing is changed.

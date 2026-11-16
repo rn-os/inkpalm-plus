@@ -116,7 +116,7 @@ With Home picked, its settings appear under the faces:
 | Setting | What it does |
 |---|---|
 | **Home style** | **Dashboard** (default): the clock, your next 3 events, then cards for the weather (with the chance of rain by hour, 8 AM to 7 PM), countdowns and trash day. **Calm**: a big clock, your next event, the weather in one line ("9° · Rain 3–6 PM · H 14 L 6") and one or two large cards |
-| **Weather location** | Search for your city once (no location permission). The weather comes from [Open-Meteo](https://open-meteo.com) (free, no account), at most every 30 minutes, during the sleep screen's updates and only when Wi-Fi is already on. Offline or more than 90 minutes old, the face says "as of 6:40" |
+| **Weather location** | Search for your city once, or tap **Use my location** for a one-time approximate fix (asks for approximate location the first time; never tracked, kept to about 1 km). The weather comes from [Open-Meteo](https://open-meteo.com) (free, no account), at most every 30 minutes, during the sleep screen's updates and only when Wi-Fi is already on. Offline or more than 90 minutes old, the face says "as of 6:40" |
 | **Units** | Auto (°F in the US, else °C), °C or °F |
 | **Countdowns** | Picked from your calendar: all-day, multi-day and 4-hour-or-longer events in the next 60 days, nearest first ("12 days to Lisbon trip", "Tomorrow: …"). **Pin** one to always show it first, **Hide** one to never show it |
 | **Trash day** | Off by default. Pick the weekdays for recycling and for trash: the face shows "Recycling tomorrow" the day before and "Trash today" on the day |
@@ -252,7 +252,7 @@ Per-app settings work without Shizuku. If InkPalm+ can't reach them on your firm
 
 ## Permissions and privacy
 
-- **Internet, for the Home sleep screen's weather only.** Nothing is sent unless you pick the Home face and set a city: then the name you search for goes to Open-Meteo's geocoding, and the city's coordinates to Open-Meteo's forecast, at most every 30 minutes and only on a network that's already on (InkPalm+ never turns Wi-Fi on). No account, no location permission. Nothing else leaves the phone.
+- **Internet, for the Home sleep screen's weather only.** Nothing is sent unless you pick the Home face and set a city: then the name you search for goes to Open-Meteo's geocoding, and the city's coordinates to Open-Meteo's forecast, at most every 30 minutes and only on a network that's already on (InkPalm+ never turns Wi-Fi on). No account. Nothing else leaves the phone.
 - **Required:** the accessibility service, **InkPalm+ quick panel**. It receives which app is in front, and that a page scrolled, text was typed or the screen changed. It doesn't read screen content or what you type.
 - **Optional:**
   - **Modify system settings:** live size changes, and the font and text size.
@@ -261,6 +261,7 @@ Per-app settings work without Shizuku. If InkPalm+ can't reach them on your firm
   - **Kill background processes:** used by ✕, **Clear all** and **Save + reopen**.
   - **Exact alarms** (KompaktOS): auto power-off at the time you chose, and the sleep screen's updates, even in Doze.
   - **Calendar** (only if you pick the Agenda or Home sleep screen): your events for this week and the next 7 days, and for Home's countdowns all-day and long events up to 60 days ahead (a year for pinned ones), read on the phone.
+  - **Approximate location** (only if you tap **Use my location** for Home's weather): one fix, when you tap it, rounded to about 1 km and kept as the weather city. Never tracked, never in the background. Searching for your city needs no location permission.
   - **Key events** (KompaktOS, only while "Hold for a full refresh" is on): the service sees the Home key to tell a hold from a touch. Other keys pass straight through.
   - **Run at startup:** checks after a restart that the panel is back on.
 - The recent-apps list and your choices stay on the phone. **Clear recent apps** empties the list.

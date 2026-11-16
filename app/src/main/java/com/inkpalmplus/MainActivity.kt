@@ -708,6 +708,11 @@ open class MainActivity : Activity() {
             addView(field, lp(0, WRAP, 1f))
             addView(inkButton("Search") { search() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
         })
+        body.addView(hbox().apply {
+            setPadding(g, dp(4), g, dp(4))
+            addView(text("Or find it from the phone's location, once", Type.S, color = Ink.MUTED), lp(0, WRAP, 1f))
+            addView(inkButton("Use my location") { useLocation() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
+        })
         placesNote?.let { body.addView(note(it)) }
         places?.forEach { p ->
             body.addView(hbox().apply {
@@ -727,7 +732,35 @@ open class MainActivity : Activity() {
             })
             body.addView(divider())
         }
-        body.addView(note("Weather by Open-Meteo (open-meteo.com): free, no account. Only the city's coordinates are sent, at most every 30 minutes, and only when Wi-Fi is already on; the face shows the forecast's age when it's old or the phone is offline. No location permission."))
+        body.addView(note("Weather by Open-Meteo (open-meteo.com): free, no account. Only the city's coordinates are sent, at most every 30 minutes, and only when Wi-Fi is already on; the face shows the forecast's age when it's old or the phone is offline. \"Use my location\" asks for your approximate location once, when you tap it, and keeps it to about 1 km; it's never tracked."))
+    }
+
+    /** "Use my location": the coarse permission when it isn't given yet, then one fix ([Weather.locate]). */
+    private fun useLocation() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            if (!shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_COARSE_LOCATION) && Prefs(this).sp.getBoolean("location_asked", false)) {
+                placesNote = "Location permission is off for InkPalm+: allow it in Android's app settings, or search for your city."
+                renderWeather()
+                runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) }
+                return
+            }
+            Prefs(this).sp.edit().putBoolean("location_asked", true).apply()
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), ASK_LOCATION)
+            return
+        }
+        places = null; placesNote = "Finding your location (up to ${Weather.LOCATE_MS / 1000} s)…"; renderWeather()
+        Shell.background({ Weather.locate(this) }) { r ->
+            when (r) {
+                is Weather.Located.Found -> {
+                    Weather.setCity(this, r.place)
+                    placesNote = null
+                    toast("Weather for ${r.place.name}")
+                    Shell.background({ Weather.fetchIfDue(this) }) { Aod.homeChanged(this); if (section == SECTION_WEATHER) renderWeather() }
+                }
+                is Weather.Located.Failed -> placesNote = "${r.why}. Search for your city instead."
+            }
+            if (section == SECTION_WEATHER) renderWeather()
+        }
     }
 
     /** Countdown candidates and how many days to them, loaded off the main thread. */
@@ -891,6 +924,11 @@ open class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == ASK_LOCATION) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) useLocation()
+            else { placesNote = "No location permission: search for your city instead."; if (section == SECTION_WEATHER) renderWeather() }
+            return
+        }
         if (requestCode != ASK_CALENDAR) return
         if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) toast("Calendar access needed for the Agenda face")
         thumbs = null
@@ -1135,6 +1173,7 @@ open class MainActivity : Activity() {
         private const val PICK_SLEEP = 51
         private const val PICK_POWEROFF = 52
         private const val ASK_CALENDAR = 53
+        private const val ASK_LOCATION = 54
 
         val ANIMATION_KEYS = listOf(
             Settings.Global.WINDOW_ANIMATION_SCALE,

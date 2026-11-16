@@ -115,6 +115,63 @@ object Weather {
         Thread({ if (fetch(app)) then() }, "weather").start()
     }
 
+    /** Why "Use my location" found nothing, or the place it found. */
+    sealed class Located {
+        data class Found(val place: Home.Place, val via: String) : Located()
+        data class Failed(val why: String) : Located()
+    }
+
+    /** The longest wait for one fix, over all providers. */
+    const val LOCATE_MS = 20_000L
+
+    /**
+     * "Use my location": ONE coarse fix, never tracking (no listener is left registered). Asks the network provider,
+     * then fused, then GPS ([Home.providerOrder], those present and on) for a current location within [LOCATE_MS]
+     * in all; else the newest last known fix under an hour old. Rounded to 0.01° ([Home.roundCoord]) before anything
+     * else sees it, named by [Geocoder] when there is one. Needs ACCESS_COARSE_LOCATION. Blocking (not on the main thread).
+     */
+    @android.annotation.SuppressLint("MissingPermission")
+    fun locate(c: Context): Located {
+        if (c.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            return Located.Failed("Location permission not given")
+        val lm = c.getSystemService(android.location.LocationManager::class.java) ?: return Located.Failed("No location service on this phone")
+        if (!lm.isLocationEnabled) return Located.Failed("Location is off in Android's settings")
+        val enabled = runCatching { lm.getProviders(true) }.getOrDefault(emptyList())
+        val order = Home.providerOrder(enabled)
+        Log.i(TAG, "home: locate: providers on $enabled, asking $order")
+        val deadline = SystemClock.elapsedRealtime() + LOCATE_MS
+        var fix: android.location.Location? = null; var via = ""
+        val exec = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            for (p in order) {
+                val left = deadline - SystemClock.elapsedRealtime()
+                if (left <= 0) break
+                val got = java.util.concurrent.LinkedBlockingQueue<Any>(1)
+                val cancel = android.os.CancellationSignal()
+                val asked = runCatching { lm.getCurrentLocation(p, cancel, exec) { l -> got.offer(l ?: Unit) } }
+                    .onFailure { Log.w(TAG, "home: locate $p: $it") }.isSuccess
+                if (!asked) continue
+                val r = got.poll(left, java.util.concurrent.TimeUnit.MILLISECONDS)
+                if (r == null) cancel.cancel()
+                if (r is android.location.Location) { fix = r; via = p; break }
+            }
+        } finally { exec.shutdown() }
+        if (fix == null) {
+            val now = SystemClock.elapsedRealtimeNanos()
+            fix = (enabled + "passive").distinct().mapNotNull { p -> runCatching { lm.getLastKnownLocation(p) }.getOrNull() }
+                .filter { Home.freshFix((now - it.elapsedRealtimeNanos) / 1_000_000) }.maxByOrNull { it.elapsedRealtimeNanos }
+            via = fix?.provider?.let { "last known ($it)" } ?: ""
+        }
+        val l = fix ?: return Located.Failed(if (order.isEmpty()) "No location provider is on" else "No location found within ${LOCATE_MS / 1000} s")
+        val lat = Home.roundCoord(l.latitude); val lon = Home.roundCoord(l.longitude)
+        val name = if (android.location.Geocoder.isPresent()) runCatching {
+            @Suppress("DEPRECATION")
+            android.location.Geocoder(c).getFromLocation(lat, lon, 1)?.firstOrNull()?.let { it.locality ?: it.subAdminArea ?: it.adminArea }
+        }.onFailure { Log.w(TAG, "home: geocoder: $it") }.getOrNull() else null
+        Log.i(TAG, "home: located via $via (named: ${name != null})")
+        return Located.Found(Home.Place(Home.locationLabel(name, lat, lon), "", lat, lon), via)
+    }
+
     /** Searches Open-Meteo's geocoding for [name]. Null: offline or it failed. Blocking. */
     fun search(name: String): List<Home.Place>? {
         val q = URLEncoder.encode(name.trim(), "UTF-8")

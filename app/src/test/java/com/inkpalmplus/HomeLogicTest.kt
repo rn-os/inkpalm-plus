@@ -69,6 +69,19 @@ class HomeLogicTest {
         assertEquals(emptyList<Home.Place>(), Home.parsePlaces("<html>"))
     }
 
+    @Test fun oneShotLocation() {
+        assertEquals(38.72, Home.roundCoord(38.71667), 0.0)
+        assertEquals(-9.13, Home.roundCoord(-9.13333), 0.0)
+        assertEquals(-9.14, Home.roundCoord(-9.1351), 0.0)
+        assertEquals("Lisbon", Home.locationLabel(" Lisbon ", 38.72, -9.13))
+        assertEquals("Current location (38.72, -9.13)", Home.locationLabel(null, 38.72, -9.13))
+        assertEquals("Current location (38.70, -9.10)", Home.locationLabel("", 38.7, -9.1))
+        assertTrue(Home.freshFix(59 * 60_000L)); assertTrue(Home.freshFix(60 * 60_000L)); assertFalse(Home.freshFix(61 * 60_000L)); assertFalse(Home.freshFix(-1))
+        assertEquals(listOf("network", "fused", "gps"), Home.providerOrder(listOf("passive", "gps", "fused", "network")))
+        assertEquals(listOf("network", "fused"), Home.providerOrder(listOf("passive", "fused", "network")))
+        assertEquals(emptyList<String>(), Home.providerOrder(listOf("passive")))
+    }
+
     // ---- Rain summary ---------------------------------------------------------------------------------
 
     private fun hours(vararg rain: IntRange): Array<Int?> = Array(24) { hr -> if (rain.any { hr in it }) 70 else 10 }

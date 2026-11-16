@@ -36,6 +36,9 @@
          coordinates), and its geocoding search for the typed city name. At most every 30 min, only when a network is
          already up; nothing else is sent anywhere. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- "Use my location" (Home face's weather): one coarse fix when the user taps it, rounded to ~1 km and kept
+         as the weather city. Never tracked; no background location. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Whether a network is up (the weather is fetched only then; radios are never turned on). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Wi-Fi on/off state for the screen and light panel's toggle. -->

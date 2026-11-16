@@ -67,6 +67,9 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
   the user's city coordinates, and its geocoding search). Fetch at most every 30 min, only when a network is already
   up, ~8 s limit, no retries; never turn radios on. Don't add other network use without the user asking: the app's
   privacy promise is "nothing else leaves the phone" (README, About).
+- ACCESS_COARSE_LOCATION only for Weather location → "Use my location": one fix when tapped (`Weather.locate`:
+  network, fused, GPS via getCurrentLocation within 20 s, else a last known fix < 1 h), rounded to 0.01°, stored as
+  the city. Never a listener left running, no background location, no FINE.
 
 ## Product direction
 - Keep e-ink settings few and plain: the user worries that too many confuse people. New behaviour should default

@@ -100,6 +100,23 @@ object Home {
         }
     }.getOrDefault(emptyList())
 
+    // ---- "Use my location" ------------------------------------------------------------------------------
+
+    /** A one-shot location is kept to ~0.01° (about 1 km): enough for the weather, no more. */
+    fun roundCoord(v: Double): Double = Math.round(v * 100) / 100.0
+
+    /** The geocoder's place name, else "Current location (38.72, -9.14)". */
+    fun locationLabel(name: String?, lat: Double, lon: Double): String =
+        name?.trim()?.takeIf { it.isNotEmpty() } ?: "Current location (%.2f, %.2f)".format(Locale.US, lat, lon)
+
+    /** A last known fix is used only when it is this recent. */
+    const val LAST_FIX_MAX_AGE_MS = 60 * 60_000L
+
+    fun freshFix(ageMs: Long): Boolean = ageMs in 0..LAST_FIX_MAX_AGE_MS
+
+    /** The providers to ask for one fix, in order: network, fused, GPS (those that exist and are on). */
+    fun providerOrder(available: Collection<String>): List<String> = listOf("network", "fused", "gps").filter { it in available }
+
     /** The probability (%) at which an hour counts as rainy. */
     const val RAINY = 50
 

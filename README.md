@@ -78,14 +78,14 @@ Also on KompaktOS:
 - **Edge Back:** swipe in from either edge to go back (KompaktOS has no navigation bar, so no back gesture). On by default; a switch under Side panel.
 - **Touch button:** a short touch is Home; holding it is a full refresh, as on the stock firmware.
 - **Quick Settings tiles:** one per screen mode, **E-ink mode** (steps through them), **Full refresh** and **Front light**. Add them with the pencil in Quick Settings.
-- **Settings** (home screen): **Front light** (whether the light follows Android's brightness) and **Sleep & power**: the **sleep screen** (see below), the **power-off screen** (Moaan's, Moaan's panda in English, or your picture), and **auto power-off** after 4 to 24 hours asleep on battery.
+- **Settings** (home screen): **Screen & light** (the screen mode everywhere, full refresh, contrast, whether the light follows Android's brightness, KompaktOS's own switches), **Sleep screen** (see below) and **Power off**: the **power-off picture** (Moaan's, Moaan's panda in English, or your picture) and **auto power-off** after 4 to 24 hours asleep on battery.
 - The light goes off with the screen and comes back with it.
 
 On the stock firmware none of this changes anything: the e-ink panel below stays as it is.
 
 ## Sleep screen (KompaktOS)
 
-The InkPalm keeps a picture on the screen while it sleeps, at no cost: e-ink holds an image without power. InkPalm+ can draw that picture for you. On the home screen, tap **Sleep & power**, then **Sleep screen**, then **Sleep screen: …** at the top: the picker shows one screen at a time, large and drawn with your own day (your events, weather, battery, photo), at the phone's true shape. Flip through with **‹ ›**, a swipe, or a tap on the preview's left or right side; **N / 18** says where you are, and **All** shows every screen small, grouped (Clock, Home, Agenda, Photo, Other), to jump to one. **Use this** picks the one shown (it then says **✓ In use**). The line under it says what the screen uses ("Uses your calendar") or what it still needs ("Weather: set location ›", "Pick a photo ›"): tap it to set that up; picking a screen that still needs something opens that setup right after. Held in landscape, the picker shows each screen's landscape layout, with the buttons beside it. The screens:
+The InkPalm keeps a picture on the screen while it sleeps, at no cost: e-ink holds an image without power. InkPalm+ can draw that picture for you. On the home screen, tap **Sleep screen**, then the face row at the top (a small preview and its name): the picker shows one screen at a time, large and drawn with your own day (your events, weather, battery, photo), at the phone's true shape. Flip through with **‹ ›**, a swipe, or a tap on the preview's left or right side; **N / 18** says where you are, and **All** shows every screen small, grouped (Clock, Home, Agenda, Photo, Other), to jump to one. **Use this** picks the one shown (it then says **✓ In use**). The line under it says what the screen uses ("Uses your calendar") or what it still needs ("Weather: set location ›", "Pick a photo ›"): tap it to set that up; picking a screen that still needs something opens that setup right after. Held in landscape, the picker shows each screen's landscape layout, with the buttons beside it. The screens:
 
 | Face | What it shows |
 |---|---|
@@ -175,7 +175,7 @@ A preset only changes refresh and the helpers. It never touches Size, Contrast o
 
 ### E-ink settings screen
 
-On the home screen, tap **Screen & e-ink** (stock firmware).
+On the home screen, tap **Screen & light** (stock firmware).
 
 <img src="docs/screenshots/6-eink-settings.png" width="300" alt="The E-ink settings screen">
 
@@ -204,7 +204,7 @@ Use **Save** to keep your changes, or **Save + reopen** to also close the app so
 
 ### Touch button
 
-The button below the screen. On the home screen, tap **Buttons**.
+The button below the screen. On the home screen, tap **Buttons & reading**.
 
 - **Tap:** Back, Home, Page down, Volume down
 - **Hold:** Full refresh, Screenshot, Page up, Volume up, Front light on/off, Home
@@ -213,32 +213,27 @@ These are the actions already built into the device. Changes apply on the next t
 
 ## Home screen
 
-The home screen is a short list of categories; each opens its own screen (◀ goes back). Each row says what's set there.
+The home screen has six rows; each opens one screen (‹ goes back) and says what's set there. Nothing is more than two levels deep. A screen taller than the display is split into pages: **‹ ›** and **1 / 2** at the bottom, no scrolling. Explanations are small grey notes under the setting they explain.
 
-<img src="docs/launch/5-home.png" width="720" alt="The InkPalm+ home screen: Side panel, Screen & e-ink, Front light, Sleep & power, Reading, Buttons and About">
+<img src="docs/launch/5-home.png" width="720" alt="The InkPalm+ home screen">
 
+- **Sleep screen** (KompaktOS): the face in use with a small preview (tap it for the [picker](#sleep-screen-kompaktos)), **Update** (Frozen, 5, 15, 30, 60 min), **Show update time**; Choose picture… and Photo style for Photo and Picture; with the Home face, a second page **Home face**: **Weather location**, **Units**, **Countdowns**, **Trash day**.
+- **Screen & light:** on KompaktOS, page 1 the **screen mode** everywhere (Fast, Soft, Dither, Text, Quality, Auto), **Full refresh** and **Contrast**; page 2 the **Front light** (follows Android's brightness) and KompaktOS's switches (its per-app modes, a real refresh on its Refresh tile). On the stock firmware, the [E-ink settings](#e-ink-settings-screen) and your apps.
 - **Side panel:**
   - **Side panel.** Opens Accessibility so you can turn the service on or off.
-  - **Newest app.** Bottom (the default) or Top of the list.
-  - **Strip side.** Left or Right.
-  - **Screen & light panel** (KompaktOS). The other edge's strip.
-  - **Edge Back.** Swipe in from either edge to go back.
-  - **Strip width.** 6 to 40 dp.
-  - **Show strip.** Draws a thin black line where you swipe.
+  - **Edge.** Left or Right.
   - **Panel width.** 66, 78 or 90% of the screen, in portrait.
   - **Apps kept.** 9, 18 or 27.
+  - **Newest app.** Bottom (the default) or Top of the list.
   - **Clear recent apps.** Starts the list again.
-  - **Keeping the panel on** (see below).
-- **Screen & e-ink:** on KompaktOS, the e-ink control status and the screen-mode switches; on the stock firmware, the [E-ink settings](#e-ink-settings-screen) and your apps.
-- **Front light** (KompaktOS): whether the light follows Android's brightness.
-- **Sleep & power** (KompaktOS): the [sleep screen](#sleep-screen-kompaktos), the power-off screen and auto power-off.
-- **Reading:** your reader app, NeoReader, KOReader or None. You're asked once, the first time you open InkPalm+.
-- **Buttons:** the [touch button](#touch-button).
+  - Page 2: **Strip width** (6 to 40 dp), **Show strip**, **Screen & light strip** (KompaktOS, the other edge's strip), **Edge Back**, and **Keeping the panel on** (see below).
+- **Power off** (KompaktOS): the power-off picture and auto power-off.
+- **Buttons & reading:** the [touch button](#touch-button) (KompaktOS: a short touch is Home; **Hold** is Nothing or Full refresh), and your reader app, NeoReader, KOReader or None (you're asked once, the first time you open InkPalm+).
 - **About:** the version, and what InkPalm+ can see.
 
 ## Keeping the panel on
 
-On the home screen, tap **Side panel**; the switches are at the bottom. Both are optional, and both need Shizuku or a one-time adb command.
+On the home screen, tap **Side panel**; the switches are on its second page. Both are optional, and both need Shizuku or a one-time adb command.
 
 - **Survives Clear Memory.** Moaan's Clear Memory force-stops every app that isn't on its whitelist, and Android then switches the panel off. This adds InkPalm+ to the whitelist. The screen shows the exact `adb shell "settings put system ..."` command if Shizuku isn't running.
 - **Turns itself back on.** If the panel gets switched off by mistake, InkPalm+ switches it back on, when it opens and after a restart. This needs the `WRITE_SECURE_SETTINGS` permission, which the touch button settings also use. Tap the switch with Shizuku running, or run this once from a computer (it survives restarts and updates):

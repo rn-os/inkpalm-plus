@@ -12,10 +12,15 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
 
 ## Code (`app/src/main/java/com/inkpalmplus/`)
 - `EinkDb`: the model (`Profile`, `Refresh`), reading/writing Moaan's table (directly, Shizuku fallback), `setAppDpiToMap`.
-- `MainActivity`: home screen: a list of categories opening sub-screens. `SectionActivity` (exported in debug;
-  `--es section panel|eink|screen|light|sleep|aod|agenda|photo|home|weather|countdowns|trash|reading|touch|about`, `keep_on` = panel): the sub-screens; `eink`
-  holds the e-ink settings, "Search apps" and the per-app list; `aod` is the Sleep screen page (a row opening the picker, then the options of the face in use);
-  `weather`, `countdowns`, `trash` the Home face's city search, countdown pin/hide list and trash weekdays.
+- `MainActivity`: settings (mockup docs/mockups/settings-reorg/): home = six rows with summaries (Sleep screen, Screen &
+  light, Side panel, Power off, Buttons & reading, About), each opening a screen; at most two levels (Sleep screen ›
+  Weather/Countdowns/Trash day). Screens are built as groups (`group()`: a setting with its notes) and **paged, not
+  scrolled**: `show()` measures the groups at runtime and `Paging.split`s them (`SettingsPages.kt`, pure, tested with
+  `Summaries`); ‹ › and "1 / 2" at the bottom; `newPage` forces a break, `title` gives the breadcrumb, `anchor` a deep
+  link's page. A page scrolls only when one group is taller than it. Rows ≥ 56 dp, explanations as `note()`s.
+  `SectionActivity` (exported in debug; `--es section sleep|weather|countdowns|trash|screen|panel|power|buttons|about|eink`;
+  old names still work: `aod` → sleep, `light` → screen p.2, `keep_on` → panel p.2, `touch`/`reading` → buttons):
+  `eink` is the stock firmware's Screen & light (e-ink settings, "Search apps", the per-app list; still scrolls).
 - `FacePicker` (pure: the picker's pages from `Aod.Face` × styles, the one in use, "All" groups, setup lines) and
   `FacePickerActivity` (exported in debug): the sleep-screen picker, one face and style a page, true-shape previews
   (`FacePreview`), "Use this" (`Aod.choose`), "All" grid; landscape = preview left, controls right (mockup

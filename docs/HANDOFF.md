@@ -377,3 +377,21 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   (the next Live update draws the right face); Live updates use the same gate (an alarm right after a power press is
   dropped and the next one armed). Logs: "aod: sleep orient: … redraw in 6 s if still asleep", "aod: sleep redraw:
   settled, …", "aod: sleep redraw skipped: woke …/recent transition/busy …", "aod: live update skipped: …".
+
+## Settings reorganised (branch `settings-reorg`, on `face-picker`, 2026-11-16)
+- Approved mockup: docs/mockups/settings-reorg/ (settings-sheet.png, frames 0–9; build.py imports
+  ../aod/face-picker/build.py). Home: Sleep screen · Screen & light · Side panel · Power off · Buttons & reading ·
+  About, each with a one-line summary (`Summaries`). Max two levels (Sleep screen › Weather / Countdowns / Trash day).
+- Paging instead of scrolling: each screen is a list of groups; `MainActivity.show()` measures them at the page's
+  width (any orientation, font scale) and `Paging.split`s them; ‹ › "1 / 2" at the bottom; forced breaks: Sleep
+  screen's "Home face" page, Screen & light's Front light page, Side panel's Strip page. A page scrolls only when a
+  single group is taller than it. The page shown survives a rotation (by its first group). Keyboard pans
+  (SOFT_INPUT_ADJUST_PAN) so typing a city doesn't re-page.
+- Where things went: Sleep & power → Sleep screen + Power off; Front light → Screen & light p.2; Screen & e-ink
+  (KompaktOS) → Screen & light (new: screen mode everywhere list, Full refresh now, Contrast stepper — the same
+  prefs as the screen panel); the e-ink status box only when there's no bridge or InkControl is still installed;
+  Reading + Buttons → Buttons & reading (KompaktOS hold = Nothing / Full refresh chips on `holdRefresh`; note
+  "Volume keys always turn pages the same way in every rotation", KompaktOS only); the "Show seconds" and
+  "Frontlight" info rows became notes. Stock firmware: Screen & light opens the old e-ink screen (scrolls).
+- Old section names still open the screen they moved to, at their page (`aod`, `light`, `keep_on`, `touch`,
+  `reading`); FacePicker's setup links (weather, reading) and the screen panel's ⚙ (screen) unchanged.

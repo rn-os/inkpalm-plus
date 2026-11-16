@@ -247,11 +247,11 @@ class FacePickerActivity : Activity() {
         val name = text(e.title, Type.XL, bold = true).apply { maxLines = 1 }
         val detail = text(FacePicker.detail(e, now), Type.S, color = Ink.MUTED).apply { maxLines = 2; setPadding(0, dp(2), 0, 0) }
         val nav = hbox().apply {
-            addView(inkButton("‹", Type.XXL) { flip(-1) }.apply { contentDescription = "Previous sleep screen" }, lp(dp(84), dp(52)))
+            addView(arrow(next = false), lp(dp(84), dp(52)))
             addView(text("${index + 1} / ${list.size}", Type.L, bold = true).apply {
                 gravity = Gravity.CENTER; contentDescription = "Screen ${index + 1} of ${list.size}"
             }, lp(0, WRAP, 1f))
-            addView(inkButton("›", Type.XXL) { flip(1) }.apply { contentDescription = "Next sleep screen" }, lp(dp(84), dp(52)))
+            addView(arrow(next = true), lp(dp(84), dp(52)))
         }
         val inUse = FacePicker.inUse(e, now)
         val use = text(if (inUse) "✓ In use" else if (busy) "Applying…" else "Use this", Type.L, bold = true, color = if (inUse) Ink.INK else Ink.PAPER).apply {
@@ -304,6 +304,28 @@ class FacePickerActivity : Activity() {
             addView(preview, lp(MATCH, 0, 1f).apply { setMargins(g, dp(4), g, 0) })
             addView(controls.apply { setPadding(g, 0, g, dp(4)) }, lp(MATCH, WRAP))
         }
+    }
+
+    /** ‹ or › as a drawn chevron, centred (the font's glyphs sit low in the button). */
+    private fun arrow(next: Boolean): View = inkButton("") { flip(if (next) 1 else -1) }.apply {
+        contentDescription = if (next) "Next sleep screen" else "Previous sleep screen"
+        val d = Chevron(dp(3).toFloat(), next)
+        foreground = d
+    }
+
+    /** A chevron the size of a large glyph, centred in its view. */
+    private inner class Chevron(private val stroke: Float, private val right: Boolean) : android.graphics.drawable.Drawable() {
+        private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = stroke; color = Ink.INK; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+        }
+        override fun draw(c: Canvas) {
+            val r = bounds; val h = dp(9).toFloat(); val w = dp(5).toFloat()
+            val cx = r.exactCenterX(); val cy = r.exactCenterY(); val dx = if (right) w else -w
+            c.drawPath(android.graphics.Path().apply { moveTo(cx - dx, cy - h); lineTo(cx + dx, cy); lineTo(cx - dx, cy + h) }, p)
+        }
+        override fun setAlpha(alpha: Int) {}
+        override fun setColorFilter(cf: android.graphics.ColorFilter?) {}
+        @Deprecated("Drawable API") override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
     }
 
     private fun downXIn(v: View): Float { val loc = IntArray(2); v.getLocationOnScreen(loc); return downX - loc[0] }
@@ -398,7 +420,7 @@ class FacePickerActivity : Activity() {
 
     private fun gridView(): View {
         val now = Aod.current(this)
-        val cols = if (land) 4 else 6
+        val cols = 6
         val body = vbox()
         body.addView(header("All screens", { grid = false; render() }, false))
         body.addView(text("Tap a screen to flip to it. Thick frame: in use.", Type.S, color = Ink.MUTED).apply { setPadding(dp(Space.GUTTER), 0, dp(Space.GUTTER), dp(4)) })
@@ -415,7 +437,7 @@ class FacePickerActivity : Activity() {
                             gravity = Gravity.CENTER_HORIZONTAL
                             val p = FacePreview(this@FacePickerActivity, ratio, if (e.face == Aod.Face.DEFAULT) "Moaan" else "…").apply { thick = on; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
                             show("t:${e.key}", p); keys += "t:${e.key}"
-                            addView(p, lp(MATCH, dp(if (land) 92 else 112)))
+                            addView(p, lp(MATCH, dp(if (land) 64 else 112)))
                             addView(text(e.label, Type.XS, bold = true).apply { gravity = Gravity.CENTER; maxLines = 2 }, lp(MATCH, WRAP).apply { topMargin = dp(2) })
                             if (on) addView(text("In use", Type.XS, bold = true, color = Ink.PAPER).apply {
                                 gravity = Gravity.CENTER; background = outline(1, Radius.SMALL, Ink.INK); setPadding(dp(4), 0, dp(4), 0)

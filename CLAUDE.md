@@ -14,9 +14,14 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
 - `EinkDb`: the model (`Profile`, `Refresh`), reading/writing Moaan's table (directly, Shizuku fallback), `setAppDpiToMap`.
 - `MainActivity`: home screen: a list of categories opening sub-screens. `SectionActivity` (exported in debug;
   `--es section panel|eink|screen|light|sleep|aod|agenda|photo|home|weather|countdowns|trash|reading|touch|about`, `keep_on` = panel): the sub-screens; `eink`
-  holds the e-ink settings, "Search apps" and the per-app list; `aod` is the sleep-screen picker, `agenda` the Agenda face's style picker, `photo` the Photo style picker;
-  `home`, `weather`, `countdowns`, `trash` the Home face's style picker, city search, countdown pin/hide list and trash weekdays.
-- `Aod`, `AodFaces`, `Agenda`, `Home`, `Weather`, `Dither`: the always-on sleep screen (faces: Clock, Clock + date, Analog, Agenda, Home, Reading, Photo, Minimal, Picture, Default; drawn into the HWC's standby.png, Live updates via an alarm
+  holds the e-ink settings, "Search apps" and the per-app list; `aod` is the Sleep screen page (a row opening the picker, then the options of the face in use);
+  `weather`, `countdowns`, `trash` the Home face's city search, countdown pin/hide list and trash weekdays.
+- `FacePicker` (pure: the picker's pages from `Aod.Face` × styles, the one in use, "All" groups, setup lines) and
+  `FacePickerActivity` (exported in debug): the sleep-screen picker, one face and style a page, true-shape previews
+  (`FacePreview`), "Use this" (`Aod.choose`), "All" grid; landscape = preview left, controls right (mockup
+  docs/mockups/aod/face-picker/, option 6). Root's `am broadcast -n com.inkpalmplus/.Aod\$Alarm --es dump faces`
+  writes every page in both orientations to files/faces/.
+- `Aod`, `AodFaces`, `Agenda`, `Home`, `Weather`, `Dither`: the always-on sleep screen (faces, in the picker's order: Clock, Clock + date, Analog, Home, Agenda, Reading, Photo, Picture, Minimal, Default; drawn into the HWC's standby.png, Live updates via an alarm
   and the bridge's `redraw=1`; drawn in the phone's physical orientation (`Aod.Gravity`, accelerometer while the screen is on), else the display's; `Agenda`: the Agenda face's styles and their pure layout parts; `Home`: the Home face's styles (Dashboard, Calm) and its pure parts: Open-Meteo JSON, rain summary, staleness, countdown picking, trash day; `Weather`: the Home face's Open-Meteo fetch and cache, city search; `Dither`: the Photo styles); see docs/HANDOFF.md.
 - `AppActivity`: one app's settings page.
 - `QuickPanelService` (accessibility service: edge strip, foreground app, debug test hooks). The strip opens `SidePanel`

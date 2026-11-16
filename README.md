@@ -85,22 +85,22 @@ On the stock firmware none of this changes anything: the e-ink panel below stays
 
 ## Sleep screen (KompaktOS)
 
-The InkPalm keeps a picture on the screen while it sleeps, at no cost: e-ink holds an image without power. InkPalm+ can draw that picture for you. On the home screen, tap **Sleep & power**, then **Sleep screen**, and pick a face:
+The InkPalm keeps a picture on the screen while it sleeps, at no cost: e-ink holds an image without power. InkPalm+ can draw that picture for you. On the home screen, tap **Sleep & power**, then **Sleep screen**, then **Sleep screen: …** at the top: the picker shows one screen at a time, large and drawn with your own day (your events, weather, battery, photo), at the phone's true shape. Flip through with **‹ ›**, a swipe, or a tap on the preview's left or right side; **N / 18** says where you are, and **All** shows every screen small, grouped (Clock, Home, Agenda, Photo, Other), to jump to one. **Use this** picks the one shown (it then says **✓ In use**). The line under it says what the screen uses ("Uses your calendar") or what it still needs ("Weather: set location ›", "Pick a photo ›"): tap it to set that up; picking a screen that still needs something opens that setup right after. Held in landscape, the picker shows each screen's landscape layout, with the buttons beside it. The screens:
 
 | Face | What it shows |
 |---|---|
 | **Clock** | The time, huge |
 | **Clock + date** | The time, the date and the battery |
 | **Analog** | A clock face with hands, the date and the battery |
-| **Agenda** | The time and your events, in one of six styles (asks for calendar access the first time; without it the face says "Calendar access needed") |
 | **Home** | The time, your next events, the weather, countdowns to your trips and big days, and trash day, in one of two styles (see below) |
+| **Agenda** | The time and your events, in one of six styles (asks for calendar access the first time; without it the face says "Calendar access needed") |
 | **Reading** | The cover, title and how far you are in the last book of your reader app (covers come from EPUB files, with All files access) |
 | **Photo** | Your picture, with a small clock in the corner (**Choose picture…**; without one it shows Clock + date) |
-| **Minimal** | Just the day and date, so it's never out of date |
 | **Picture** | Your picture as it is |
+| **Minimal** | Just the day and date, so it's never out of date |
 | **Default** | Moaan's own picture |
 
-With Agenda picked, **Agenda style** (under the faces) changes how it lays out your day; each style has a preview:
+Agenda has a page for each style:
 
 | Style | What it shows |
 |---|---|
@@ -111,17 +111,16 @@ With Agenda picked, **Agenda style** (under the faces) changes how it lays out y
 | **Two days** | Today and tomorrow, one under the other (side by side in landscape) |
 | **Week** | This week's days with a dot per event, the time, then the rest of today |
 
-With Home picked, its settings appear under the faces:
+Home has two pages: **Dashboard** (the clock, your next 3 events, then cards for the weather (with the chance of rain by hour, 8 AM to 7 PM), countdowns and trash day) and **Calm** (a big clock, your next event, the weather in one line ("9° · Rain 3–6 PM · H 14 L 6") and one or two large cards). With Home in use, its settings appear on the Sleep screen page under the picker's row:
 
 | Setting | What it does |
 |---|---|
-| **Home style** | **Dashboard** (default): the clock, your next 3 events, then cards for the weather (with the chance of rain by hour, 8 AM to 7 PM), countdowns and trash day. **Calm**: a big clock, your next event, the weather in one line ("9° · Rain 3–6 PM · H 14 L 6") and one or two large cards |
 | **Weather location** | Search for your city once, or tap **Use my location** for a one-time approximate fix (asks for approximate location the first time; never tracked, kept to about 1 km). The weather comes from [Open-Meteo](https://open-meteo.com) (free, no account), at most every 30 minutes, during the sleep screen's updates and only when Wi-Fi is already on. Offline or more than 90 minutes old, the face says "as of 6:40" |
 | **Units** | Auto (°F in the US, else °C), °C or °F |
 | **Countdowns** | Picked from your calendar: all-day, multi-day and 4-hour-or-longer events in the next 60 days, nearest first ("12 days to Lisbon trip", "Tomorrow: …"). **Pin** one to always show it first, **Hide** one to never show it |
 | **Trash day** | Off by default. Pick the weekdays for recycling and for trash: the face shows "Recycling tomorrow" the day before and "Trash today" on the day |
 
-With Photo or Picture picked, **Photo style** (under the faces) sets how your picture is drawn. The panel shows 16 greys, so a photo's soft gradients fall into blotchy grey steps; the dithered styles trade those for fine dots, drawn one per screen pixel. Each style has a preview; the clock and date on the Photo face stay clean.
+Photo has a page for each **Photo style**, which sets how your picture is drawn. The panel shows 16 greys, so a photo's soft gradients fall into blotchy grey steps; the dithered styles trade those for fine dots, drawn one per screen pixel. The clock and date on the Photo face stay clean. Picture is one page, drawn in the same Photo style; with Picture in use, the Sleep screen page has a **Photo style** row to change it. With Photo or Picture in use, **Choose picture…** on that page changes the picture.
 
 | Photo style | What it does |
 |---|---|

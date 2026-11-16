@@ -201,19 +201,28 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
     /**
      * [Wi-Fi] [Bluetooth] [Airplane] [Rotate]: four equal 48 dp icon toggles in the header's place (Material Symbols);
      * filled black with a white icon while on (or turning on) or, for Rotate, locked. A radio on its way shows the icon
-     * it's going to and a dot in the corner until it gets there.
+     * it's going to and a dot in the corner until it gets there. Holding one opens its Android settings screen
+     * ([settingsFor]) and closes the panel.
      */
     private fun radioRow(): View {
         radioViews.clear()
-        fun toggle(click: () -> Unit) = ImageView(ctx).apply {
+        fun toggle(hold: Hold, click: () -> Unit) = ImageView(ctx).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             val v = ctx.dp(11)   // a 26 dp icon in the 48 dp button
             setPadding(ctx.dp(2), v, ctx.dp(2), v)
             isClickable = true
             setOnClickListener { click() }
+            setOnLongClickListener { openSettings(hold); true }
+            accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_LONG_CLICK, hold.label))
+                }
+            }
         }
-        val views = Radios.Radio.entries.map { r -> toggle { toggleRadio(r) }.also { radioViews[r] = it } } +
-            toggle { toggleRotation() }.also { rotView = it }
+        val views = Radios.Radio.entries.map { r -> toggle(Hold.of(r)) { toggleRadio(r) }.also { radioViews[r] = it } } +
+            toggle(Hold.ROTATE) { toggleRotation() }.also { rotView = it }
         return ctx.hbox().apply {
             views.forEachIndexed { i, v -> addView(v, lp(0, ctx.dp(48), 1f).apply { if (i < views.size - 1) marginEnd = ctx.dp(4) }) }
             refreshRadios()
@@ -232,7 +241,27 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
             setLayerGravity(1, Gravity.TOP or Gravity.END)
             setLayerInset(1, 0, ctx.dp(5), ctx.dp(5), 0)
         }
-        v.contentDescription = desc
+        v.contentDescription = "$desc. Hold: ${(if (v === rotView) Hold.ROTATE else radioViews.entries.firstOrNull { it.value === v }?.key?.let { Hold.of(it) })?.label ?: "settings"}"
+    }
+
+    /** What holding a toggle opens: its Android settings screen (the first of [actions] that resolves). */
+    enum class Hold(val label: String, vararg val actions: String) {
+        WIFI("Wi-Fi settings", android.provider.Settings.ACTION_WIFI_SETTINGS),
+        BT("Bluetooth settings", android.provider.Settings.ACTION_BLUETOOTH_SETTINGS),
+        AIRPLANE("Airplane mode settings", android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS, android.provider.Settings.ACTION_WIRELESS_SETTINGS),
+        ROTATE("Auto-rotate settings", *(if (android.os.Build.VERSION.SDK_INT >= 34) arrayOf("android.settings.AUTO_ROTATE_SETTINGS") else emptyArray()),
+            android.provider.Settings.ACTION_DISPLAY_SETTINGS);
+
+        companion object { fun of(r: Radios.Radio) = when (r) { Radios.Radio.WIFI -> WIFI; Radios.Radio.BT -> BT; Radios.Radio.AIRPLANE -> AIRPLANE } }
+    }
+
+    /** Opens [h]'s settings screen from the service (a new task), then closes the panel. Nothing is toggled. */
+    private fun openSettings(h: Hold) {
+        val pm = ctx.packageManager
+        val intent = h.actions.asSequence().map { Intent(it).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }.firstOrNull { it.resolveActivity(pm) != null }
+        if (intent == null) { android.widget.Toast.makeText(ctx, "No ${h.label} screen on this phone", android.widget.Toast.LENGTH_SHORT).show(); return }
+        runCatching { ctx.startActivity(intent) }.onFailure { android.util.Log.w("InkPalmPlus", "screen panel: ${h.label}: $it") }
+        onClose()
     }
 
     private fun refreshRadios() {

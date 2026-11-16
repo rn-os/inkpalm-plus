@@ -450,6 +450,10 @@ class QuickPanelService : AccessibilityService() {
             // The Agenda face's style ("aod_agenda WEEK"), and every style in both orientations to files/ ("aod_agenda_dump").
             "aod_agenda" -> { val st = Agenda.Style.valueOf(value.uppercase()); Eink.post { Aod.setAgendaStyle(this, st) }; true }
             "aod_agenda_dump" -> { Eink.post { Aod.dumpAgenda(this) }; true }
+            // The Home face's style ("aod_home CALM"), and both styles in both orientations to files/, with sample
+            // weather and with the real settings ("aod_home_dump"; also root's `--es dump home` on Aod.Alarm).
+            "aod_home" -> { val st = Home.Style.valueOf(value.uppercase()); Eink.post { Aod.setHomeStyle(this, st) }; true }
+            "aod_home_dump" -> { Eink.post { Aod.dumpHome(this) }; true }
             // The Photo and Picture faces' style ("aod_photo SMOOTH").
             "aod_photo" -> { val st = Dither.Style.valueOf(value.uppercase()); Eink.post { Log.i(TAG, "aod_photo ${st.name}: ${Aod.setPhotoStyle(this, st) ?: "ok"}") }; true }
             "aod_interval" -> { Aod.setInterval(this, value.toInt()); true }

@@ -66,6 +66,10 @@ open class MainActivity : Activity() {
             SECTION_AOD -> "Sleep screen" to "What the screen shows while the phone is off"
             SECTION_AGENDA -> "Agenda style" to "How the Agenda sleep screen lays out your day"
             SECTION_PHOTO -> "Photo style" to "How your picture is drawn on the sleep screen"
+            SECTION_HOME -> "Home style" to "How the Home sleep screen lays out your day"
+            SECTION_WEATHER -> "Weather location" to "The city the Home face shows the weather for"
+            SECTION_COUNTDOWNS -> "Countdowns" to "Days to your trips and big days, from your calendar"
+            SECTION_TRASH -> "Trash day" to "A reminder the day before and on the day"
             SECTION_READING -> "Reading" to "Your reader app and its last book"
             SECTION_TOUCH -> "Buttons" to "The touch button below the screen"
             SECTION_ABOUT -> "About" to "Version, permissions and privacy"
@@ -124,6 +128,7 @@ open class MainActivity : Activity() {
         super.onResume()
         // Back from Agenda or Photo style: the tile shows the style picked there.
         if (section == SECTION_AOD) thumbs = null
+        if (section == SECTION_COUNTDOWNS) countdownRows = null
         // The panel may have been switched off by a force-stop (Moaan's Clear Memory): put it back.
         Shell.background({ Survival.repair(this, "app opened") }) { reload() }
     }
@@ -151,6 +156,10 @@ open class MainActivity : Activity() {
             SECTION_AOD -> renderAod()
             SECTION_AGENDA -> renderAgenda()
             SECTION_PHOTO -> renderPhotoStyle()
+            SECTION_HOME -> renderHomeStyle()
+            SECTION_WEATHER -> renderWeather()
+            SECTION_COUNTDOWNS -> renderCountdowns()
+            SECTION_TRASH -> renderTrash()
             SECTION_READING -> renderReading()
             SECTION_ABOUT -> renderAbout()
             else -> { renderAsk(); renderHome() }
@@ -203,7 +212,7 @@ open class MainActivity : Activity() {
             else "Tap: ${TouchButton.TAP_ACTIONS[TouchButton.tap(this)]} · Hold: ${TouchButton.HOLD_ACTIONS[TouchButton.hold(this)]}"
         body.addView(navRow("Buttons", "Touch button · $touch", SECTION_TOUCH))
         body.addView(divider())
-        body.addView(navRow("About", "Version ${version()} · no internet permission", SECTION_ABOUT))
+        body.addView(navRow("About", "Version ${version()} · internet only for the Home face's weather", SECTION_ABOUT))
     }
 
     private fun version() = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
@@ -467,7 +476,8 @@ open class MainActivity : Activity() {
     private fun updateLabel(minutes: Int) = if (minutes <= 0) "Frozen" else "every $minutes min"
 
     /** "Agenda (Week)" for a style other than Classic; else the face's name. */
-    private fun faceLabel(f: Aod.Face) = f.title + Aod.agendaStyle(this).takeIf { f == Aod.Face.AGENDA && it != Agenda.Style.CLASSIC }?.let { " (${it.title})" }.orEmpty()
+    private fun faceLabel(f: Aod.Face) = f.title + (Aod.agendaStyle(this).takeIf { f == Aod.Face.AGENDA && it != Agenda.Style.CLASSIC }?.title
+        ?: Aod.homeStyle(this).takeIf { f == Aod.Face.HOME }?.title)?.let { " ($it)" }.orEmpty()
 
     private fun renderSleep() {
         body.removeAllViews()
@@ -503,7 +513,7 @@ open class MainActivity : Activity() {
         val face = Aod.face(this)
         body.addView(sectionTitle("Face"))
         val t = thumbs
-        if (t == null) Shell.background({ Aod.Face.entries.associateWith { Aod.thumbnail(this, it) } }) { thumbs = it; renderAod() }
+        if (t == null) Shell.background({ Aod.Face.entries.associateWith { Aod.thumbnail(this, it, land = land) } }) { thumbs = it; renderAod() }
         val faces = Aod.Face.entries
         faces.chunked(4).forEach { row ->
             body.addView(hbox().apply {
@@ -533,11 +543,12 @@ open class MainActivity : Activity() {
             body.addView(navRow("Agenda style", "${style.title} · ${style.detail}", SECTION_AGENDA), lp(MATCH, WRAP).apply { topMargin = dp(4) })
             body.addView(divider())
         }
-        if (face == Aod.Face.AGENDA && Aod.needsCalendar(this)) body.addView(vbox().apply {
+        if (face == Aod.Face.HOME) renderHomeRows()
+        if ((face == Aod.Face.AGENDA || face == Aod.Face.HOME) && Aod.needsCalendar(this)) body.addView(vbox().apply {
             background = outline(3)
             setPadding(dp(14), dp(12), dp(14), dp(12))
             addView(text("Calendar access needed", Type.L, bold = true))
-            addView(text("The Agenda face shows your events. Without access it says so on the sleep screen.", Type.S, color = Ink.MUTED))
+            addView(text("The ${face.title} face shows your events${if (face == Aod.Face.HOME) " and countdowns" else ""}. Without access it says so on the sleep screen.", Type.S, color = Ink.MUTED))
             addView(inkButton("Allow") { askCalendar(fromSettings = true) }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
         }, lp(MATCH, WRAP).apply { setMargins(g, dp(8), g, dp(4)) })
 
@@ -554,6 +565,7 @@ open class MainActivity : Activity() {
             addView(text(costTitle, Type.L, bold = true))
             addView(text(costDetail, Type.M, color = Ink.MUTED))
             if (!face.drawn) addView(text("Updates apply to the drawn faces, not to Default or Picture.", Type.S, bold = true).apply { setPadding(0, dp(6), 0, 0) })
+            if (face == Aod.Face.HOME && Weather.city(this@MainActivity) != null) addView(text("Home's weather: fetched at most every 30 min during these updates, only when Wi-Fi is already on (never turned on). About 1–2 s more awake per fetch, ~0.4% of battery a day.", Type.S, color = Ink.MUTED).apply { setPadding(0, dp(6), 0, 0) })
             if (minutes > 0) addView(text("Live faces show a small \"Updated 10:15\" stamp. Below ${Aod.LOW_BATTERY}% the face shows a battery box and updates stop. They carry on while charging.", Type.S, color = Ink.MUTED).apply { setPadding(0, dp(6), 0, 0) })
         }, lp(MATCH, WRAP).apply { setMargins(g, dp(4), g, dp(8)) })
         body.addView(divider())
@@ -575,12 +587,12 @@ open class MainActivity : Activity() {
         if (!Aod.supported()) { body.addView(note("Needs KompaktOS's bridge.")); return }
         val style = Aod.agendaStyle(this)
         val t = styleThumbs
-        if (t == null) Shell.background({ Agenda.Style.entries.associateWith { Aod.thumbnail(this, Aod.Face.AGENDA, it) } }) { styleThumbs = it; renderAgenda() }
+        if (t == null) Shell.background({ Agenda.Style.entries.associateWith { Aod.thumbnail(this, Aod.Face.AGENDA, it, land = land) } }) { styleThumbs = it; renderAgenda() }
         Agenda.Style.entries.chunked(3).forEach { row ->
             body.addView(hbox().apply {
                 setPadding(dp(12), dp(4), dp(12), dp(4))
                 gravity = Gravity.TOP
-                for (s in row) addView(thumbTile(s.title, s == style, t?.get(s), 190) {
+                for (s in row) addView(thumbTile(s.title, s == style, t?.get(s), if (land) 120 else 190) {
                     work({ Aod.setAgendaStyle(this@MainActivity, s) }, "Agenda style: ${s.title}")
                 }, lp(0, WRAP, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
             })
@@ -588,6 +600,238 @@ open class MainActivity : Activity() {
         body.addView(note("${style.title}: ${style.detail}."))
         if (Aod.face(this) != Aod.Face.AGENDA) body.addView(note("The sleep screen shows another face now: pick Agenda under Sleep screen to see this."))
         if (Aod.needsCalendar(this)) body.addView(note("Calendar access needed: without it each style says so."))
+    }
+
+    // ---- Home face (docs/mockups/aod/home-face/) --------------------------------------------------------
+
+    /** Home's settings on the Sleep screen page: style, weather location, units, countdowns, trash day. */
+    private fun renderHomeRows() {
+        val style = Aod.homeStyle(this)
+        body.addView(navRow("Home style", "${style.title} · ${style.detail}", SECTION_HOME), lp(MATCH, WRAP).apply { topMargin = dp(4) })
+        body.addView(divider())
+        val city = Weather.city(this)
+        body.addView(navRow("Weather location", city?.name ?: "Not set · search for your city", SECTION_WEATHER))
+        body.addView(divider())
+        val units = Home.Units.entries
+        val auto = if (Home.fahrenheit(Home.Units.AUTO)) "°F" else "°C"
+        body.addView(choicesRow("Units", "Auto follows your region (now $auto)", units.map { it.title }, units.indexOf(Weather.units(this))) { i ->
+            Weather.setUnits(this, units[i]); Aod.homeChanged(this); renderAod()
+        })
+        body.addView(divider())
+        val pins = Aod.pinned(this).size; val hides = Aod.hidden(this).size
+        body.addView(navRow("Countdowns", "From your calendar" + (if (pins > 0) " · $pins pinned" else "") + (if (hides > 0) " · $hides hidden" else ""), SECTION_COUNTDOWNS))
+        body.addView(divider())
+        body.addView(navRow("Trash day", trashLabel(), SECTION_TRASH))
+        body.addView(divider())
+    }
+
+    private val weekdays = listOf(java.util.Calendar.MONDAY, java.util.Calendar.TUESDAY, java.util.Calendar.WEDNESDAY, java.util.Calendar.THURSDAY,
+        java.util.Calendar.FRIDAY, java.util.Calendar.SATURDAY, java.util.Calendar.SUNDAY)
+
+    private fun dayName(d: Int) = java.text.DateFormatSymbols.getInstance().shortWeekdays[d]
+
+    private fun trashLabel(): String {
+        if (!Aod.trashOn(this)) return "Off"
+        fun days(s: Set<Int>) = weekdays.filter { it in s }.joinToString(", ") { dayName(it) }.ifEmpty { "no day" }
+        return "Recycling ${days(Aod.recyclingDays(this))} · Trash ${days(Aod.trashDays(this))}"
+    }
+
+    private var homeThumbs: Map<Home.Style, Bitmap?>? = null
+
+    /** The Home face's styles side by side, drawn with today's data; a tap picks one and installs it. */
+    private fun renderHomeStyle() {
+        body.removeAllViews()
+        if (!Aod.supported()) { body.addView(note("Needs KompaktOS's bridge.")); return }
+        val style = Aod.homeStyle(this)
+        val t = homeThumbs
+        if (t == null) Shell.background({ Home.Style.entries.associateWith { Aod.thumbnail(this, Aod.Face.HOME, home = it, land = land) } }) { homeThumbs = it; renderHomeStyle() }
+        body.addView(hbox().apply {
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+            gravity = Gravity.TOP
+            for (s in Home.Style.entries) addView(thumbTile(s.title, s == style, t?.get(s), if (land) 170 else 260, description = "Home style ${s.title}") {
+                work({ Aod.setHomeStyle(this@MainActivity, s) }, "Home style: ${s.title}")
+            }, lp(0, WRAP, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
+        })
+        for (s in Home.Style.entries) body.addView(note("${s.title}: ${s.detail}."))
+        if (Aod.face(this) != Aod.Face.HOME) body.addView(note("The sleep screen shows another face now: pick Home under Sleep screen to see this."))
+    }
+
+    private var cityQuery = ""
+    private var places: List<Home.Place>? = null
+    private var placesNote: String? = null
+
+    /** The weather's city: searched with Open-Meteo's geocoding (a typed name goes to it), picked from the results. */
+    private fun renderWeather() {
+        body.removeAllViews()
+        val city = Weather.city(this)
+        body.addView(hbox().apply {
+            setPadding(g, dp(10), g, dp(10))
+            addView(vbox().apply {
+                addView(text(city?.name ?: "No city set", Type.L, bold = true))
+                val at = Weather.fetchedAt(this@MainActivity)
+                addView(text(when {
+                    city == null -> "The Home face says \"Set a city\" until you pick one"
+                    at > 0 -> "Forecast from " + android.text.format.DateFormat.getTimeFormat(this@MainActivity).format(java.util.Date(at)) +
+                        " · Open-Meteo" + if (!Weather.online(this@MainActivity)) " · offline now" else ""
+                    else -> if (Weather.online(this@MainActivity)) "Fetching the forecast…" else "Offline: the forecast comes on the next update with Wi-Fi on"
+                }, Type.S, color = Ink.MUTED))
+            }, lp(0, WRAP, 1f))
+            if (city != null) addView(inkButton("Remove") {
+                Weather.setCity(this@MainActivity, null); Aod.homeChanged(this@MainActivity); renderWeather()
+            })
+        })
+        body.addView(sectionTitle("Search"))
+        val field = EditText(this).apply {
+            hint = "City name"
+            setText(cityQuery)
+            textSize = Type.L
+            setTextColor(Ink.INK)
+            setSingleLine()
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            background = outline(2, Radius.SMALL)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        fun search() {
+            cityQuery = field.text.toString().trim()
+            if (cityQuery.length < 2) return
+            if (!Weather.online(this)) { places = null; placesNote = "Offline: turn on Wi-Fi to search. InkPalm+ never turns it on."; renderWeather(); return }
+            placesNote = "Searching…"; places = null; renderWeather()
+            val q = cityQuery
+            Shell.background({ Weather.search(q) }) { r ->
+                places = r; placesNote = when { r == null -> "Couldn't reach Open-Meteo"; r.isEmpty() -> "No city called \"$q\""; else -> null }
+                if (section == SECTION_WEATHER) renderWeather()
+            }
+        }
+        field.setOnEditorActionListener { _, _, _ -> search(); true }
+        body.addView(hbox().apply {
+            setPadding(g, dp(8), g, dp(4))
+            addView(field, lp(0, WRAP, 1f))
+            addView(inkButton("Search") { search() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
+        })
+        body.addView(hbox().apply {
+            setPadding(g, dp(4), g, dp(4))
+            addView(text("Or find it from the phone's location, once", Type.S, color = Ink.MUTED), lp(0, WRAP, 1f))
+            addView(inkButton("Use my location") { useLocation() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
+        })
+        placesNote?.let { body.addView(note(it)) }
+        places?.forEach { p ->
+            body.addView(hbox().apply {
+                setPadding(g, dp(12), g, dp(12))
+                pressable()
+                addView(vbox().apply {
+                    addView(text(p.name, Type.L, bold = true))
+                    if (p.detail.isNotEmpty()) addView(text(p.detail, Type.S, color = Ink.MUTED))
+                }, lp(0, WRAP, 1f))
+                setOnClickListener {
+                    Weather.setCity(this@MainActivity, p)
+                    places = null; placesNote = null; cityQuery = ""
+                    toast("Weather for ${p.name}")
+                    renderWeather()
+                    Shell.background({ Weather.fetchIfDue(this@MainActivity) }) { Aod.homeChanged(this@MainActivity); if (section == SECTION_WEATHER) renderWeather() }
+                }
+            })
+            body.addView(divider())
+        }
+        body.addView(note("Weather by Open-Meteo (open-meteo.com): free, no account. Only the city's coordinates are sent, at most every 30 minutes, and only when Wi-Fi is already on; the face shows the forecast's age when it's old or the phone is offline. \"Use my location\" asks for your approximate location once, when you tap it, and keeps it to about 1 km; it's never tracked."))
+    }
+
+    /** "Use my location": the coarse permission when it isn't given yet, then one fix ([Weather.locate]). */
+    private fun useLocation() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            if (!shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_COARSE_LOCATION) && Prefs(this).sp.getBoolean("location_asked", false)) {
+                placesNote = "Location permission is off for InkPalm+: allow it in Android's app settings, or search for your city."
+                renderWeather()
+                runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) }
+                return
+            }
+            Prefs(this).sp.edit().putBoolean("location_asked", true).apply()
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), ASK_LOCATION)
+            return
+        }
+        places = null; placesNote = "Finding your location (up to ${Weather.LOCATE_MS / 1000} s)…"; renderWeather()
+        Shell.background({ Weather.locate(this) }) { r ->
+            when (r) {
+                is Weather.Located.Found -> {
+                    Weather.setCity(this, r.place)
+                    placesNote = null
+                    toast("Weather for ${r.place.name}")
+                    Shell.background({ Weather.fetchIfDue(this) }) { Aod.homeChanged(this); if (section == SECTION_WEATHER) renderWeather() }
+                }
+                is Weather.Located.Failed -> placesNote = "${r.why}. Search for your city instead."
+            }
+            if (section == SECTION_WEATHER) renderWeather()
+        }
+    }
+
+    /** Countdown candidates and how many days to them, loaded off the main thread. */
+    private var countdownRows: List<Home.Candidate>? = null
+
+    /** The calendar's countdowns (all-day, multi-day and 4 h+ events in the next 60 days, and pinned ones), each
+     *  with Pin and Hide. */
+    private fun renderCountdowns() {
+        body.removeAllViews()
+        if (Aod.needsCalendar(this)) {
+            body.addView(note("Countdowns come from your calendar: allow calendar access first."))
+            body.addView(inkButton("Allow") { askCalendar(fromSettings = true) }.apply { }, lp(WRAP, WRAP).apply { setMargins(g, dp(8), g, dp(8)) })
+            return
+        }
+        body.addView(note("Shown automatically: all-day, multi-day and 4 h+ events in the next ${Home.COUNTDOWN_DAYS} days, nearest first. Pinned ones always come first; hidden ones never show."))
+        val rows = countdownRows
+        if (rows == null) {
+            body.addView(note("Reading your calendar…"))
+            Shell.background({ Aod.refreshCountdowns(); Aod.countdownCandidates(this) }) { countdownRows = it; if (section == SECTION_COUNTDOWNS) renderCountdowns() }
+            return
+        }
+        val now = System.currentTimeMillis(); val today0 = Agenda.midnight(now)
+        val pins = Aod.pinned(this); val hides = Aod.hidden(this)
+        val shown = Home.countdowns(rows, pins, hides, today0, Agenda.midnight(now, Home.COUNTDOWN_DAYS), 2).map { it.key }
+        val list = rows.filter { it.key in pins || Home.isCountdown(it, today0, Agenda.midnight(now, Home.COUNTDOWN_DAYS)) }.distinctBy { it.key }
+        body.addView(sectionTitle("On the face now"))
+        body.addView(note(if (shown.isEmpty()) "None" else rows.filter { it.key in shown }.distinctBy { it.key }
+            .joinToString("\n") { Home.countdownText(it.title, Home.daysUntil(today0, it.begin)).toString() }))
+        body.addView(sectionTitle("From your calendar"))
+        if (list.isEmpty()) body.addView(note("Nothing in the next ${Home.COUNTDOWN_DAYS} days."))
+        val df = java.text.SimpleDateFormat("EEE d MMM", java.util.Locale.getDefault())
+        for (e in list) {
+            val pinned = e.key in pins; val hidden = e.key in hides
+            body.addView(hbox().apply {
+                setPadding(g, dp(8), g, dp(8))
+                addView(vbox().apply {
+                    addView(text(e.title, Type.L, bold = !hidden, color = if (hidden) Ink.MUTED else Ink.INK).apply { maxLines = 2 })
+                    val days = Home.daysUntil(today0, e.begin)
+                    addView(text(df.format(java.util.Date(e.begin)) + " · " + when (days) { 0 -> "today"; 1 -> "tomorrow"; else -> "in $days days" } +
+                        (if (e.key in shown) " · shown" else ""), Type.S, color = Ink.MUTED))
+                }, lp(0, WRAP, 1f).apply { marginEnd = dp(8) })
+                addView(chip("Pin", pinned) { Aod.setCountdown(this@MainActivity, e.key, pin = !pinned, hide = false); renderCountdowns() }, lp(WRAP, WRAP))
+                addView(chip("Hide", hidden) { Aod.setCountdown(this@MainActivity, e.key, pin = false, hide = !hidden); renderCountdowns() }, lp(WRAP, WRAP).apply { marginStart = dp(6) })
+            })
+            body.addView(divider())
+        }
+    }
+
+    /** Off, or the weekdays for recycling and for trash (M T W T F S S). */
+    private fun renderTrash() {
+        body.removeAllViews()
+        val on = Aod.trashOn(this)
+        val rec = Aod.recyclingDays(this); val trash = Aod.trashDays(this)
+        body.addView(toggleRow("Trash day", if (on) "A card the day before and on the day" else "Off: no trash card", on) {
+            Aod.setTrash(this, !on, rec, trash); renderTrash()
+        })
+        if (!on) return
+        fun days(title: String, set: Set<Int>, change: (Set<Int>) -> Unit) {
+            body.addView(text(title, Type.L, medium = true).apply { setPadding(g, dp(10), g, dp(2)) })
+            body.addView(hbox().apply {
+                setPadding(g, dp(4), g, dp(4))
+                weekdays.forEachIndexed { i, d ->
+                    addView(chip(dayName(d).take(1), d in set) { change(if (d in set) set - d else set + d); renderTrash() }.apply {
+                        minWidth = 0; setPadding(0, dp(8), 0, dp(8)); contentDescription = "$title ${dayName(d)}"
+                    }, lp(0, WRAP, 1f).apply { if (i > 0) marginStart = dp(4) })
+                }
+            })
+        }
+        days("Recycling", rec) { Aod.setTrash(this, true, it, trash) }
+        days("Trash", trash) { Aod.setTrash(this, true, rec, it) }
+        body.addView(note("The Home face shows \"Recycling tomorrow\" the day before and \"Trash today\" on the day; nothing on other days."))
     }
 
     // ---- Photo style ([Dither]) ---------------------------------------------------------------------
@@ -603,11 +847,11 @@ open class MainActivity : Activity() {
         val style = Aod.photoStyle(this)
         val face = Aod.face(this).takeIf { it == Aod.Face.PICTURE } ?: Aod.Face.PHOTO
         val t = photoThumbs
-        if (t == null) Shell.background({ Dither.Style.entries.associateWith { Aod.thumbnail(this, face, photoStyle = it) } }) { photoThumbs = it; renderPhotoStyle() }
+        if (t == null) Shell.background({ Dither.Style.entries.associateWith { Aod.thumbnail(this, face, photoStyle = it, land = land) } }) { photoThumbs = it; renderPhotoStyle() }
         body.addView(hbox().apply {
             setPadding(dp(12), dp(4), dp(12), dp(4))
             gravity = Gravity.TOP
-            for (s in Dither.Style.entries) addView(thumbTile(s.title, s == style, t?.get(s), 190, description = "Photo style ${s.title}", keepShape = true) {
+            for (s in Dither.Style.entries) addView(thumbTile(s.title, s == style, t?.get(s), if (land) 120 else 190, description = "Photo style ${s.title}") {
                 work({ Aod.setPhotoStyle(this@MainActivity, s) }, "Photo style: ${s.title}")
             }, lp(0, WRAP, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
         })
@@ -630,18 +874,21 @@ open class MainActivity : Activity() {
     }
 
     private fun faceTile(f: Aod.Face, selected: Boolean, thumb: Bitmap?): View =
-        thumbTile(f.title, selected, thumb, 150, if (f == Aod.Face.DEFAULT) "Moaan" else if (f == Aod.Face.PICTURE) "Choose…" else "…", "Face ${f.title}") { pickFace(f) }
+        thumbTile(f.title, selected, thumb, if (land) 96 else 150, if (f == Aod.Face.DEFAULT) "Moaan" else if (f == Aod.Face.PICTURE) "Choose…" else "…", "Face ${f.title}") { pickFace(f) }
 
-    /** A thumbnail [heightDp] tall over its [title]; a thick frame and a ✓ when [selected]. [keepShape]: not stretched
-     *  to the frame (pictures). */
+    /** The screen is held in landscape: previews show the faces' landscape layouts. */
+    private val land get() = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    /** A thumbnail [heightDp] tall over its [title]; a thick frame and a ✓ when [selected]. The preview keeps the
+     *  face's shape (720:1440, or 1440:720 in landscape): fitted in and centred, never stretched. */
     private fun thumbTile(title: String, selected: Boolean, thumb: Bitmap?, heightDp: Int, placeholder: String = "…",
-                          description: String = title, keepShape: Boolean = false, onClick: () -> Unit): View = vbox().apply {
+                          description: String = title, onClick: () -> Unit): View = vbox().apply {
         gravity = Gravity.CENTER_HORIZONTAL
         val frame = FrameLayout(this@MainActivity).apply {
             background = outline(if (selected) 4 else 2, Radius.SMALL)
             val pad = dp(if (selected) 4 else 2)
             setPadding(pad, pad, pad, pad)
-            if (thumb != null) addView(ImageView(this@MainActivity).apply { setImageBitmap(thumb); scaleType = if (keepShape) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.FIT_XY },
+            if (thumb != null) addView(ImageView(this@MainActivity).apply { setImageBitmap(thumb); scaleType = ImageView.ScaleType.FIT_CENTER },
                 FrameLayout.LayoutParams(MATCH, MATCH))
             else addView(text(placeholder, Type.M, bold = true).apply { gravity = Gravity.CENTER },
                 FrameLayout.LayoutParams(MATCH, MATCH))
@@ -659,7 +906,7 @@ open class MainActivity : Activity() {
     private fun pickFace(f: Aod.Face) {
         when {
             f == Aod.Face.PICTURE && !Aod.hasPicture(this) -> { pickImage(PICK_SLEEP); return }
-            f == Aod.Face.AGENDA && Aod.needsCalendar(this) -> askCalendar(fromSettings = false)
+            (f == Aod.Face.AGENDA || f == Aod.Face.HOME) && Aod.needsCalendar(this) -> askCalendar(fromSettings = false)
         }
         work({ Aod.setFace(this, f) }, "Sleep screen: ${f.title}")
     }
@@ -677,6 +924,11 @@ open class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == ASK_LOCATION) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) useLocation()
+            else { placesNote = "No location permission: search for your city instead."; if (section == SECTION_WEATHER) renderWeather() }
+            return
+        }
         if (requestCode != ASK_CALENDAR) return
         if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) toast("Calendar access needed for the Agenda face")
         thumbs = null
@@ -690,7 +942,7 @@ open class MainActivity : Activity() {
         body.removeAllViews()
         body.addView(infoRow("Version", packageName, version(), filled = false))
         body.addView(divider())
-        body.addView(note("No internet permission: nothing leaves the phone. Not affiliated with Moaan."))
+        body.addView(note("Internet is used only for the Home sleep screen's weather: when you set a city, its name is searched and its coordinates are sent to Open-Meteo (open-meteo.com, no account), at most every 30 min and only on a network that's already on. Nothing else leaves the phone. Not affiliated with Moaan."))
         body.addView(note("The side panel's accessibility service only learns which app is in front, and that a page scrolled, text was typed or the screen changed. It doesn't read what's on screen or what you type."))
         body.addView(note("E-ink control: ${Eink.describe()}."))
         body.addView(note("Source and help: github.com/rn-os/inkpalm-plus"))
@@ -912,11 +1164,16 @@ open class MainActivity : Activity() {
         const val SECTION_AOD = "aod"
         const val SECTION_AGENDA = "agenda"
         const val SECTION_PHOTO = "photo"
+        const val SECTION_HOME = "home"
+        const val SECTION_WEATHER = "weather"
+        const val SECTION_COUNTDOWNS = "countdowns"
+        const val SECTION_TRASH = "trash"
         const val SECTION_READING = "reading"
         const val SECTION_ABOUT = "about"
         private const val PICK_SLEEP = 51
         private const val PICK_POWEROFF = 52
         private const val ASK_CALENDAR = 53
+        private const val ASK_LOCATION = 54
 
         val ANIMATION_KEYS = listOf(
             Settings.Global.WINDOW_ANIMATION_SCALE,

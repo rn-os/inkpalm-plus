@@ -13,10 +13,11 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
 ## Code (`app/src/main/java/com/inkpalmplus/`)
 - `EinkDb`: the model (`Profile`, `Refresh`), reading/writing Moaan's table (directly, Shizuku fallback), `setAppDpiToMap`.
 - `MainActivity`: home screen: a list of categories opening sub-screens. `SectionActivity` (exported in debug;
-  `--es section panel|eink|screen|light|sleep|aod|agenda|photo|reading|touch|about`, `keep_on` = panel): the sub-screens; `eink`
-  holds the e-ink settings, "Search apps" and the per-app list; `aod` is the sleep-screen picker, `agenda` the Agenda face's style picker, `photo` the Photo style picker.
-- `Aod`, `AodFaces`, `Agenda`, `Dither`: the always-on sleep screen (faces drawn into the HWC's standby.png, Live updates via an alarm
-  and the bridge's `redraw=1`; drawn in the phone's physical orientation (`Aod.Gravity`, accelerometer while the screen is on), else the display's; `Agenda`: the Agenda face's styles and their pure layout parts; `Dither`: the Photo styles); see docs/HANDOFF.md.
+  `--es section panel|eink|screen|light|sleep|aod|agenda|photo|home|weather|countdowns|trash|reading|touch|about`, `keep_on` = panel): the sub-screens; `eink`
+  holds the e-ink settings, "Search apps" and the per-app list; `aod` is the sleep-screen picker, `agenda` the Agenda face's style picker, `photo` the Photo style picker;
+  `home`, `weather`, `countdowns`, `trash` the Home face's style picker, city search, countdown pin/hide list and trash weekdays.
+- `Aod`, `AodFaces`, `Agenda`, `Home`, `Weather`, `Dither`: the always-on sleep screen (faces: Clock, Clock + date, Analog, Agenda, Home, Reading, Photo, Minimal, Picture, Default; drawn into the HWC's standby.png, Live updates via an alarm
+  and the bridge's `redraw=1`; drawn in the phone's physical orientation (`Aod.Gravity`, accelerometer while the screen is on), else the display's; `Agenda`: the Agenda face's styles and their pure layout parts; `Home`: the Home face's styles (Dashboard, Calm) and its pure parts: Open-Meteo JSON, rain summary, staleness, countdown picking, trash day; `Weather`: the Home face's Open-Meteo fetch and cache, city search; `Dither`: the Photo styles); see docs/HANDOFF.md.
 - `AppActivity`: one app's settings page.
 - `QuickPanelService` (accessibility service: edge strip, foreground app, debug test hooks). The strip opens `SidePanel`
   (recent apps, paged; a Last read card from `Readers` (NeoReader's provider, KOReader's history.lua) on top; its footer button "E-ink · this app" opens `QuickPanel`, the e-ink overlay). `RecentApps` records
@@ -30,7 +31,7 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
   rebuilds the strip and panel when the screen turns.
 - KompaktOS (InkControl merged in, mockup 19): `Eink` (backends: stock binder / direct / root bridge request
   files), `ScreenModes` (`ScreenMode` presets, per-app / KompaktOS / everywhere, repaint, contrast, `KompaktSync`),
-  `ScreenPanel` (the other edge's strip: Wi-Fi/Bluetooth/Airplane/Rotate icon toggles (`Radios`, `RotationLock`; Material Symbols vectors in res/drawable, see NOTICE), modes, Full refresh, contrast, `LightBlock`), `Light` (LEDs via the bridge),
+  `ScreenPanel` (the other edge's strip: Wi-Fi/Bluetooth/Airplane/Rotate icon toggles (`Radios`, `RotationLock`; hold = that Android settings screen, `ScreenPanel.Hold`; Material Symbols vectors in res/drawable, see NOTICE), modes, Full refresh, contrast, `LightBlock`), `Light` (LEDs via the bridge),
   `AutoOff`, `SleepImages` (sleep and power-off screens), `Tiles` (QS tiles, `TextIcon`). The service also does edge
   Back (inward swipe) and touch-button hold = full refresh (key filter). `App` gives `Eink` its files dir.
 - `Shell`: Shizuku shell commands and a background helper. `Ui`: e-ink view helpers copied from SuperBoox.
@@ -60,6 +61,15 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
 ## Mockups
 - UI changes get mockups first: `docs/mockups/build.py` (boards as HTML, `panel.css`) and `docs/mockups/render.sh`
   (renders PNGs with macOS Quick Look; no Playwright needed). Quick Look draws about 1200×1200 CSS px, so boards are two rows.
+
+## Permissions
+- INTERNET (and ACCESS_NETWORK_STATE) exist **only for the Home face's weather** (`Weather`: Open-Meteo forecast for
+  the user's city coordinates, and its geocoding search). Fetch at most every 30 min, only when a network is already
+  up, ~8 s limit, no retries; never turn radios on. Don't add other network use without the user asking: the app's
+  privacy promise is "nothing else leaves the phone" (README, About).
+- ACCESS_COARSE_LOCATION only for Weather location → "Use my location": one fix when tapped (`Weather.locate`:
+  network, fused, GPS via getCurrentLocation within 20 s, else a last known fix < 1 h), rounded to 0.01°, stored as
+  the city. Never a listener left running, no background location, no FINE.
 
 ## Product direction
 - Keep e-ink settings few and plain: the user worries that too many confuse people. New behaviour should default

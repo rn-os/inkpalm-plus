@@ -200,9 +200,18 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   fallback. A ContentObserver keeps the toggle in sync while the panel is open.
 - Per-app Rotate modes (`Rotation`'s overlay) still win over the lock; the sleep screen's reorient only reads the
   accelerometer while auto-rotate is on, so a locked phone keeps its face's orientation.
-- One text size per row (`ToggleFit.sharedSp`, 12 → 10 sp, from the widest steady label); when "Bluetooth" can't fit
-  at 10 sp (portrait, ~98 px per toggle) the row uses the short name "BT". Passing states (Turning on…) may shrink
-  their own toggle only.
+- (Superseded by the icon toggles below: the shared text size / "BT" short name is gone.)
+
+## Icon toggles (branch `panel-icons`, 2026-11-16)
+- The top row's four toggles are icons now (Material Symbols Outlined, weight 600, filled; vector drawables
+  `res/drawable/ic_wifi*.xml`, `ic_bluetooth*`, `ic_airplanemode_*`, `ic_screen_rotation`, `ic_screen_lock_rotation`;
+  Apache 2.0, see NOTICE). Same 48 dp buttons, 2 dp outline, small radius; on/locked = filled black with a white icon,
+  off = black icon on white. Icon: wifi / wifi_off, bluetooth / bluetooth_disabled, airplanemode_active / _inactive,
+  screen_rotation (Auto) / screen_lock_rotation (Locked).
+- Passing states (Turning on/off) show the icon of the target state plus a 7 dp dot in the top-right corner. No radio
+  (`State.NONE`): dashed outline, disabled. contentDescription from `Radios.describe` / `RotationLock.describe`
+  ("Wi-Fi, off", "Bluetooth, turning on", "Rotation, locked").
+- `ToggleFit`, `Radios.label`, `Radio.short` and `RotationLock.label` were removed.
 
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown

@@ -14,9 +14,11 @@ import android.provider.Settings
  * Reading the state needs only ACCESS_WIFI_STATE (Bluetooth's on/off state needs no permission).
  */
 object Radios {
-    /** [short]: the name on a toggle too narrow for [title] at a legible size (portrait, with four toggles in a row). */
-    enum class Radio(val title: String, val key: String, val short: String = title) {
-        WIFI("Wi-Fi", "wifi"), BT("Bluetooth", "bt", "BT"), AIRPLANE("Airplane", "airplane")
+    /** [onIcon] / [offIcon]: the toggle's Material Symbols icon while on (or turning on) / off. */
+    enum class Radio(val title: String, val key: String, val onIcon: Int, val offIcon: Int) {
+        WIFI("Wi-Fi", "wifi", R.drawable.ic_wifi, R.drawable.ic_wifi_off),
+        BT("Bluetooth", "bt", R.drawable.ic_bluetooth, R.drawable.ic_bluetooth_disabled),
+        AIRPLANE("Airplane", "airplane", R.drawable.ic_airplanemode_active, R.drawable.ic_airplanemode_inactive),
     }
     enum class State { OFF, ON, TURNING_ON, TURNING_OFF, NONE }
 
@@ -43,13 +45,19 @@ object Radios {
         }
     }.getOrDefault(State.NONE)
 
-    /** The button's two short lines: the name ([short]: its short form), then On / Off / Turning on… */
-    fun label(r: Radio, s: State, short: Boolean = false): String = "${if (short) r.short else r.title}\n" + when (s) {
-        State.ON -> "On"
-        State.OFF -> "Off"
-        State.TURNING_ON -> "Turning on…"
-        State.TURNING_OFF -> "Turning off…"
-        State.NONE -> "None"
+    /** On its way to on or off: the toggle shows where it's going, with a dot for "not there yet". */
+    fun State.passing() = this == State.TURNING_ON || this == State.TURNING_OFF
+
+    /** The toggle's icon: where the radio is, or for a passing state where it's going. */
+    fun icon(r: Radio, s: State): Int = if (s.wantsOn()) r.onIcon else r.offIcon
+
+    /** What TalkBack reads for the toggle, e.g. "Wi-Fi, off" or "Bluetooth, turning on". */
+    fun describe(r: Radio, s: State): String = "${r.title}, " + when (s) {
+        State.ON -> "on"
+        State.OFF -> "off"
+        State.TURNING_ON -> "turning on"
+        State.TURNING_OFF -> "turning off"
+        State.NONE -> "unavailable"
     }
 
     /** The request file's line, e.g. `wifi=1`. */

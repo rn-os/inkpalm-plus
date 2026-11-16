@@ -1,0 +1,7 @@
+InkPalm+
+Copyright the InkPalm+ authors. Licensed under the Apache License 2.0 (see LICENSE).
+
+This product includes icons from Material Symbols by Google
+(https://github.com/google/material-design-icons), licensed under the Apache License 2.0:
+app/src/main/res/drawable/ic_wifi.xml, ic_wifi_off.xml, ic_bluetooth.xml, ic_bluetooth_disabled.xml,
+ic_airplanemode_active.xml, ic_airplanemode_inactive.xml, ic_screen_rotation.xml, ic_screen_lock_rotation.xml

@@ -10,6 +10,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -27,15 +28,11 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
     private val appLabel = pkg?.let { RecentApps.Info.label(ctx, it) }
     /** Where the next tap on a mode goes: the app in front, or everywhere. Starts on the app when it has its own. */
     private var forApp = pkg != null && ScreenModes.own(ctx, pkg) != null
-    private val radioViews = LinkedHashMap<Radios.Radio, TextView>()
+    private val radioViews = LinkedHashMap<Radios.Radio, ImageView>()
     /** A switch in flight: what to show (Turning on…) and the state that ends it. */
     private val pending = HashMap<Radios.Radio, Pair<Radios.State, Radios.State>>()
     /** The fourth toggle: Android's rotation lock ([RotationLock]). */
-    private var rotView: TextView? = null
-    /** The top row's one text size (sp) and whether its long names take their short form ([fitRow]). */
-    private var rowSp = 12
-    private var shortNames = false
-    private var fittedWidth = -1
+    private var rotView: ImageView? = null
     private var shown = false
     private var light: Light.State? = null
     private var lightBlock: LightBlock? = null
@@ -105,7 +102,7 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
         content.removeAllViews()
         val (now, source) = ScreenModes.resolve(ctx, pkg)
         // One row at the top, below the status bar: [Wi-Fi] [Bluetooth] [Airplane] [Rotate] ⚙ ✕. Portrait is too narrow for the
-        // ✕ as well (the toggle names would shrink past reading), and a tap outside the panel closes it anyway.
+        // ✕ as well (it would squeeze the toggles), and a tap outside the panel closes it anyway.
         fun square(glyph: String, size: Float, desc: String, click: () -> Unit) = ctx.inkButton(glyph, size, click).apply {
             setPadding(0, 0, 0, 0); contentDescription = desc
         }
@@ -202,76 +199,53 @@ class ScreenPanel(private val service: QuickPanelService, private val onClose: (
     }
 
     /**
-     * [Wi-Fi] [Bluetooth] [Airplane] [Rotate]: four equal 48 dp toggles in the header's place; filled black while on (or
-     * turning on) or, for Rotate, locked. All four labels share one size ([fitRow]).
+     * [Wi-Fi] [Bluetooth] [Airplane] [Rotate]: four equal 48 dp icon toggles in the header's place (Material Symbols);
+     * filled black with a white icon while on (or turning on) or, for Rotate, locked. A radio on its way shows the icon
+     * it's going to and a dot in the corner until it gets there.
      */
     private fun radioRow(): View {
         radioViews.clear()
-        fittedWidth = -1
-        fun toggle(click: () -> Unit) = ctx.text("", Type.S, bold = true).apply {
-            gravity = Gravity.CENTER; maxLines = 2; minHeight = ctx.dp(48)
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            setPadding(ctx.dp(2), 0, ctx.dp(2), 0)
+        fun toggle(click: () -> Unit) = ImageView(ctx).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            val v = ctx.dp(11)   // a 26 dp icon in the 48 dp button
+            setPadding(ctx.dp(2), v, ctx.dp(2), v)
+            isClickable = true
             setOnClickListener { click() }
         }
         val views = Radios.Radio.entries.map { r -> toggle { toggleRadio(r) }.also { radioViews[r] = it } } +
             toggle { toggleRotation() }.also { rotView = it }
         return ctx.hbox().apply {
             views.forEachIndexed { i, v -> addView(v, lp(0, ctx.dp(48), 1f).apply { if (i < views.size - 1) marginEnd = ctx.dp(4) }) }
-            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitRow() }
             refreshRadios()
         }
     }
 
-    /**
-     * One text size for the whole top row: the largest (12 down to 10 sp) at which every toggle's name and steady state
-     * fits on its line. When a long name (Bluetooth) can't fit even at 10 sp (portrait: four toggles of ~98 px), the
-     * names take their short forms (BT) and the size is fitted again.
-     */
-    private fun fitRow() {
-        val v = rotView ?: return
-        val avail = v.width - v.paddingLeft - v.paddingRight
-        if (avail <= 0 || avail == fittedWidth) return
-        fittedWidth = avail
-        val paint = android.text.TextPaint(v.paint)
-        fun steady(short: Boolean) = Radios.Radio.entries.flatMap { r -> listOf(Radios.State.ON, Radios.State.OFF).map { Radios.label(r, it, short) } } +
-            RotationLock.label(true) + RotationLock.label(false)
-        val full = ToggleFit.sharedSp(steady(false), avail.toFloat(), 12, ToggleFit.LEGIBLE_SP) { s, sp -> width(paint, s, sp) }
-        shortNames = full == null
-        rowSp = full ?: ToggleFit.sharedSp(steady(true), avail.toFloat(), 12, 9) { s, sp -> width(paint, s, sp) } ?: 9
-        Shell.main.post { if (shown) refreshRadios() }   // not inside the layout pass
-    }
-
-    private fun width(paint: android.text.TextPaint, s: String, sp: Int): Float {
-        paint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, sp.toFloat(), ctx.resources.displayMetrics)
-        return paint.measureText(s)
-    }
-
-    /** [v] shows [text] at the row's size, smaller only for a passing state (Turning on…) that wouldn't fit at it. */
-    private fun setToggleText(v: TextView, text: String) {
-        v.text = text
-        val avail = (v.width - v.paddingLeft - v.paddingRight).toFloat()
-        val paint = android.text.TextPaint(v.paint)
-        val sp = if (avail <= 0) rowSp else ToggleFit.sharedSp(listOf(text), avail, rowSp, 8) { s, sp -> width(paint, s, sp) } ?: 8
-        v.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, sp.toFloat())
+    /** [v] shows [icon], filled black with the icon white when [on], and a dot in its top corner while [passing]. */
+    private fun setToggle(v: ImageView, icon: Int, on: Boolean, passing: Boolean, desc: String) {
+        val fg = if (on) Ink.PAPER else Ink.INK
+        v.setImageResource(icon)
+        v.imageTintList = android.content.res.ColorStateList.valueOf(fg)
+        val box = ctx.outline(2, Radius.SMALL, if (on) Ink.INK else Ink.PAPER)
+        v.background = if (!passing) box else android.graphics.drawable.LayerDrawable(arrayOf(box, GradientDrawable().apply {
+            shape = GradientDrawable.OVAL; setColor(fg); setSize(ctx.dp(7), ctx.dp(7))
+        })).apply {
+            setLayerGravity(1, Gravity.TOP or Gravity.END)
+            setLayerInset(1, 0, ctx.dp(5), ctx.dp(5), 0)
+        }
+        v.contentDescription = desc
     }
 
     private fun refreshRadios() {
         radioViews.forEach { (r, v) ->
             val s = pending[r]?.takeIf { Radios.state(ctx, r) != it.second }?.first ?: Radios.state(ctx, r)
-            val on = with(Radios) { s.wantsOn() }
-            setToggleText(v, Radios.label(r, s, shortNames))
-            v.background = ctx.outline(2, Radius.SMALL, if (on) Ink.INK else Ink.PAPER)
-            v.setTextColor(if (on) Ink.PAPER else Ink.INK)
-            v.contentDescription = "${r.title} ${Radios.label(r, s).substringAfter('\n').lowercase()}"
+            with(Radios) { setToggle(v, icon(r, s), s.wantsOn(), s.passing(), describe(r, s)) }
             v.isEnabled = s != Radios.State.NONE
+            // No radio (no Bluetooth adapter): a dashed outline, as Ui's disabled buttons (no grays on e-ink).
+            if (!v.isEnabled) v.background = ctx.outline(2, Radius.SMALL, Ink.PAPER).apply { setStroke(ctx.dp(2), Ink.INK, ctx.dp(4).toFloat(), ctx.dp(4).toFloat()) }
         }
         rotView?.let { v ->
             val locked = RotationLock.locked(ctx)
-            setToggleText(v, RotationLock.label(locked))
-            v.background = ctx.outline(2, Radius.SMALL, if (locked) Ink.INK else Ink.PAPER)
-            v.setTextColor(if (locked) Ink.PAPER else Ink.INK)
-            v.contentDescription = if (locked) "Rotation locked" else "Auto-rotate"
+            setToggle(v, RotationLock.icon(locked), locked, false, RotationLock.describe(locked))
         }
     }
 

@@ -33,23 +33,9 @@ object RotationLock {
         Log.i(QuickPanelService.TAG, "rotation lock: ${w.joinToString { "${it.first}=${it.second}" }}")
     }
 
-    /** The button's two lines, like [Radios.label]. */
-    fun label(locked: Boolean) = "$TITLE\n" + if (locked) "Locked" else "Auto"
+    /** The toggle's icon: screen_rotation while Auto, screen_lock_rotation while Locked. */
+    fun icon(locked: Boolean) = if (locked) R.drawable.ic_screen_lock_rotation else R.drawable.ic_screen_rotation
 
-    const val TITLE = "Rotate"
-}
-
-/** One text size for a whole row of toggles. */
-object ToggleFit {
-    /** Below this a label is too small to read on the panel: a long name takes its short form instead. */
-    const val LEGIBLE_SP = 10
-
-    /**
-     * The largest size in [maxSp] down to [minSp] at which every line of every label in [labels] is at most [avail]
-     * px wide ([width]: a line's width in px at a size in sp), or null if not even [minSp] fits.
-     */
-    fun sharedSp(labels: List<String>, avail: Float, maxSp: Int, minSp: Int, width: (String, Int) -> Float): Int? {
-        val lines = labels.flatMap { it.split('\n') }.filter { it.isNotEmpty() }
-        return (maxSp downTo minSp).firstOrNull { sp -> lines.all { width(it, sp) <= avail } }
-    }
+    /** What TalkBack reads for the toggle. */
+    fun describe(locked: Boolean) = "Rotation, " + if (locked) "locked" else "auto"
 }

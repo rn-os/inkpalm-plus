@@ -114,6 +114,46 @@ object Home {
 
     fun freshFix(ageMs: Long): Boolean = ageMs in 0..LAST_FIX_MAX_AGE_MS
 
+    /** Why "Use my location" found nothing. */
+    enum class LocateFail { NO_PERMISSION, NO_SERVICE, LOCATION_OFF, NO_PROVIDER, NO_FIX }
+
+    /** What the weather page says when "Use my location" found nothing. [microg]: microG is the location provider
+     *  (its Wi-Fi location is the only source on the InkPalm, which has no GPS). */
+    fun locateMessage(fail: LocateFail, microg: Boolean, seconds: Long): String = when (fail) {
+        LocateFail.NO_PERMISSION -> "No location permission: search for your city instead."
+        LocateFail.NO_SERVICE -> "No location service on this phone. Search for your city instead."
+        LocateFail.LOCATION_OFF -> "Location is off in Android's settings."
+        LocateFail.NO_PROVIDER -> if (microg) "No location provider is on. Turn on Wi\u2011Fi location in microG Settings \u2192 Location."
+            else "No location provider is on."
+        LocateFail.NO_FIX -> if (microg) "No location from microG. Turn on Wi\u2011Fi location in microG Settings \u2192 Location."
+            else "No location found within $seconds s."
+    }
+
+    /** With only approximate location granted, Android lets an app ask about once every 10 minutes, so microG
+     *  postpones the Wi-Fi scan past the wait. */
+    const val APPROXIMATE_NOTE = "InkPalm+ may use only your approximate location. Android limits how often approximate lookups run, so the answer can come too late. Precise location is used once and rounded to about 1 km all the same."
+
+    /** The service "Estimate from internet connection" asks (HTTPS, no key, no account). */
+    const val IP_SERVICE = "ipinfo.io"
+
+    /** What "Estimate from internet connection" tells before it runs. */
+    const val IP_NOTE = "This sends your phone's public IP address (the one every website sees) to $IP_SERVICE, which guesses the city your internet connection comes from. It's often the nearest big town. Nothing else is sent, and only now."
+
+    /** ipinfo.io's answer ({"city":"Lisbon","region":"Lisbon","country":"PT","loc":"38.7167,-9.1333",…}) as a
+     *  place rounded like a fix ([roundCoord]); null for an error, a private ("bogon") address or no coordinates. */
+    fun parseIpPlace(json: String): Place? = runCatching {
+        val o = Json.parse(json) as? Map<*, *> ?: return null
+        if (o["error"] != null || o["bogon"] == true) return null
+        val loc = (o["loc"] as? String)?.split(",")?.mapNotNull { it.trim().toDoubleOrNull() } ?: return null
+        if (loc.size != 2 || loc[0] !in -90.0..90.0 || loc[1] !in -180.0..180.0) return null
+        val city = (o["city"] as? String)?.trim().orEmpty()
+        val region = (o["region"] as? String)?.trim().orEmpty()
+        val country = (o["country"] as? String)?.trim().orEmpty()
+        val lat = roundCoord(loc[0]); val lon = roundCoord(loc[1])
+        val name = city.ifEmpty { region }.ifEmpty { locationLabel(null, lat, lon) }
+        Place(name, listOf(region, country).filter { it.isNotEmpty() && it != name }.distinct().joinToString(", "), lat, lon)
+    }.getOrNull()
+
     /** The providers to ask for one fix, in order: network, fused, GPS (those that exist and are on). */
     fun providerOrder(available: Collection<String>): List<String> = listOf("network", "fused", "gps").filter { it in available }
 

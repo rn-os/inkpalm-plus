@@ -294,7 +294,20 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   "Current location (lat, lon)". Stored exactly like a searched city. The device (KompaktOS GSI) has microG as
   user apps: com.google.android.gms provides the network and fused providers
   (org.microg.gms.location.provider.*), backend org.microg.nlp.backend.nominatim (a geocoder); a passive provider;
-  no gps provider listed by `dumpsys location`; location_mode=3. Not tried on the device (the user taps it).
+  no gps provider listed by `dumpsys location`; location_mode=3.
+- "Use my location" round 2 (face-picker branch): on the device it found nothing: "providers on [passive, network,
+  fused], asking [network, fused]", then microG logged "NetworkLocation: Schedule high-power scan in 94735ms": Android
+  clamps coarse-only requests to ~10 min, so microG postponed the Wi-Fi scan past our 20 s. Now FINE is asked with
+  COARSE (either may be given); precise → one QUALITY_HIGH_ACCURACY `getCurrentLocation` (LocationRequest,
+  duration 45 s) on network and fused at once, a provider answering null gets a minTime-0 listener removed on the
+  first fix; 45 s overall, "Finding your location…" shown. Failure box (`Home.locateMessage`): "No location from
+  microG. Turn on Wi‑Fi location in microG Settings → Location." + "microG location settings" (action
+  com.google.android.gms.location.settings.GOOGLE_LOCATION_SETTINGS → org.microg.gms.location.settings.
+  GoogleLocationSettingsActivity; then org.microg.gms.ui.SettingsActivity; then ACTION_LOCATION_SOURCE_SETTINGS),
+  approximate-only → `Home.APPROXIMATE_NOTE` + "Allow precise (used once, rounded to ~1 km)", and "Estimate from
+  internet connection" (also a small "Estimate…" under the button): explains first (`Home.IP_NOTE`), then one GET
+  https://ipinfo.io/json (429 → "busy"), `Home.parseIpPlace` (city, else region; rounded; bogon/error → null).
+  microG's Wi-Fi location (location_wifi_mls=1) must be on for any fix; the user turned it on.
 - Face previews (all pickers) keep the face's shape: a quarter of the face's size, FIT_CENTER; in landscape the
   settings show the landscape layouts (asked: "those preview screens look stretched").
 - Checks: HomeLogicTest (JSON, forecast and geocoding parsing, rain spans/summaries, units, throttling/staleness,

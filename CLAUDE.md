@@ -69,12 +69,17 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
 
 ## Permissions
 - INTERNET (and ACCESS_NETWORK_STATE) exist **only for the Home face's weather** (`Weather`: Open-Meteo forecast for
-  the user's city coordinates, and its geocoding search). Fetch at most every 30 min, only when a network is already
+  the user's city coordinates, and its geocoding search; and the IP city estimate when the user taps it). Fetch at most every 30 min, only when a network is already
   up, ~8 s limit, no retries; never turn radios on. Don't add other network use without the user asking: the app's
   privacy promise is "nothing else leaves the phone" (README, About).
-- ACCESS_COARSE_LOCATION only for Weather location → "Use my location": one fix when tapped (`Weather.locate`:
-  network, fused, GPS via getCurrentLocation within 20 s, else a last known fix < 1 h), rounded to 0.01°, stored as
-  the city. Never a listener left running, no background location, no FINE.
+- ACCESS_COARSE_LOCATION + ACCESS_FINE_LOCATION (asked together; the user may give either) only for Weather location
+  → "Use my location": one fix when tapped (`Weather.locate`: network, fused, GPS at once, API 31+ a single
+  high-accuracy `getCurrentLocation` request when precise is given, else a minTime-0 listener removed on the first
+  fix; 45 s, else a last known fix < 1 h), rounded to 0.01°, stored as the city. FINE is there because Android limits
+  coarse-only requests to ~1 per 10 min, so microG postpones its Wi-Fi scan past the wait. Never a listener left
+  running, no background location. Logs "home: locate: …".
+- "Estimate from internet connection" (`Weather.estimateFromIp`, ipinfo.io/json over HTTPS, no key): only on tap,
+  after `Home.IP_NOTE` says it sends the public IP address; city + rounded coordinates stored like a searched city.
 
 ## Product direction
 - Keep e-ink settings few and plain: the user worries that too many confuse people. New behaviour should default

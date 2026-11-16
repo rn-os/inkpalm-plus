@@ -658,8 +658,16 @@ open class MainActivity : Activity() {
         })
         body.addView(hbox().apply {
             setPadding(g, dp(4), g, dp(4))
-            addView(text("Or find it from the phone's location, once", Type.S, color = Ink.MUTED), lp(0, WRAP, 1f))
-            addView(inkButton("Use my location") { useLocation() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
+            addView(text(if (locating) "Finding your location\u2026 (up to ${Weather.LOCATE_MS / 1000} s)" else "Or find it from the phone's location, once",
+                Type.S, color = Ink.MUTED, bold = locating), lp(0, WRAP, 1f))
+            addView(inkButton("Use my location") { if (!locating) useLocation() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
+        })
+        locateFail?.let { body.addView(locateFailBox(it), lp(MATCH, WRAP).apply { setMargins(g, dp(8), g, dp(4)) }) }
+        if (ipConfirm) body.addView(ipConfirmBox(), lp(MATCH, WRAP).apply { setMargins(g, dp(8), g, dp(4)) })
+        else if (locateFail == null && !locating) body.addView(hbox().apply {
+            setPadding(g, dp(2), g, dp(4))
+            addView(text("No location? Estimate it from your internet connection", Type.S, color = Ink.MUTED), lp(0, WRAP, 1f))
+            addView(inkButton("Estimate\u2026", Type.S) { ipConfirm = true; renderWeather() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
         })
         placesNote?.let { body.addView(note(it)) }
         places?.forEach { p ->
@@ -680,12 +688,80 @@ open class MainActivity : Activity() {
             })
             body.addView(divider())
         }
-        body.addView(note("Weather by Open-Meteo (open-meteo.com): free, no account. Only the city's coordinates are sent, at most every 30 minutes, and only when Wi-Fi is already on; the face shows the forecast's age when it's old or the phone is offline. \"Use my location\" asks for your approximate location once, when you tap it, and keeps it to about 1 km; it's never tracked."))
+        body.addView(note("Weather by Open-Meteo (open-meteo.com): free, no account. Only the city's coordinates are sent, at most every 30 minutes, and only when Wi-Fi is already on; the face shows the forecast's age when it's old or the phone is offline. \"Use my location\" finds your location once, when you tap it, and keeps it to about 1 km; it's never tracked. \"Estimate from internet connection\" sends your public IP address to ${Home.IP_SERVICE}, only when you tap it."))
     }
 
-    /** "Use my location": the coarse permission when it isn't given yet, then one fix ([Weather.locate]). */
+    private var locating = false
+    /** The last "Use my location" that found nothing; cleared by the next try or a city. */
+    private var locateFail: Weather.Located.Failed? = null
+    /** The IP estimate's explanation is showing, waiting for "Send and estimate". */
+    private var ipConfirm = false
+
+    /** What went wrong, microG's Wi-Fi location setting, precise location (when only approximate was given), and the
+     *  internet-connection estimate. */
+    private fun locateFailBox(f: Weather.Located.Failed): View = vbox().apply {
+        background = outline(3)
+        setPadding(dp(14), dp(12), dp(14), dp(12))
+        val microg = Weather.microg(this@MainActivity)
+        addView(text(Home.locateMessage(f.fail, microg, Weather.LOCATE_MS / 1000), Type.M, bold = true))
+        val noFix = f.fail == Home.LocateFail.NO_FIX || f.fail == Home.LocateFail.NO_PROVIDER || f.fail == Home.LocateFail.LOCATION_OFF
+        if (noFix) addView(inkButton(if (microg && f.fail != Home.LocateFail.LOCATION_OFF) "microG location settings" else "Location settings") {
+            val intents = Weather.locationSettingsIntents().let { if (microg && f.fail != Home.LocateFail.LOCATION_OFF) it else it.takeLast(1) }
+            if (intents.none { runCatching { startActivity(it) }.isSuccess }) toast("Couldn't open the location settings")
+        }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
+        if (f.fail == Home.LocateFail.NO_FIX && !f.precise) {
+            addView(text(Home.APPROXIMATE_NOTE, Type.S, color = Ink.MUTED).apply { setPadding(0, dp(10), 0, 0) })
+            addView(inkButton("Allow precise (used once, rounded to ~1 km)") { askPrecise() }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
+        }
+        if (f.fail != Home.LocateFail.NO_PERMISSION && !ipConfirm) {
+            addView(text("Or guess the city from your internet connection.", Type.S, color = Ink.MUTED).apply { setPadding(0, dp(10), 0, 0) })
+            addView(inkButton("Estimate from internet connection") { ipConfirm = true; renderWeather() }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
+        }
+    }
+
+    /** Explains what the IP estimate sends before anything is sent. */
+    private fun ipConfirmBox(): View = vbox().apply {
+        background = outline(3)
+        setPadding(dp(14), dp(12), dp(14), dp(12))
+        addView(text("Estimate from internet connection", Type.L, bold = true))
+        addView(text(Home.IP_NOTE, Type.S, color = Ink.MUTED).apply { setPadding(0, dp(4), 0, 0) })
+        addView(hbox().apply {
+            addView(inkButton("Send and estimate") { estimateFromIp() })
+            addView(inkButton("Cancel") { ipConfirm = false; renderWeather() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
+        }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
+    }
+
+    private fun estimateFromIp() {
+        ipConfirm = false
+        if (!Weather.online(this)) { placesNote = "Offline: turn on Wi-Fi first. InkPalm+ never turns it on."; renderWeather(); return }
+        places = null; placesNote = "Asking ${Home.IP_SERVICE}\u2026"; renderWeather()
+        Shell.background({ Weather.estimateFromIp() }) { (p, why) ->
+            if (p != null) {
+                Weather.setCity(this, p)
+                locateFail = null; placesNote = "Estimated from your internet connection: ${p.name}. Search if it's wrong."
+                toast("Weather for ${p.name}")
+                Shell.background({ Weather.fetchIfDue(this) }) { Aod.homeChanged(this); if (section == SECTION_WEATHER) renderWeather() }
+            } else placesNote = why
+            if (section == SECTION_WEATHER) renderWeather()
+        }
+    }
+
+    /** Only approximate location was given: asks again with precise (Android's upgrade dialog). */
+    private fun askPrecise() {
+        if (!shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) && Prefs(this).sp.getBoolean("location_precise_asked", false)) {
+            placesNote = "Precise location is off for InkPalm+: turn it on under Permissions \u2192 Location in Android's app settings."
+            renderWeather()
+            runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) }
+            return
+        }
+        Prefs(this).sp.edit().putBoolean("location_precise_asked", true).apply()
+        requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), ASK_LOCATION)
+    }
+
+    /** "Use my location": precise and approximate location asked together when neither is given yet (the user picks
+     *  one), then one fix ([Weather.locate]). */
     private fun useLocation() {
-        if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (!Weather.approximate(this)) {
             if (!shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_COARSE_LOCATION) && Prefs(this).sp.getBoolean("location_asked", false)) {
                 placesNote = "Location permission is off for InkPalm+: allow it in Android's app settings, or search for your city."
                 renderWeather()
@@ -693,19 +769,19 @@ open class MainActivity : Activity() {
                 return
             }
             Prefs(this).sp.edit().putBoolean("location_asked", true).apply()
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), ASK_LOCATION)
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), ASK_LOCATION)
             return
         }
-        places = null; placesNote = "Finding your location (up to ${Weather.LOCATE_MS / 1000} s)…"; renderWeather()
+        places = null; placesNote = null; locateFail = null; ipConfirm = false; locating = true; renderWeather()
         Shell.background({ Weather.locate(this) }) { r ->
+            locating = false
             when (r) {
                 is Weather.Located.Found -> {
                     Weather.setCity(this, r.place)
-                    placesNote = null
                     toast("Weather for ${r.place.name}")
                     Shell.background({ Weather.fetchIfDue(this) }) { Aod.homeChanged(this); if (section == SECTION_WEATHER) renderWeather() }
                 }
-                is Weather.Located.Failed -> placesNote = "${r.why}. Search for your city instead."
+                is Weather.Located.Failed -> locateFail = r
             }
             if (section == SECTION_WEATHER) renderWeather()
         }
@@ -798,7 +874,8 @@ open class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == ASK_LOCATION) {
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) useLocation()
+            // Either is enough: precise, or only approximate (then the failure note offers precise).
+            if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) useLocation()
             else { placesNote = "No location permission: search for your city instead."; if (section == SECTION_WEATHER) renderWeather() }
             return
         }
@@ -814,7 +891,7 @@ open class MainActivity : Activity() {
         body.removeAllViews()
         body.addView(infoRow("Version", packageName, version(), filled = false))
         body.addView(divider())
-        body.addView(note("Internet is used only for the Home sleep screen's weather: when you set a city, its name is searched and its coordinates are sent to Open-Meteo (open-meteo.com, no account), at most every 30 min and only on a network that's already on. Nothing else leaves the phone. Not affiliated with Moaan."))
+        body.addView(note("Internet is used only for the Home sleep screen's weather: when you set a city, its name is searched and its coordinates are sent to Open-Meteo (open-meteo.com, no account), at most every 30 min and only on a network that's already on. \"Estimate from internet connection\" (only when you tap it) sends your public IP address to ipinfo.io once. Nothing else leaves the phone. Not affiliated with Moaan."))
         body.addView(note("The side panel's accessibility service only learns which app is in front, and that a page scrolled, text was typed or the screen changed. It doesn't read what's on screen or what you type."))
         body.addView(note("E-ink control: ${Eink.describe()}."))
         body.addView(note("Source and help: github.com/rn-os/inkpalm-plus"))

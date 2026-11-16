@@ -82,6 +82,30 @@ class HomeLogicTest {
         assertEquals(emptyList<String>(), Home.providerOrder(listOf("passive")))
     }
 
+    @Test fun ipEstimate() {
+        val ok = """{"ip":"203.0.113.9","city":"Lisbon","region":"Lisbon","country":"PT","loc":"38.7167,-9.1333","timezone":"Europe/Lisbon"}"""
+        assertEquals(Home.Place("Lisbon", "PT", 38.72, -9.13), Home.parseIpPlace(ok))
+        assertEquals(Home.Place("Porto", "Porto District, PT", 41.15, -8.61),
+            Home.parseIpPlace("""{"city":"Porto","region":"Porto District","country":"PT","loc":"41.1496,-8.6110"}"""))
+        // No city: the region; nothing at all: the coordinates.
+        assertEquals("Bavaria", Home.parseIpPlace("""{"city":"","region":"Bavaria","country":"DE","loc":"48.1,11.6"}""")!!.name)
+        assertEquals("Current location (48.10, 11.60)", Home.parseIpPlace("""{"loc":"48.1,11.6"}""")!!.name)
+        assertNull(Home.parseIpPlace("""{"status":429,"error":{"title":"Rate limit exceeded","message":"..."}}"""))
+        assertNull(Home.parseIpPlace("""{"ip":"10.0.0.1","bogon":true}"""))
+        assertNull(Home.parseIpPlace("""{"city":"X","loc":"999,1"}"""))
+        assertNull(Home.parseIpPlace("""{"city":"X"}"""))
+        assertNull(Home.parseIpPlace("<html>Too many requests</html>"))
+    }
+
+    @Test fun locateMessages() {
+        assertEquals("No location from microG. Turn on Wi\u2011Fi location in microG Settings \u2192 Location.",
+            Home.locateMessage(Home.LocateFail.NO_FIX, microg = true, seconds = 45))
+        assertEquals("No location found within 45 s.", Home.locateMessage(Home.LocateFail.NO_FIX, microg = false, seconds = 45))
+        assertTrue(Home.locateMessage(Home.LocateFail.NO_PROVIDER, true, 45).contains("microG"))
+        assertEquals("Location is off in Android's settings.", Home.locateMessage(Home.LocateFail.LOCATION_OFF, true, 45))
+        assertTrue(Home.IP_NOTE.contains("IP address") && Home.IP_NOTE.contains(Home.IP_SERVICE))
+    }
+
     // ---- Rain summary ---------------------------------------------------------------------------------
 
     private fun hours(vararg rain: IntRange): Array<Int?> = Array(24) { hr -> if (rain.any { hr in it }) 70 else 10 }

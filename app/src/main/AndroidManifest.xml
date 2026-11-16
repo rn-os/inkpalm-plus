@@ -36,9 +36,12 @@
          coordinates), and its geocoding search for the typed city name. At most every 30 min, only when a network is
          already up; nothing else is sent anywhere. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- "Use my location" (Home face's weather): one coarse fix when the user taps it, rounded to ~1 km and kept
-         as the weather city. Never tracked; no background location. -->
+    <!-- "Use my location" (Home face's weather): one fix when the user taps it, rounded to ~1 km and kept as the
+         weather city. Never tracked; no background location. FINE is asked with COARSE (the user may give either):
+         Android limits approximate-only requests to about one per 10 minutes, so microG would postpone its Wi-Fi
+         scan past the wait. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Whether a network is up (the weather is fetched only then; radios are never turned on). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Wi-Fi on/off state for the screen and light panel's toggle. -->
@@ -60,6 +63,8 @@
         <!-- KOReader (Play/GitHub and F-Droid builds): opening books in it. -->
         <package android:name="org.koreader.launcher" />
         <package android:name="org.koreader.launcher.fdroid" />
+        <!-- microG: "Use my location"'s failure note points to its Wi-Fi location setting when it's there. -->
+        <package android:name="com.google.android.gms" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

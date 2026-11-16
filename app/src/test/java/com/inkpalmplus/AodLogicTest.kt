@@ -171,4 +171,15 @@ class AodLogicTest {
         assertFalse(o.asleep)
         assertEquals(3, o.current { 3 })
     }
+
+    /** Rotation lock on at user_rotation 1 (landscape), asleep, turned to portrait: the face follows the phone and the
+     *  user's wake gives back the locked display's rotation. */
+    @Test fun aTurnAsleepUnderTheLockIsHeldThenTheLockWins() {
+        val o = Aod.Orientation()
+        o.awake(1); o.sleep()
+        assertTrue(o.turned(0))
+        assertEquals(0, o.current { 1 })        // the cover holds the face's rotation, not the locked one
+        o.wake()
+        assertEquals(1, o.current { 1 })
+    }
 }

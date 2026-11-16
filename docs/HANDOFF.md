@@ -155,7 +155,7 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   Mapping is Android's (x up → ROTATION_90, -x up → 270, -y up → 180), as WindowOrientationListener.
 - `Orientation.turned(r)` moves the held (frozen) rotation; the user's wake still clears it. The face and
   `WakeCover` (orientationFor + turnFor) both read the same held rotation, so the cover and panel buffer agree.
-- Only with `accelerometer_rotation` = 1; off, the sleep orientation is kept as before.
+- ~~Only with `accelerometer_rotation` = 1~~: since `panel-icons` (2026-11-16) also with rotation lock on (see below).
 - Log line per update: `aod: orient: <sensor> n=… in … ms xyz=… → <rotation|keep>, held A → B`.
 
 ## Agenda styles (branch `agenda-styles`, from `aod-reorient`, 2026-10-29)
@@ -198,8 +198,8 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - `RotationLock`: tap toggles Settings.System.accelerometer_rotation (1 Auto ↔ 0 Locked, filled black); locking
   first sets user_rotation to the display's rotation, like Android's QS tile. WRITE_SETTINGS appop, Shizuku
   fallback. A ContentObserver keeps the toggle in sync while the panel is open.
-- Per-app Rotate modes (`Rotation`'s overlay) still win over the lock; the sleep screen's reorient only reads the
-  accelerometer while auto-rotate is on, so a locked phone keeps its face's orientation.
+- Per-app Rotate modes (`Rotation`'s overlay) still win over the lock. The sleep screen's reorient runs with the lock
+  on too (since `panel-icons`, below).
 - (Superseded by the icon toggles below: the shared text size / "BT" short name is gone.)
 
 ## Icon toggles (branch `panel-icons`, 2026-11-16)
@@ -212,6 +212,16 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   (`State.NONE`): dashed outline, disabled. contentDescription from `Radios.describe` / `RotationLock.describe`
   ("Wi-Fi, off", "Bluetooth, turning on", "Rotation, locked").
 - `ToggleFit`, `Radios.label`, `Radio.short` and `RotationLock.label` were removed.
+
+## Sleep screen re-orients with rotation lock on (branch `panel-icons`, 2026-11-16)
+- Asked: turn the phone to landscape while asleep with rotation lock on and have the next Live update show the
+  landscape face, without waking it and turning the lock off.
+- `Aod.reorient` no longer checks `accelerometer_rotation`; same gravity rules (near-flat / ~45° / moving keeps the
+  held orientation). It only moves `Orientation`'s held rotation; Settings (user_rotation, accelerometer_rotation)
+  are never written. `WakeCover` still holds the display at the face's rotation for the redraw wake through its
+  overlay window's `screenOrientation` (honored under the lock, as `Rotation`'s per-app modes are), and counter-turns
+  the buffer for the rotation it actually draws at. The user's wake clears the held rotation and the display goes back
+  to the locked user_rotation.
 
 ## Open items
 - Run `tools/device-test.sh run all` on the locked-down debug build (the InkPalm was disconnected when the lockdown

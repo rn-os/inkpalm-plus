@@ -10,8 +10,9 @@ import android.util.Log
  * rotation tile does, so the screen stays as it is.
  *
  * It sits under [Rotation]: an app with its own Rotate mode (the overlay window asking for an orientation) turns the
- * screen whatever this says. The sleep screen ([Aod.reorient]) only reads the accelerometer while this is Auto, so a
- * locked phone keeps its face in the orientation it went to sleep in.
+ * screen whatever this says. The sleep screen ([Aod.reorient]) follows the phone turned while asleep either way (it
+ * reads the accelerometer itself and never writes these settings): a locked phone turned while asleep still gets
+ * its face in the new orientation at the next Live update, and wakes to the locked rotation.
  */
 object RotationLock {
     fun locked(ctx: Context): Boolean =

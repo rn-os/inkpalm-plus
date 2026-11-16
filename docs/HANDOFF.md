@@ -309,3 +309,32 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   ACTION_WIRELESS_SETTINGS, android.settings.AUTO_ROTATE_SETTINGS on API 34+ else ACTION_DISPLAY_SETTINGS; the first
   that resolves, FLAG_ACTIVITY_NEW_TASK from the service), then the panel closes. Tap unchanged. The descriptions
   end "Hold: Wi-Fi settings", and the long-click accessibility action is labelled the same.
+
+## Sleep screen picker (branch `face-picker`, 2026-11-16)
+- Asked: a flip-through picker replacing the face grid and the per-face style screens; mockup
+  docs/mockups/aod/face-picker/ (picker-sheet.png frames 1–6, `build.py`); landscape = option 6 (the face's
+  landscape layout left, controls right; 6b was the rejected portrait-shaped alternative).
+- `FacePicker` (pure, FacePickerTest): pages = `Aod.Face` order × styles (`Agenda.Style`, `Home.Style`,
+  `Dither.Style` for Photo), 18 now. `Aod.Face` was reordered to the approved order (Clock, Clock + date, Analog,
+  Home, Agenda, Reading, Photo, Picture, Minimal, Default; prefs store names, so nothing migrates) and got `group`
+  (the All grid's headings, `Aod.Group`) and `detail`. `inUse`: face + its style (Picture whatever the Photo style);
+  `need`: the line under the button and its setup (CALENDAR, WEATHER, PHOTO, READER).
+- Picture/Photo mapping: "Photo · Crisp" = face PHOTO + `aod_photo_style` CRISP (`Aod.choose` saves the style, then
+  `setFace` installs once). Picture is a single page drawn in the current Photo style (its line says which); while
+  Picture is in use, the Sleep screen page has a "Photo style" chips row (Crisp / Smooth / Plain) for it.
+- `FacePickerActivity` (exported in debug; opened from Sleep screen → "Sleep screen: Agenda · Week ▶"): previews
+  are `Aod.thumbnail` at half size (`divisor` = 2; tiles 4) in the activity's orientation, on one background
+  thread, the shown page then its neighbours, ≤ 8 pages kept; `FacePreview` fits and frames the bitmap at its own
+  shape. Flip: ‹ ›, a horizontal swipe anywhere (the touch is cancelled for the views under it), a tap on the
+  preview's left or right 30%; wraps around; no animation. "Use this" → `Aod.choose`, then "✓ In use"; when the
+  face still needs setup it is picked and then the setup opens (Picture without a picture: the photo is picked
+  first, then Picture). The setup line opens Weather location / Reading / the system picker / the calendar
+  permission (once denied for good: app settings) without picking the face; a photo picked there is kept
+  (`SleepImages.savePicture`) and reinstalled only if Photo or Picture is in use.
+- Removed: the face grid (`faceTile`, `thumbTile`, `pickFace`) and the Agenda style, Home style and Photo style
+  screens (sections `agenda`, `home`, `photo`). Sleep screen keeps: the picker row, Choose picture… (Photo/Picture),
+  Photo style (Picture), Home's weather/units/countdowns/trash rows, the calendar box, Update and the rest.
+- `--es dump faces` on `Aod$Alarm` (root) writes every page in both orientations to files/faces/ (as the picker
+  draws them). All landscape layouts checked that way on the device: fine. Picture has no landscape layout (it's
+  installed as the portrait picture), so its landscape preview is the portrait picture, upright; Day rail in
+  landscape is narrow with wide margins (as before).

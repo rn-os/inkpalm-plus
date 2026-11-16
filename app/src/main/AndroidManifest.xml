@@ -28,10 +28,16 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 
-    <!-- Always-on sleep screen (KompaktOS): the Agenda face's next 3 events, asked for when Agenda is picked. -->
+    <!-- Always-on sleep screen (KompaktOS): the Agenda and Home faces' events (and Home's countdowns), asked for when one is picked. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Always-on sleep screen: stays awake while the bridge wakes and sleeps the screen for a Live update. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- The Home sleep-screen face's weather, and only that: Open-Meteo's forecast for the city the user sets (its
+         coordinates), and its geocoding search for the typed city name. At most every 30 min, only when a network is
+         already up; nothing else is sent anywhere. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Whether a network is up (the weather is fetched only then; radios are never turned on). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Wi-Fi on/off state for the screen and light panel's toggle. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 

@@ -65,13 +65,19 @@ object Aod {
     private const val K_LOW_SHOWN = "aod_low_shown"
     private const val K_AGENDA = "aod_agenda_style"
     private const val K_PHOTO_STYLE = "aod_photo_style"
+    private const val K_HOME = "aod_home_style"
+    private const val K_PINS = "home_pins"
+    private const val K_HIDES = "home_hides"
+    private const val K_TRASH_ON = "home_trash_on"
+    private const val K_RECYCLING = "home_recycling_days"
+    private const val K_TRASH = "home_trash_days"
     const val LOW_BATTERY = 10
     val INTERVALS = listOf(0, 5, 15, 30, 60)
     const val DEFAULT_INTERVAL = 5
 
     /** [DEFAULT] is Moaan's own picture, [PICTURE] the user's picture as it is; the rest are drawn ([drawn]). */
     enum class Face(val title: String, val drawn: Boolean = true) {
-        CLOCK("Clock"), CLOCK_DATE("Clock + date"), ANALOG("Analog"), AGENDA("Agenda"), READING("Reading"),
+        CLOCK("Clock"), CLOCK_DATE("Clock + date"), ANALOG("Analog"), AGENDA("Agenda"), HOME("Home"), READING("Reading"),
         PHOTO("Photo"), MINIMAL("Minimal"), PICTURE("Picture", false), DEFAULT("Default", false);
 
         companion object { fun of(s: String?): Face? = entries.firstOrNull { it.name == s } }
@@ -225,6 +231,45 @@ object Aod {
         return null
     }
 
+    /** How the Home face is laid out ([Home.Style]); Dashboard until one is picked. */
+    fun homeStyle(c: Context): Home.Style = Home.Style.of(Prefs(c).sp.getString(K_HOME, null))
+
+    /** Picks the Home face's [style] and, when Home is the face, installs it. Blocking (on [Eink.worker]). */
+    fun setHomeStyle(c: Context, style: Home.Style): String? {
+        Prefs(c).sp.edit().putString(K_HOME, style.name).apply()
+        lastKey = null
+        if (face(c) == Face.HOME) install(c, redraw = false, force = true)
+        return null
+    }
+
+    /** A Home setting changed (city, units, pins, trash day): draw the face again when it's Home. */
+    fun homeChanged(c: Context) {
+        lastKey = null
+        if (face(c) == Face.HOME) prepare(c, force = true)
+    }
+
+    fun pinned(c: Context): Set<String> = Prefs(c).sp.getStringSet(K_PINS, null)?.toSet() ?: emptySet()
+    fun hidden(c: Context): Set<String> = Prefs(c).sp.getStringSet(K_HIDES, null)?.toSet() ?: emptySet()
+
+    /** Pins a countdown (always shown first), hides it (never shown), or neither. */
+    fun setCountdown(c: Context, key: String, pin: Boolean, hide: Boolean) {
+        val p = pinned(c).toMutableSet(); val h = hidden(c).toMutableSet()
+        if (pin) p += key else p -= key
+        if (hide) h += key else h -= key
+        Prefs(c).sp.edit().putStringSet(K_PINS, p).putStringSet(K_HIDES, h).apply()
+        candidateCache = null
+        homeChanged(c)
+    }
+
+    fun trashOn(c: Context) = Prefs(c).sp.getBoolean(K_TRASH_ON, false)
+    fun recyclingDays(c: Context) = Home.daysOf(Prefs(c).sp.getString(K_RECYCLING, null))
+    fun trashDays(c: Context) = Home.daysOf(Prefs(c).sp.getString(K_TRASH, null))
+
+    fun setTrash(c: Context, on: Boolean, recycling: Set<Int>, trash: Set<Int>) {
+        Prefs(c).sp.edit().putBoolean(K_TRASH_ON, on).putString(K_RECYCLING, Home.daysString(recycling)).putString(K_TRASH, Home.daysString(trash)).apply()
+        homeChanged(c)
+    }
+
     /** How the Photo and Picture faces dither the picture ([Dither.Style]); Crisp until one is picked. */
     fun photoStyle(c: Context): Dither.Style = Dither.Style.of(Prefs(c).sp.getString(K_PHOTO_STYLE, null))
 
@@ -308,6 +353,7 @@ object Aod {
     /** The screen is on: draw the face again if what it shows changed (the minute, battery, events, …). */
     fun tick(c: Context) {
         if (!supported() || !face(c).drawn || redrawing() || !interactive(c)) return
+        if (face(c) == Face.HOME) Weather.fetchInBackground(c) { lastKey = null; prepare(c, force = true) }
         prepare(c)
     }
 
@@ -348,12 +394,12 @@ object Aod {
      *  in [style] (else the one picked); for Photo and Picture, in [photoStyle] (else the one picked). The picture is
      *  dithered at the thumbnail's size, so its dots show on screen as they will on the sleep screen (a scaled-down
      *  dither would blur back to grey). Blocking. */
-    fun thumbnail(c: Context, face: Face, style: Agenda.Style? = null, photoStyle: Dither.Style? = null): Bitmap? {
+    fun thumbnail(c: Context, face: Face, style: Agenda.Style? = null, photoStyle: Dither.Style? = null, home: Home.Style? = null): Bitmap? {
         val dots = photoStyle ?: photoStyle(c)
         val big = when {
             face == Face.DEFAULT -> return null
             face == Face.PICTURE -> { photo(c); BitmapFactory.decodeFile(picture(c).path) ?: return null }
-            else -> AodFaces.render(face, collect(c, face, false).copy(rotation = Surface.ROTATION_0, agenda = style, photoStyle = Dither.Style.PLAIN))
+            else -> AodFaces.render(face, collect(c, face, false).copy(rotation = Surface.ROTATION_0, agenda = style, photoStyle = Dither.Style.PLAIN, home = home))
         }
         val small = Bitmap.createScaledBitmap(big, AodFaces.W / 4, AodFaces.H / 4, true).also { if (it !== big) big.recycle() }
         if ((face == Face.PICTURE || face == Face.PHOTO) && dots != Dither.Style.PLAIN)
@@ -386,6 +432,40 @@ object Aod {
         Log.i(TAG, "aod: agenda styles dumped (${data.events?.size ?: "no access"} events)")
     }
 
+    /**
+     * Both Home styles, portrait and landscape, as files/home_<STYLE>_<rotation>.png (upright) with SAMPLE weather and
+     * a sample trash day (so every card shows without a city or network), and as files/home_real_<STYLE>_<rotation>.png
+     * with what the face would show now (the user's city, cache, trash setting). The countdowns and events are the real
+     * calendar's in both. Nothing is changed or fetched. Debug hook, and root's `--es dump home` on [Alarm]. Blocking.
+     */
+    fun dumpHome(c: Context) {
+        val real = collect(c, Face.HOME, false)
+        val now = real.now
+        val sample = real.withHome(
+            weather = Home.weatherView(sampleForecast(now), now, now - 20 * 60_000L, true, Weather.fahrenheit(c), real.h24) { hm(c, it) },
+            trash = Home.TrashDay("Recycling tomorrow", false, Agenda.midnight(now, 1)))
+        for ((prefix, data) in listOf("home" to sample, "home_real" to real))
+            for (style in Home.Style.entries) for (rot in listOf(Surface.ROTATION_0, Surface.ROTATION_90)) {
+                val bmp = AodFaces.render(Face.HOME, data.copy(rotation = rot, home = style))
+                val up = if (rot == Surface.ROTATION_0) bmp else AodFaces.turnBack(bmp, degreesFor(rot))
+                File(c.filesDir, "${prefix}_${style.name}_$rot.png").outputStream().use { up.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                up.recycle()
+            }
+        Log.i(TAG, "aod: home dumped: ${real.events?.size ?: "no access"} events, countdowns ${real.countdowns.joinToString(" | ")}, " +
+            "weather ${real.weather?.line()} ${real.weather?.age ?: ""}")
+    }
+
+    /** A made-up day: 9°, light rain, rain likely 3–6 PM, H 14 L 6 (for [dumpHome]). */
+    private fun sampleForecast(now: Long): Home.Forecast {
+        val offset = TimeZone.getDefault().getOffset(now) / 1000L
+        val day0 = Math.floorDiv(now / 1000 + offset, 86_400L) * 86_400L - offset
+        val probs = listOf(0, 0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 5, 5, 10, 20, 60, 85, 85, 30, 20, 10, 5, 0, 0)
+        return Home.Forecast(offset, now / 1000, 9.3, 61, (0 until 24).map { day0 + it * 3600L }, probs,
+            listOf(day0), listOf(14.2), listOf(5.8), listOf(61))
+    }
+
+    private fun hm(c: Context, t: Long): String = java.text.SimpleDateFormat(if (DateFormat.is24HourFormat(c)) "HH:mm" else "h:mm", Locale.getDefault()).format(java.util.Date(t))
+
     private fun collect(c: Context, face: Face, lowOverride: Boolean?): AodFaces.Data {
         val bat = c.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val level = bat?.let { b ->
@@ -399,8 +479,12 @@ object Aod {
             now = now, h24 = DateFormat.is24HourFormat(c), battery = level,
             low = lowOverride ?: isLow(level, plugged),
             live = live,
-            events = if (face == Face.AGENDA) events(c, now) else null,
+            events = if (face == Face.AGENDA || face == Face.HOME) events(c, now) else null,
             agenda = agendaStyle(c),
+            home = homeStyle(c),
+            weather = if (face == Face.HOME) weather(c, now) else null,
+            countdowns = if (face == Face.HOME) countdowns(c, now) else emptyList(),
+            trash = if (face == Face.HOME && trashOn(c)) Home.trashDay(recyclingDays(c), trashDays(c), now) else null,
             photoStyle = photoStyle(c),
             book = if (face == Face.READING) book(c) else null,
             photo = if (face == Face.PHOTO) photo(c) else null,
@@ -463,6 +547,62 @@ object Aod {
     }
 
     private const val MAX_EVENTS = 200
+
+    /** The Home face's weather now: the cached forecast with its age, or why there's none. */
+    private fun weather(c: Context, now: Long): Home.WeatherView {
+        if (Weather.city(c) == null) return Home.WeatherView.message("Set a city in InkPalm+")
+        return Home.weatherView(Weather.cached(c), now, Weather.fetchedAt(c), Weather.online(c), Weather.fahrenheit(c), DateFormat.is24HourFormat(c)) { hm(c, it) }
+    }
+
+    /** The countdowns the Home face shows (2 at most), from [countdownCandidates]. */
+    private fun countdowns(c: Context, now: Long): List<Home.CountdownText> {
+        val today0 = Agenda.midnight(now)
+        return Home.countdowns(countdownCandidates(c, now), pinned(c), hidden(c), today0, Agenda.midnight(now, Home.COUNTDOWN_DAYS), 2)
+            .map { Home.countdownText(it.title, Home.daysUntil(today0, it.begin), it.begin) }
+    }
+
+    /** Forget the cached countdown candidates (the settings list wants them fresh). */
+    fun refreshCountdowns() { candidateCache = null }
+
+    @Volatile private var candidateCache: Triple<Long, Long, List<Home.Candidate>>? = null
+
+    /**
+     * All-day, multi-day and >= 4 h events from today on: within [Home.COUNTDOWN_DAYS] days, and up to a year ahead
+     * for the pinned ones; empty without calendar access. Read again at most every 5 minutes (the screen-on tick asks
+     * each minute). Blocking.
+     */
+    fun countdownCandidates(c: Context, now: Long = System.currentTimeMillis()): List<Home.Candidate> {
+        if (needsCalendar(c)) return emptyList()
+        val today0 = Agenda.midnight(now)
+        candidateCache?.let { (at, day, list) -> if (day == today0 && now - at in 0 until 5 * 60_000L) return list }
+        val pins = pinned(c)
+        val list = runCatching {
+            val out = ArrayList<Home.Candidate>()
+            val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
+            android.content.ContentUris.appendId(uri, today0 - Agenda.DAY)
+            android.content.ContentUris.appendId(uri, Agenda.midnight(now, 366))
+            val proj = arrayOf(CalendarContract.Instances.EVENT_ID, CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN,
+                CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY)
+            val sel = "${CalendarContract.Instances.VISIBLE}=1 AND (${CalendarContract.Instances.ALL_DAY}=1 OR " +
+                "(${CalendarContract.Instances.END} - ${CalendarContract.Instances.BEGIN}) >= ${Home.LONG_EVENT})"
+            c.contentResolver.query(uri.build(), proj, sel, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { cur ->
+                while (cur.moveToNext()) {
+                    val allDay = cur.getInt(4) == 1
+                    var begin = cur.getLong(2); var end = cur.getLong(3)
+                    if (allDay) { begin = utcDayToLocal(begin); end = utcDayToLocal(end) }
+                    val title = cur.getString(1)?.takeIf { it.isNotBlank() } ?: continue
+                    val key = Home.keyOf(cur.getLong(0), title)
+                    if (begin < today0) continue
+                    if (begin >= Agenda.midnight(now, Home.COUNTDOWN_DAYS) && key !in pins) continue
+                    out += Home.Candidate(key, title, begin, end, allDay)
+                    if (out.size >= 300) break
+                }
+            }
+            out.toList()
+        }.onFailure { Log.w(TAG, "aod: countdowns: $it") }.getOrDefault(emptyList())
+        candidateCache = Triple(now, today0, list)
+        return list
+    }
 
     private fun utcDayToLocal(utc: Long): Long {
         val u = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = utc }
@@ -729,6 +869,13 @@ object Aod {
         val sp = Prefs(c).sp
         if (low && sp.getBoolean(K_LOW_SHOWN, false)) { Log.i(TAG, "aod: battery $level%, updates stopped"); return }
         reorient(c)
+        // The Home face's weather: one fetch when due (30 min) and a network is already up, under its own short wake
+        // lock (the alarm's covers the redraw); then the face is drawn with it.
+        if (face(c) == Face.HOME && Weather.due(c)) {
+            val wl = c.getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "InkPalmPlus:weather")
+            wl.acquire(Weather.DEADLINE_MS + 1_000L)
+            try { Weather.fetchIfDue(c) } finally { if (wl.isHeld) wl.release() }
+        }
         // The bridge wakes the screen for ~5 s; until its SCREEN_OFF, the wake is ours.
         expectWake(15_000L)
         if (!install(c, redraw = true, force = true, low = low)) { redrawUntil = 0; return }
@@ -782,7 +929,8 @@ object Aod {
     /** The Live update alarm. Holds a wake lock while the bridge wakes and sleeps the screen. Not exported: only
      *  InkPalm+'s own PendingIntent reaches it (and root: `am broadcast -n com.inkpalmplus/.Aod\$Alarm` is one
      *  update now, for checks on release builds, which have no test hooks; with `--es cover poweroff`, auto power-off's
-     *  cover and wake bookkeeping for 30 s without the power-off itself, for a dry run of the bridge's predraw). */
+     *  cover and wake bookkeeping for 30 s without the power-off itself, for a dry run of the bridge's predraw; with
+     *  `--es dump home`, [dumpHome] only: no update, nothing changed or fetched). */
     class Alarm : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             val app = c.applicationContext
@@ -795,6 +943,7 @@ object Aod {
                 try {
                     // The dry run: as auto power-off does it (the bridge's predraw wake is ours), minus power.req.
                     if (i.getStringExtra("cover") == "poweroff") { Aod.poweringOff(app, holdMs = 30_000L); AutoOff.showCover(app) }
+                    else if (i.getStringExtra("dump") == "home") dumpHome(app)
                     else update(app)
                 } finally { done.finish() }
             }

@@ -39,14 +39,25 @@ object AodFaces {
         val agenda: Agenda.Style = Agenda.Style.CLASSIC,
         /** How the Photo face's picture is dithered ([Dither]). */
         val photoStyle: Dither.Style = Dither.Style.CRISP,
+        /** The Home face's style and cards ([Home]). */
+        val home: Home.Style = Home.Style.DASHBOARD,
+        val weather: Home.WeatherView? = null,
+        val countdowns: List<Home.CountdownText> = emptyList(),
+        val trash: Home.TrashDay? = null,
     ) {
-        fun copy(rotation: Int, agenda: Agenda.Style? = null, photoStyle: Dither.Style? = null) =
-            Data(now, h24, battery, low, live, events, book, photo, rotation, agenda ?: this.agenda, photoStyle ?: this.photoStyle)
+        fun copy(rotation: Int, agenda: Agenda.Style? = null, photoStyle: Dither.Style? = null, home: Home.Style? = null) =
+            Data(now, h24, battery, low, live, events, book, photo, rotation, agenda ?: this.agenda, photoStyle ?: this.photoStyle,
+                home ?: this.home, weather, countdowns, trash)
 
-        /** Everything the face shows: the minute, battery, events, book, photo, orientation, Agenda and Photo style. */
-        fun key(face: Aod.Face): String = listOf(face.name, agenda.name, photoStyle.name, minute(now), battery, low, live, rotation,
+        fun withHome(weather: Home.WeatherView?, trash: Home.TrashDay?) =
+            Data(now, h24, battery, low, live, events, book, photo, rotation, agenda, photoStyle, home, weather, countdowns, trash)
+
+        /** Everything the face shows: the minute, battery, events, book, photo, orientation, Agenda, Photo and Home style,
+         *  the Home cards. */
+        fun key(face: Aod.Face): String = listOf(face.name, agenda.name, photoStyle.name, home.name, minute(now), battery, low, live, rotation,
             events?.joinToString("|") { "${it.title}${it.begin}${it.end}" } ?: "no-access",
-            book?.let { "${it.title}${it.progress}${it.cover != null}" }, photo?.generationId).joinToString(";")
+            book?.let { "${it.title}${it.progress}${it.cover != null}" }, photo?.generationId,
+            weather?.let { "${it.line()}${it.age}${it.strip}" }, countdowns.joinToString("|"), trash).joinToString(";")
 
         private fun minute(t: Long) = t / 60_000L
     }
@@ -104,6 +115,7 @@ object AodFaces {
                 Agenda.Style.TWO_DAYS -> twoDays(c, w, h, d)
                 Agenda.Style.WEEK -> week(c, w, h, d)
             }
+            Aod.Face.HOME -> if (d.home == Home.Style.CALM) homeCalm(c, w, h, d) else homeDashboard(c, w, h, d)
             Aod.Face.READING -> reading(c, w, h, d)
             Aod.Face.PHOTO -> if (d.photo != null) photo(bmp, c, w, h, d, d.photo) else clockDate(c, w, h, d)
             Aod.Face.MINIMAL -> minimal(c, w, h, d)
@@ -753,6 +765,363 @@ object AodFaces {
             c.drawRect(left, y - 3, left + width, y, fill)
         }
         if (shown.size < list.size) more(c, list.size - shown.size, left, y + 8, 24f)
+    }
+
+    // ---- Home face (docs/mockups/aod/home-face/: A Dashboard, B Calm; their CSS px are panel px) ------------
+
+    private enum class Icon { RAIN, CLOUD, SUN, SNOW, TRASH, CAL }
+
+    private fun weatherIcon(v: Home.WeatherView?) = when {
+        v == null || v.message != null -> Icon.CLOUD
+        v.code in Home.SNOW_CODES -> Icon.SNOW
+        v.rainy -> Icon.RAIN
+        v.code in 0..1 -> Icon.SUN
+        else -> Icon.CLOUD
+    }
+
+    /** The mockups' line icons (a 48-unit grid, 3.6 stroke) in a [size] px square at [x], [top]. */
+    private fun icon(c: Canvas, kind: Icon, x: Float, top: Float, size: Float, ink: Int = Color.BLACK) {
+        val k = size / 48f
+        val p = stroke(3.6f, Paint.Cap.ROUND).apply { color = ink; strokeJoin = Paint.Join.ROUND }
+        val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink }
+        c.save(); c.translate(x, top); c.scale(k, k)
+        // The cloud: M13 28h22a7 7 0 0 0 0-14 10 10 0 0 0-19 3 6 6 0 0 0-3 11z
+        fun cloud(dy: Float) = Path().apply {
+            moveTo(13f, 28f + dy); lineTo(35f, 28f + dy)
+            arcTo(RectF(28f, 14f + dy, 42f, 28f + dy), 90f, -180f)
+            arcTo(RectF(15.93f, 8.2f + dy, 35.93f, 28.2f + dy), -24.8f, -148.3f)
+            arcTo(RectF(10.3f, 17f + dy, 22.3f, 29f + dy), -92.9f, -143.7f)
+            close()
+        }
+        when (kind) {
+            Icon.RAIN -> { c.drawPath(cloud(0f), p); for (x0 in listOf(16f, 25f, 34f)) c.drawLine(x0, 34f, x0 - 3, 41f, p) }
+            Icon.SNOW -> { c.drawPath(cloud(0f), p); for (x0 in listOf(15f, 24f, 33f)) c.drawCircle(x0, 37.5f, 2.6f, dot) }
+            Icon.CLOUD -> c.drawPath(cloud(6f), p)
+            Icon.SUN -> {
+                c.drawCircle(24f, 24f, 8f, p)
+                for (i in 0 until 8) { c.save(); c.rotate(i * 45f, 24f, 24f); c.drawLine(24f, 5f, 24f, 10f, p); c.restore() }
+            }
+            Icon.TRASH -> c.drawPath(Path().apply {
+                moveTo(9f, 13f); lineTo(39f, 13f)
+                moveTo(18f, 13f); lineTo(18f, 8f); lineTo(30f, 8f); lineTo(30f, 13f)
+                moveTo(13f, 13f); lineTo(15f, 42f); lineTo(33f, 42f); lineTo(35f, 13f)
+                moveTo(21f, 20f); lineTo(21f, 35f); moveTo(27f, 20f); lineTo(27f, 35f)
+            }, p)
+            Icon.CAL -> {
+                c.drawRoundRect(RectF(6f, 10f, 42f, 42f), 3f, 3f, p)
+                c.drawLine(6f, 20f, 42f, 20f, p); c.drawLine(15f, 5f, 15f, 14f, p); c.drawLine(33f, 5f, 33f, 14f, p)
+            }
+        }
+        c.restore()
+    }
+
+    /** A Home card: a 4 px border, radius 18; [inv]: black, for white ink. */
+    private fun card(c: Canvas, r: RectF, inv: Boolean) {
+        if (inv) c.drawRoundRect(r, 18f, 18f, fill)
+        else c.drawRoundRect(RectF(r.left + 2, r.top + 2, r.right - 2, r.bottom - 2), 16f, 16f, stroke(4f))
+    }
+
+    /** The icon and small capitals ("WEATHER") from [top]; returns the bottom (36 px down). */
+    private fun cardHead(c: Canvas, kind: Icon, label: String, x: Float, top: Float, ink: Int): Float {
+        icon(c, kind, x, top, 36f, ink)
+        c.css(label, x + 46, top + (36 - 22 * 1.2f) / 2, cap(22f, color = ink))
+        return top + 36
+    }
+
+    /** Where the Home face's content ends: portrait as [limit]; landscape a little lower (the cards' grid), still
+     *  clear of the "Updated" footer. */
+    private fun homeBottom(d: Data, h: Int, land: Boolean) = if (land) h - (if (d.live) 92f else 40f) else limit(d, h)
+
+    /** The time column of an event row: "09:00", "All day", "Tue 9:00", "Tue". */
+    private fun whenLabel(d: Data, e: Event): String = when {
+        e.allDay -> if (today(d, e.begin) || e.begin <= d.now) "All day" else fmt("EEE", e.begin)
+        today(d, e.begin) || e.begin <= d.now -> hm(d, e.begin)
+        else -> fmt("EEE ", e.begin) + hm(d, e.begin)
+    }
+
+    /** "NEXT 3" and up to 3 rows (time | title) between rules. Returns the bottom. */
+    private fun homeNext(c: Canvas, d: Data, ev: List<Event>, left: Float, width: Float, top: Float, fs: Float, pad: Float): Float {
+        var y = c.css("NEXT 3", left, top, cap(22f)) + 6
+        if (d.events == null || ev.isEmpty()) {
+            c.drawRect(left, y, left + width, y + 3, fill)
+            return notice(c, d, "Nothing in the next 7 days", left, y + 3 + pad, width, size = fs * 0.9f) + pad
+        }
+        val np = pen(fs, BOLD, align = LEFT)
+        val tw = maxOf(fs * 130 / 34, ev.maxOf { pen(fs, HEAVY).measureText(whenLabel(d, it)) }).coerceAtMost(width * 0.42f)
+        for (e in ev) {
+            c.drawRect(left, y, left + width, y + 3, fill)
+            val base = baseline(np, y + 3 + pad)
+            val l = whenLabel(d, e)
+            c.drawText(l, left, base, fit(pen(fs, HEAVY, align = LEFT), l, tw))
+            c.drawText(ell(np, e.title, width - tw - 18), left + tw + 18, base, np)
+            y += 3 + 2 * pad + fs * 1.2f
+        }
+        c.drawRect(left, y, left + width, y + 3, fill)
+        return y + 3
+    }
+
+    // A: Dashboard --------------------------------------------------------------------------------------
+
+    private fun homeDashboard(c: Canvas, w: Int, h: Int, d: Data) {
+        val land = w > h
+        val ev = Agenda.upcoming(d.events.orEmpty(), d.now)
+        val grid: RectF
+        if (land) {
+            val lw = w * 0.4f; val left = 48f
+            val big = clockPen(170f, d, lw - left - 10, LEFT)
+            var y = c.css(time(d), left - 6, 38f, big, 1f) + 6
+            val batW = if (d.battery >= 0) 46 + pen(22f, BOLD).measureText("${d.battery}%") else 0f
+            val dp = fit(pen(36f, BOLD, align = LEFT), dayLong(d), lw - left - 26 - batW)
+            c.css(dayLong(d), left, y, dp)
+            bat(c, left + dp.measureText(dayLong(d)) + 26, y + dp.textSize * 0.6f, d.battery, LEFT)
+            y += dp.textSize * 1.2f + 28
+            homeNext(c, d, ev, left, lw - left, y, 32f, 10f)
+            grid = RectF(lw + 36, 28f, w - 40f, homeBottom(d, h, true))
+        } else {
+            val top = 50f
+            // The date on the right ("Monday" over "16 November"), the battery under it, centred on the clock.
+            val dp = pen(36f, BOLD, align = RIGHT)
+            val l1 = fmt("EEEE", d.now); val l2 = fmt("d MMMM", d.now)
+            val dw = maxOf(dp.measureText(l1), dp.measureText(l2), 120f)
+            val big = clockPen(158f, d, w - 80f - dw - 24, LEFT)
+            c.css(time(d), 34f, top, big, 1f)
+            val blockH = 2 * 36 * 1.15f + 12 + 26.4f
+            var ry = top + (big.textSize - blockH) / 2
+            ry = c.css(l1, w - 40f, ry, dp, 1.15f); ry = c.css(l2, w - 40f, ry, dp, 1.15f) + 12
+            bat(c, w - 40f, ry + 13.2f, d.battery, RIGHT)
+            val end = homeNext(c, d, ev, 40f, w - 80f, top + big.textSize + 26, 34f, 14f)
+            grid = RectF(40f, end + 26, w - 40f, homeBottom(d, h, false))
+        }
+        homeGrid(c, d, grid, land)
+    }
+
+    /**
+     * The Dashboard's cards in [g]: Weather, then Trash (when it's today or tomorrow), then up to 2 countdowns, as the
+     * mockup's 2 × 2 grid. Fewer cards: 1 fills a row; 2 share a row; 3 are Weather and one beside it over the last
+     * across (portrait), or Weather down the left and two stacked beside it (landscape). Portrait rows are kept to a
+     * card's height rather than stretched.
+     */
+    private fun homeGrid(c: Canvas, d: Data, g: RectF, land: Boolean) {
+        val gap = if (land) 14f else 18f
+        val pad = if (land) 16f else 22f
+        val cards = ArrayList<(RectF) -> Unit>()
+        cards += { r -> weatherCard(c, d, r, pad) }
+        d.trash?.let { t -> cards += { r -> trashCard(c, t, r, inv = true, size = if (land) 36f else 42f, padH = pad, padV = pad, wrapLines = 2) } }
+        for (ct in d.countdowns.take(2)) cards += { r -> countdownCard(c, ct, r, if (land) 64f else 80f, if (land) 30f else 34f, pad, pad) }
+        val colW = (g.width() - gap) / 2
+        fun col(i: Int, top: Float, bottom: Float) = RectF(g.left + i * (colW + gap), top, g.left + i * (colW + gap) + colW, bottom)
+        val rowMax = if (land) g.height() else minOf(g.height(), 440f)
+        val rects: List<RectF> = when (cards.size) {
+            1 -> listOf(RectF(g.left, g.top, g.right, g.top + minOf(rowMax, if (land) g.height() else 400f)))
+            2 -> listOf(col(0, g.top, g.top + rowMax), col(1, g.top, g.top + rowMax))
+            3 -> if (land) listOf(col(0, g.top, g.bottom), col(1, g.top, g.top + (g.height() - gap) / 2), col(1, g.top + (g.height() + gap) / 2, g.bottom))
+                else {
+                    val second = minOf((g.height() - gap) / 2, 250f)
+                    val first = minOf(g.height() - gap - second, 460f)
+                    listOf(col(0, g.top, g.top + first), col(1, g.top, g.top + first), RectF(g.left, g.top + first + gap, g.right, g.top + first + gap + second))
+                }
+            else -> {
+                val rh = minOf((g.height() - gap) / 2, if (land) Float.MAX_VALUE else 440f)
+                listOf(col(0, g.top, g.top + rh), col(1, g.top, g.top + rh), col(0, g.top + rh + gap, g.top + 2 * rh + gap), col(1, g.top + rh + gap, g.top + 2 * rh + gap))
+            }
+        }
+        cards.forEachIndexed { i, draw ->
+            val r = rects[i]
+            if (r.height() < 80) return@forEachIndexed
+            c.save(); c.clipRect(r); draw(r); c.restore()
+        }
+    }
+
+    /** "9°  H 14 · L 6", "Rain 3–6 PM", "as of 6:40", and the hourly strip (8 to 19 h) at the bottom when it fits. */
+    private fun weatherCard(c: Canvas, d: Data, r: RectF, pad: Float) {
+        card(c, r, false)
+        val x = r.left + 4 + pad; val inner = r.width() - 8 - 2 * pad
+        val bottom = r.bottom - 4 - pad
+        val v = d.weather
+        var y = cardHead(c, weatherIcon(v), "WEATHER", x, r.top + 4 + pad, Color.BLACK)
+        if (v == null || v.message != null) {
+            val p = pen(30f, BOLD, align = LEFT)
+            y += 10
+            for (l in wrap(p, v?.message ?: "No weather", inner, 3)) y = c.css(l, x, y, p, 1.1f)
+            return
+        }
+        val tp = pen(if (r.height() < 300 || inner < 240) 72f else 96f, HEAVY, -0.045f, align = LEFT)
+        y += 8
+        val base = baseline(tp, y, 1f)
+        c.drawText(v.temp, x, base, tp)
+        y += tp.textSize
+        v.hiLo?.let { hl ->
+            // Beside the temperature, as in the mockup; under it when it doesn't fit there.
+            val hp = pen(28f, BOLD, align = LEFT); val hx = x + tp.measureText(v.temp) + 14
+            if (hp.measureText(hl) <= inner - (hx - x)) c.drawText(hl, hx, base, hp)
+            else y = c.css(ell(hp, hl, inner), x, y + 2, hp)
+        }
+        v.rain?.let { y = c.css(ell(pen(30f, BOLD, align = LEFT), it, inner), x, y + 4, pen(30f, BOLD, align = LEFT)) }
+        v.age?.let { y = c.css(ell(thin(24f), it, inner), x, y + 2, thin(24f)) }
+        val strip = v.strip ?: return
+        val labelH = 20 * 1.2f + 4
+        val barsH = minOf(96f, bottom - labelH - (y + 12))
+        if (barsH >= 24) hourStrip(c, d, strip, x, bottom - labelH - barsH, inner, barsH)
+    }
+
+    /** One bar per hour of [Home.STRIP], as tall as the chance of rain; filled from [Home.RAINY] %. */
+    private fun hourStrip(c: Canvas, d: Data, probs: List<Int?>, x: Float, top: Float, width: Float, barsH: Float) {
+        val slot = minOf(width / probs.size, 30f)
+        val bw = minOf(slot - 6, 18f)
+        val lp = thin(20f, Paint.Align.CENTER)
+        probs.forEachIndexed { i, p ->
+            val bx = x + i * slot
+            val v = (p ?: 0).coerceIn(0, 100)
+            val bh = maxOf(12f, barsH * v / 100f)
+            if (v >= Home.RAINY) c.drawRoundRect(RectF(bx, top + barsH - bh, bx + bw, top + barsH), 3f, 3f, fill)
+            else c.drawRoundRect(RectF(bx + 1.5f, top + barsH - bh + 1.5f, bx + bw - 1.5f, top + barsH - 1.5f), 3f, 3f, stroke(3f))
+            val hour = Home.STRIP.first + i
+            if (hour == 8 || hour == 12 || hour == 16 || hour == 19)
+                c.css(if (d.h24) "$hour" else "${if (hour % 12 == 0) 12 else hour % 12}${if (hour < 12) "a" else "p"}", bx + bw / 2, top + barsH + 4, lp)
+        }
+    }
+
+    /** "TRASH" / "Recycling tomorrow" ([size] px, up to [wrapLines] lines) / "Tue 17 Nov". */
+    private fun trashCard(c: Canvas, t: Home.TrashDay, r: RectF, inv: Boolean, size: Float, padH: Float, padV: Float, wrapLines: Int) {
+        card(c, r, inv)
+        val ink = if (inv) Color.WHITE else Color.BLACK
+        val x = r.left + 4 + padH; val inner = r.width() - 8 - 2 * padH
+        var y = cardHead(c, Icon.TRASH, "TRASH", x, r.top + 4 + padV, ink) + 10
+        val p = pen(size, HEAVY, color = ink, align = LEFT)
+        val lines = if (wrapLines <= 1) listOf(t.text).also { fit(p, t.text, inner) } else wrap(p, t.text, inner, wrapLines)
+        for (l in lines) y = c.css(l, x, y, p, 1.05f)
+        c.css(fmt("EEE d MMM", t.day), x, y + 8, thin(if (size > 44) 28f else 26f, color = ink))
+    }
+
+    private fun trashHeight(size: Float, padV: Float) = 8 + 2 * padV + 36 + 10 + size * 1.05f + 8 + 28 * 1.2f
+
+    /** How a countdown's text sits: [inline] beside the number (else under it), in [lines]; [height] of the body. */
+    private class CountLayout(val lines: List<String>, val inline: Boolean, val height: Float)
+
+    private fun countLayout(ct: Home.CountdownText, inner: Float, num: Paint, text: Paint): CountLayout {
+        val n = ct.number ?: return wrap(text, ct.text, inner, 2).let { CountLayout(it, false, it.size * text.textSize * 1.1f) }
+        val rest = inner - num.measureText(n) - 18
+        val one = wrap(text, ct.text, rest, 2)
+        if (rest >= inner * 0.45f && (one.size == 1 || text.measureText(ct.text) > inner))
+            return CountLayout(one, true, maxOf(num.textSize, num.textSize * 0.8f + (one.size - 1) * text.textSize * 1.1f + text.textSize * 0.3f))
+        val under = wrap(text, ct.text, inner, 2)
+        return CountLayout(under, false, num.textSize + 4 + under.size * text.textSize * 1.1f)
+    }
+
+    private fun countdownHeight(ct: Home.CountdownText, inner: Float, numSize: Float, textSize: Float, padV: Float) =
+        8 + 2 * padV + 36 + 6 + countLayout(ct, inner, pen(numSize, HEAVY, -0.045f, align = LEFT), pen(textSize, HEAVY, align = LEFT)).height
+
+    /** "COUNTDOWN" / "12 days to Lisbon trip" (the number large), or "Tomorrow: Lisbon trip"; the date when there's room. */
+    private fun countdownCard(c: Canvas, ct: Home.CountdownText, r: RectF, numSize: Float, textSize: Float, padH: Float, padV: Float) {
+        card(c, r, false)
+        val x = r.left + 4 + padH; val inner = r.width() - 8 - 2 * padH
+        val bottom = r.bottom - 4 - padV
+        var y = cardHead(c, Icon.CAL, "COUNTDOWN", x, r.top + 4 + padV, Color.BLACK) + 6
+        val np = pen(numSize, HEAVY, -0.045f, align = LEFT); val tp = pen(textSize, HEAVY, align = LEFT)
+        val lay = countLayout(ct, inner, np, tp)
+        if (ct.number == null) for (l in lay.lines) y = c.css(l, x, y, tp, 1.1f)
+        else if (lay.inline) {
+            val base = baseline(np, y, 1f)
+            c.drawText(ct.number, x, base, np)
+            val tx = x + np.measureText(ct.number) + 18
+            lay.lines.forEachIndexed { i, l -> c.drawText(l, tx, base + i * textSize * 1.1f, tp) }
+            y += lay.height
+        } else {
+            y = c.css(ct.number, x, y, np, 1f) + 4
+            for (l in lay.lines) y = c.css(l, x, y, tp, 1.1f)
+        }
+        if (ct.date > 0 && y + 8 + 26 * 1.2f <= bottom) c.css(fmt("EEE d MMM", ct.date), x, y + 8, thin(26f))
+    }
+
+    // B: Calm ---------------------------------------------------------------------------------------------
+
+    private fun homeCalm(c: Canvas, w: Int, h: Int, d: Data) {
+        val land = w > h
+        val next = Agenda.upcoming(d.events.orEmpty(), d.now, n = 1).firstOrNull()
+        val v = d.weather
+        val cards: RectF
+        if (land) {
+            val lw = w * 0.48f; val cx = lw / 2
+            val colTop = 44f; val colBottom = homeBottom(d, h, true) - 6
+            c.drawRect(lw - 4, colTop, lw, colBottom, fill)
+            val big = clockPen(240f, d, lw - 60)
+            val dp = fit(pen(42f, BOLD), dayLong(d), lw - 60)
+            val total = big.textSize + 6 + dp.textSize * 1.2f + 14 + 26.4f + 26 + 36 + 20 + 36 + (if (v?.age != null) 4 + 24 * 1.2f else 0f)
+            var y = colTop + (colBottom - colTop - total) / 2
+            y = c.css(time(d), cx, y, big, 1f) + 6
+            y = c.css(dayLong(d), cx, y, dp) + 14
+            bat(c, cx, y + 13.2f, d.battery); y += 26.4f + 26
+            calmNext(c, d, next, cx, y, 30f, lw - 60); y += 36 + 20
+            calmWeather(c, v, cx, y, 28f, lw - 60)
+            cards = RectF(lw + 40, 20f, w - 44f, homeBottom(d, h, true))
+            calmCards(c, d, cards, 16f, 24f, 18f, 44f, 72f, 42f)
+        } else {
+            val cx = w / 2f
+            var y = c.css(time(d), cx, 60f, clockPen(236f, d, w - 60f), 1f) + 10
+            y = c.css(dayLong(d), cx, y, fit(pen(46f, BOLD), dayLong(d), w - 60f)) + 20
+            bat(c, cx, y + 13.2f, d.battery); y += 26.4f + 34
+            calmNext(c, d, next, cx, y, 30f, w - 80f); y += 36 + 26
+            c.drawRect(120f, y, w - 120f, y + 4, fill); y += 4 + 26
+            y = calmWeather(c, v, cx, y, 32f, w - 80f)
+            cards = RectF(48f, y + 20, w - 48f, limit(d, h))
+            calmCards(c, d, cards, 28f, 28f, 28f, 54f, 96f, 42f)
+        }
+    }
+
+    /** "NEXT  09:00 Standup", centred on [cx]. */
+    private fun calmNext(c: Canvas, d: Data, e: Event?, cx: Float, top: Float, fs: Float, maxW: Float) {
+        if (e == null) {
+            val s = if (d.events == null) "Calendar access needed" else "Nothing in the next 7 days"
+            c.css(s, cx, top, fit(thin(fs, Paint.Align.CENTER), s, maxW))
+            return
+        }
+        val cp = cap(22f); val tp = pen(fs, HEAVY, align = LEFT); val np = pen(fs, BOLD, align = LEFT)
+        val head = "NEXT  "; val t = whenLabel(d, e) + " "
+        val fixed = cp.measureText(head) + tp.measureText(t)
+        val title = ell(np, e.title, maxW - fixed)
+        var x = cx - (fixed + np.measureText(title)) / 2
+        val base = baseline(np, top)
+        c.drawText(head, x, base, cp); x += cp.measureText(head)
+        c.drawText(t, x, base, tp); x += tp.measureText(t)
+        c.drawText(title, x, base, np)
+    }
+
+    /** The weather in one line with its icon ("9° · Rain 3–6 PM · H 14 L 6"), and "as of 6:40" under it when old.
+     *  Returns the bottom. */
+    private fun calmWeather(c: Canvas, v: Home.WeatherView?, cx: Float, top: Float, fs: Float, maxW: Float): Float {
+        if (v == null) return top
+        val tp = pen(fs, HEAVY, align = LEFT); val rp = pen(fs, BOLD, align = LEFT)
+        val head = if (v.message != null) "" else v.temp
+        var rest = if (v.message != null) v.message else listOfNotNull(v.rain, v.hiLoShort).joinToString(" · ").let { if (it.isEmpty()) "" else " · $it" }
+        val room = maxW - 36 - 14
+        while (tp.measureText(head) + rp.measureText(rest) > room && rp.textSize > fs * 0.8f) { tp.textSize *= 0.95f; rp.textSize *= 0.95f }
+        rest = ell(rp, rest, room - tp.measureText(head))
+        val total = 36 + 14 + tp.measureText(head) + rp.measureText(rest)
+        var x = cx - total / 2
+        icon(c, weatherIcon(v), x, top, 36f)
+        x += 50
+        val base = baseline(rp, top + (36 - fs * 1.2f) / 2)
+        c.drawText(head, x, base, tp); c.drawText(rest, x + tp.measureText(head), base, rp)
+        var y = top + 36
+        v.age?.let { y = c.css(it, cx, y + 4, thin(24f, Paint.Align.CENTER)) }
+        return y
+    }
+
+    /** The Calm cards stacked in [r], centred: Trash (when it's today or tomorrow; black on the day), then 1–2
+     *  countdowns; the last ones are left out when they don't fit. */
+    private fun calmCards(c: Canvas, d: Data, r: RectF, gap: Float, padH: Float, padV: Float, trashSize: Float, numSize: Float, textSize: Float) {
+        val inner = r.width() - 8 - 2 * padH
+        val items = ArrayList<Pair<Float, (RectF) -> Unit>>()
+        d.trash?.let { t -> items += trashHeight(trashSize, padV) to { rr: RectF -> trashCard(c, t, rr, inv = t.today, size = trashSize, padH = padH, padV = padV, wrapLines = 1) } }
+        for (ct in d.countdowns.take(2)) items += countdownHeight(ct, inner, numSize, textSize, padV) to { rr: RectF -> countdownCard(c, ct, rr, numSize, textSize, padH, padV) }
+        while (items.isNotEmpty() && items.sumOf { it.first.toDouble() } + gap * (items.size - 1) > r.height()) items.removeAt(items.size - 1)
+        if (items.isEmpty()) return
+        var y = r.top + (r.height() - (items.sumOf { it.first.toDouble() }.toFloat() + gap * (items.size - 1))) / 2
+        for ((hgt, draw) in items) {
+            val rr = RectF(r.left, y, r.right, y + hgt)
+            c.save(); c.clipRect(rr); draw(rr); c.restore()
+            y += hgt + gap
+        }
     }
 
     /** The cover: the book's own picture, else a drawn book with its title and author (as in the mockup). */

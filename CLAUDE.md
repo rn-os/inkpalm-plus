@@ -74,7 +74,7 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
 
 ## Permissions
 - INTERNET (and ACCESS_NETWORK_STATE) exist **only for the Home face's weather** (`Weather`: Open-Meteo forecast for
-  the user's city coordinates, and its geocoding search; and the IP city estimate when the user taps it). Fetch at most every 30 min, only when a network is already
+  the user's city coordinates, and its geocoding search; and the IP city estimate when the user taps it). Fetch as "Weather updates" says (`Home.weatherGap`: Every refresh = each Live update, 4 min floor asleep, 5 min awake; or 15/30/60 min), only when a network is already
   up, ~8 s limit, no retries; never turn radios on. Don't add other network use without the user asking: the app's
   privacy promise is "nothing else leaves the phone" (README, About).
 - ACCESS_COARSE_LOCATION + ACCESS_FINE_LOCATION (asked together; the user may give either) only for Weather location

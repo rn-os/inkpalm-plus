@@ -1001,7 +1001,7 @@ object Aod {
         val sp = Prefs(c).sp
         if (low && sp.getBoolean(K_LOW_SHOWN, false)) { Log.i(TAG, "aod: battery $level%, updates stopped"); return }
         reorient(c)
-        // The Home face's weather: one fetch when due (30 min) and a network is already up, under its own short wake
+        // The Home face's weather: one fetch when due (Weather updates: every Live update by default) and a network is already up, under its own short wake
         // lock (the alarm's covers the redraw); then the face is drawn with it.
         if (face(c) == Face.HOME && Weather.due(c)) {
             val wl = c.getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "InkPalmPlus:weather")

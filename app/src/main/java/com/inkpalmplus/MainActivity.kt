@@ -554,7 +554,14 @@ open class MainActivity : Activity() {
             addView(divider())
         }
         group(title = "Home face").apply {
-            addView(note("Weather is fetched at most every 30 min during updates, only when Wi-Fi is already on (never turned on). About 1–2 s more awake per fetch, ~0.4% of battery a day."))
+            val every = Weather.every(this@MainActivity)
+            addView(choicesBlock("Weather updates", "How often the forecast is fetched", Home.WEATHER_EVERY.map { Home.weatherEveryLabel(it) },
+                Home.WEATHER_EVERY.indexOf(every)) { i -> Weather.setEvery(this@MainActivity, Home.WEATHER_EVERY[i]); renderSleep() })
+            addView(note("Open-Meteo updates current conditions about every 15 minutes. Each fetch is one small request over Wi\u2011Fi (about ${Home.WEATHER_KB} KB)."))
+            val minutes = Aod.interval(this@MainActivity)
+            addView(note(Home.weatherPerDay(every, minutes)?.let { n -> "With updates every $minutes min: about $n requests a day (~${n * Home.WEATHER_KB / 100 / 10.0} MB), each 1–2 s more awake." }
+                ?: "Frozen: one fetch when the screen goes off (if the last was ${if (every > 0) "$every" else "4"}+ min ago)."))
+            addView(note("Only when Wi\u2011Fi is already on (never turned on); while the screen is on, at most every 5 min."))
             addView(note("The Home face shows your events and countdowns, so it needs calendar access."))
         }
     }
@@ -650,7 +657,7 @@ open class MainActivity : Activity() {
                 addView(inkButton("Estimate from internet connection") { ipConfirm = true; renderWeather() }, lp(MATCH, WRAP).apply { setMargins(g, dp(2), g, dp(2)) })
             }
         }
-        group().addView(note("Weather by Open-Meteo (open-meteo.com): free, no account. Only the city's coordinates are sent, at most every 30 minutes, and only when Wi-Fi is already on; the face shows the forecast's age when it's old or the phone is offline. \"Estimate from internet connection\" sends your public IP address to ${Home.IP_SERVICE}, only when you tap it. Nothing else leaves the phone."))
+        group().addView(note("Weather by Open-Meteo (open-meteo.com): free, no account. Only the city's coordinates are sent, as often as Sleep screen › Home face › Weather updates says, and only when Wi-Fi is already on; the face shows the forecast's age when it's old or the phone is offline. \"Estimate from internet connection\" sends your public IP address to ${Home.IP_SERVICE}, only when you tap it. Nothing else leaves the phone."))
         show()
     }
 
@@ -1191,7 +1198,7 @@ open class MainActivity : Activity() {
             })
             addView(divider())
         }
-        group().addView(note("Internet is used only for the Home sleep screen's weather: when you set a city, its name is searched and its coordinates are sent to Open-Meteo (open-meteo.com, no account), at most every 30 min and only on a network that's already on. \"Estimate from internet connection\" (only when you tap it) sends your public IP address to ipinfo.io once. Nothing else leaves the phone. Not affiliated with Moaan."))
+        group().addView(note("Internet is used only for the Home sleep screen's weather: when you set a city, its name is searched and its coordinates are sent to Open-Meteo (open-meteo.com, no account), as often as the sleep screen updates (or at most every 15, 30 or 60 min, as chosen) and only on a network that's already on. \"Estimate from internet connection\" (only when you tap it) sends your public IP address to ipinfo.io once. Nothing else leaves the phone. Not affiliated with Moaan."))
         group().addView(note("The side panel's accessibility service only learns which app is in front, and that a page scrolled, text was typed or the screen changed. It doesn't read what's on screen or what you type."))
         group().addView(note("E-ink control: ${Eink.describe()}."))
         group().addView(note("Source and help: github.com/rn-os/inkpalm-plus · $packageName"))

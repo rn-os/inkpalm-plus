@@ -409,3 +409,8 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   access" (App info) on Weather location and the Home face page; the face says "Weather: no network access for
   InkPalm+" when it has no data (old data keeps "as of"). The user has since allowed it, so on the device the box is
   hidden; the blocked path is untested there.
+- "Weather updates" (asked; separate commit): Sleep screen › Home face: Every refresh (default) / 15 / 30 / 60 min
+  (pref `home_weather_every`). `Home.weatherGap`: Every refresh = 4 min floor asleep (so each Live update at 5 min+
+  fetches) and 5 min awake (minute ticks); else the chosen minutes. Frozen: one fetch at the screen-off render when
+  the gap allows. Notes: Open-Meteo's ~15 min current conditions, ~4 KB a fetch, requests a day (`weatherPerDay`:
+  288 at 5 min). Still only with a network up, 8 s deadline, no retries, never wakes the phone itself.

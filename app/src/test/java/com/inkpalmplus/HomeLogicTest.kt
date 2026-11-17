@@ -157,6 +157,27 @@ class HomeLogicTest {
         assertFalse(Home.due(100 * m + 29 * m, 100 * m))
         assertTrue(Home.due(100 * m + 30 * m, 100 * m))
         assertTrue(Home.due(50 * m, 100 * m))   // the clock went back
+    }
+
+    @Test fun weatherUpdatesChoice() {
+        val m = 60_000L
+        fun due(every: Int, awake: Boolean, ago: Long) = Home.due(1000 * m, 1000 * m - ago, Home.weatherGap(every, awake))
+        // Every refresh (default): each Live update (5 min and up) fetches; not twice within 4 min asleep, 5 min awake.
+        assertEquals(0, Home.WEATHER_EVERY_DEFAULT)
+        assertTrue(due(0, false, 5 * m)); assertTrue(due(0, false, 4 * m)); assertFalse(due(0, false, 3 * m))
+        assertTrue(due(0, true, 5 * m)); assertFalse(due(0, true, 4 * m)); assertFalse(due(0, true, 1 * m))
+        // 15 / 30 / 60 min, awake or not.
+        for (every in listOf(15, 30, 60)) for (awake in listOf(false, true)) {
+            assertFalse(due(every, awake, every * m - 1)); assertTrue(due(every, awake, every * m))
+        }
+        assertTrue(due(60, false, 0) == false)
+        assertTrue(Home.due(5 * m, 0, Home.weatherGap(60, false)))   // never fetched
+        // Requests a day while asleep.
+        assertEquals(288, Home.weatherPerDay(0, 5))
+        assertEquals(96, Home.weatherPerDay(15, 5))
+        assertEquals(24, Home.weatherPerDay(15, 60))
+        assertEquals(null, Home.weatherPerDay(0, 0))
+        assertEquals("Every refresh", Home.weatherEveryLabel(0)); assertEquals("30 min", Home.weatherEveryLabel(30))
         assertFalse(Home.showAge(200 * m, 200 * m - 90 * m, true))
         assertTrue(Home.showAge(200 * m, 200 * m - 91 * m, true))
         assertTrue(Home.showAge(200 * m, 200 * m - 5 * m, false))

@@ -241,8 +241,33 @@ object Home {
     /** A forecast is fetched again after this. */
     const val REFRESH_MS = 30 * 60_000L
 
-    /** Whether a fetch is due: [lastAttempt] (ms, 0: never) this long ago. Never more than once per [REFRESH_MS]. */
-    fun due(now: Long, lastAttempt: Long): Boolean = lastAttempt <= 0 || now - lastAttempt >= REFRESH_MS || now < lastAttempt
+    /** Whether a fetch is due: the last try ([lastAttempt], ms, 0: never) was at least [gap] ms ago. */
+    fun due(now: Long, lastAttempt: Long, gap: Long = REFRESH_MS): Boolean = lastAttempt <= 0 || now - lastAttempt >= gap || now < lastAttempt
+
+    /** "Weather updates": 0 = every sleep-screen refresh (the default), else at most every 15, 30 or 60 min. */
+    val WEATHER_EVERY = listOf(0, 15, 30, 60)
+    const val WEATHER_EVERY_DEFAULT = 0
+    /** Every refresh, asleep: a floor under the Live updates (5 min and up), so nothing fetches twice in a row. */
+    const val EVERY_REFRESH_FLOOR_MS = 4 * 60_000L
+    /** Every refresh, awake: the face is redrawn every minute then; the weather at most every 5 min. */
+    const val EVERY_REFRESH_AWAKE_MS = 5 * 60_000L
+
+    /** The least time between two fetches for the [every] choice; [awake]: the screen is on (minute ticks). */
+    fun weatherGap(every: Int, awake: Boolean): Long = when {
+        every > 0 -> every * 60_000L
+        awake -> EVERY_REFRESH_AWAKE_MS
+        else -> EVERY_REFRESH_FLOOR_MS
+    }
+
+    /** Fetches a day while asleep, for the [every] choice and the sleep screen's update [interval] (min; 0 = Frozen:
+     *  once per screen-off, so null). */
+    fun weatherPerDay(every: Int, interval: Int): Int? = if (interval <= 0) null else 1440 / maxOf(every, interval)
+
+    /** About 4 KB a fetch. */
+    const val WEATHER_KB = 4
+
+    /** "Every refresh", "15 min". */
+    fun weatherEveryLabel(every: Int): String = if (every <= 0) "Every refresh" else "$every min"
 
     /** The face's weather line while Android blocks InkPalm+'s network access ([NetCheck]). */
     const val BLOCKED = "Weather: no network access for InkPalm+"

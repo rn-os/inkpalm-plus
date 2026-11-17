@@ -17,7 +17,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * only when the user taps "Estimate from internet connection" after its explanation, one request to ipinfo.io
  * ([estimateFromIp]), which sees the public IP address.
  *
- * Fetched at most every [Home.REFRESH_MS] (30 min), only when a network is already up (Wi-Fi on; radios are never
+ * Fetched at most as often as "Weather updates" says ([Home.weatherGap]: every Live update by default, else 15/30/60
+ * min; awake at most every 5 min), only when a network is already up (Wi-Fi on; radios are never
  * turned on), with an [TIMEOUT_MS] limit and no retries: asleep it piggybacks on the Live update's alarm wake
  * ([Aod.update]: fetch, then render), awake on the minute tick. The answer is cached (files/weather.json) and shown
  * with its age when stale or offline ([Home.weatherView]).
@@ -30,6 +31,7 @@ object Weather {
     private const val K_UNITS = "home_units"
     private const val K_FETCHED = "home_weather_at"
     private const val K_ATTEMPT = "home_weather_try"
+    private const val K_EVERY = "home_weather_every"
     /** Connect and read, each. */
     const val TIMEOUT_MS = 4_000
     /** The whole fetch (DNS included, which the timeouts don't cover) is waited for this long, then given up. */
@@ -70,8 +72,16 @@ object Weather {
     /** The phone is online but Android blocks InkPalm+'s network access ([NetCheck]). */
     fun blocked(c: Context): Boolean = NetCheck.state(c) == NetCheck.State.BLOCKED
 
-    /** A fetch is due: a city is set, the last try was 30 min ago or more, and a network is up. */
-    fun due(c: Context): Boolean = city(c) != null && Home.due(System.currentTimeMillis(), Prefs(c).sp.getLong(K_ATTEMPT, 0L)) && online(c)
+    /** "Weather updates" ([Home.WEATHER_EVERY]): 0 = every sleep-screen refresh. */
+    fun every(c: Context): Int = Prefs(c).sp.getInt(K_EVERY, Home.WEATHER_EVERY_DEFAULT).let { if (it in Home.WEATHER_EVERY) it else Home.WEATHER_EVERY_DEFAULT }
+    fun setEvery(c: Context, minutes: Int) = Prefs(c).sp.edit().putInt(K_EVERY, minutes).apply()
+
+    /** A fetch is due: a city is set, the last try was [Home.weatherGap] ago or more, and a network is up. */
+    fun due(c: Context): Boolean {
+        if (city(c) == null) return false
+        val awake = runCatching { c.getSystemService(android.os.PowerManager::class.java).isInteractive }.getOrDefault(false)
+        return Home.due(System.currentTimeMillis(), Prefs(c).sp.getLong(K_ATTEMPT, 0L), Home.weatherGap(every(c), awake)) && online(c)
+    }
 
     private val busy = AtomicBoolean(false)
 

@@ -266,8 +266,8 @@ object Home {
     /** About 4 KB a fetch. */
     const val WEATHER_KB = 4
 
-    /** "Every refresh", "15 min". */
-    fun weatherEveryLabel(every: Int): String = if (every <= 0) "Every refresh" else "$every min"
+    /** "Each update" (each sleep-screen update), "15 min". */
+    fun weatherEveryLabel(every: Int): String = if (every <= 0) "Each update" else "$every min"
 
     /** The face's weather line while Android blocks InkPalm+'s network access ([NetCheck]). */
     const val BLOCKED = "Weather: no network access for InkPalm+"

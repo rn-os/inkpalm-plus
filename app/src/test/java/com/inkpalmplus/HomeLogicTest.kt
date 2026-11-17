@@ -177,7 +177,7 @@ class HomeLogicTest {
         assertEquals(96, Home.weatherPerDay(15, 5))
         assertEquals(24, Home.weatherPerDay(15, 60))
         assertEquals(null, Home.weatherPerDay(0, 0))
-        assertEquals("Every refresh", Home.weatherEveryLabel(0)); assertEquals("30 min", Home.weatherEveryLabel(30))
+        assertEquals("Each update", Home.weatherEveryLabel(0)); assertEquals("30 min", Home.weatherEveryLabel(30))
         assertFalse(Home.showAge(200 * m, 200 * m - 90 * m, true))
         assertTrue(Home.showAge(200 * m, 200 * m - 91 * m, true))
         assertTrue(Home.showAge(200 * m, 200 * m - 5 * m, false))

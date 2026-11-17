@@ -115,7 +115,7 @@ Home has two pages: **Dashboard** (the clock, your next 3 events, then cards for
 
 | Setting | What it does |
 |---|---|
-| **Weather location** | Search for your city once, or tap **Use my location** for a one-time fix (asks for location the first time: precise works best, since Android limits how often approximate lookups run; either way it's used once, never tracked, and kept to about 1 km). On a phone with microG, its Wi-Fi location must be on (microG Settings → Location), and microG itself needs precise location allowed all the time (Android's permission page doesn't offer that for it): when it lacks it, **Fix microG location** grants exactly that, to microG only, after asking (through KompaktOS's bridge or Shizuku; otherwise it opens microG's permission page); if nothing is found you can instead **Estimate from internet connection**, which sends your public IP address to ipinfo.io for a city-level guess, only when you tap it. The weather comes from [Open-Meteo](https://open-meteo.com) (free, no account), during the sleep screen's updates and only when Wi-Fi is already on: **Weather updates** is **Every refresh** (the default: each update, so every 5 min at 5 min; at most every 5 min while the screen is on) or at most every 15, 30 or 60 min. Each fetch is about 4 KB. Offline or more than 90 minutes old, the face says "as of 6:40" |
+| **Weather location** | Search for your city once, or tap **Use my location** for a one-time fix (asks for location the first time: precise works best, since Android limits how often approximate lookups run; either way it's used once, never tracked, and kept to about 1 km). On a phone with microG, its Wi-Fi location must be on (microG Settings → Location), and microG itself needs precise location allowed all the time (Android's permission page doesn't offer that for it): when it lacks it, **Fix microG location** grants exactly that, to microG only, after asking (through KompaktOS's bridge or Shizuku; otherwise it opens microG's permission page); if nothing is found you can instead **Estimate from internet connection**, which sends your public IP address to ipinfo.io for a city-level guess, only when you tap it. The weather comes from [Open-Meteo](https://open-meteo.com) (free, no account), during the sleep screen's updates and only when Wi-Fi is already on: **Weather updates** is **Each update** (the default: each sleep-screen update, so every 5 min at 5 min; at most every 5 min while the screen is on) or at most every 15, 30 or 60 min. Each fetch is about 4 KB. Offline or more than 90 minutes old, the face says "as of 6:40" |
 | **Units** | Auto (°F in the US, else °C), °C or °F |
 | **Countdowns** | Picked from your calendar: all-day, multi-day and 4-hour-or-longer events in the next 60 days, nearest first ("12 days to Lisbon trip", "Tomorrow: …"). **Pin** one to always show it first, **Hide** one to never show it |
 | **Trash day** | Off by default. Pick the weekdays for recycling and for trash: the face shows "Recycling tomorrow" the day before and "Trash today" on the day |
@@ -213,12 +213,12 @@ These are the actions already built into the device. Changes apply on the next t
 
 ## Home screen
 
-The home screen has six rows; each opens one screen (‹ goes back) and says what's set there. Nothing is more than two levels deep. A screen taller than the display is split into pages: **‹ ›** and **1 / 2** at the bottom, no scrolling. Explanations are small grey notes under the setting they explain.
+The home screen has six rows; each opens one screen (‹ goes back) and says what's set there. Nothing is more than two levels deep. A screen with more than fits has named tabs under its title (tap one to switch; the last one you used comes back), and rarely used settings sit behind an **Advanced ›** row at the bottom. Explanations are small grey notes under the setting they explain.
 
 <img src="docs/launch/5-home.png" width="720" alt="The InkPalm+ home screen">
 
-- **Sleep screen** (KompaktOS): the face in use with a small preview (tap it for the [picker](#sleep-screen-kompaktos)), **Update** (Frozen, 5, 15, 30, 60 min), **Show update time**; Choose picture… and Photo style for Photo and Picture; with the Home face, a second page **Home face**: **Weather location**, **Units**, **Countdowns**, **Trash day**.
-- **Screen & light:** on KompaktOS, page 1 the **screen mode** everywhere (Fast, Soft, Dither, Text, Quality, Auto), **Full refresh** and **Contrast**; page 2 the **Front light** (follows Android's brightness) and KompaktOS's switches (its per-app modes, a real refresh on its Refresh tile). On the stock firmware, the [E-ink settings](#e-ink-settings-screen) and your apps.
+- **Sleep screen** (KompaktOS), tabs **Face · Updates · Home face**: **Face** has the face in use with a small preview (tap it for the [picker](#sleep-screen-kompaktos)), Choose picture… and Photo style for Photo and Picture, and calendar access when a face needs it; **Updates** has how often it's redrawn (Frozen, 5, 15, 30, 60 min) and **Show update time**; **Home face** (only while the Home face is in use) has **Weather location**, **Weather updates**, **Units**, **Countdowns** and **Trash day**.
+- **Screen & light:** on KompaktOS, tabs **Screen** (the **screen mode** everywhere: Fast, Soft, Dither, Text, Quality, Auto; **Full refresh**; **Contrast**) and **Light** (follows Android's brightness). **Advanced ›**: KompaktOS's switches (its per-app modes, a real refresh on its Refresh tile). On the stock firmware, the [E-ink settings](#e-ink-settings-screen) and your apps.
 - **Side panel:**
   - **Side panel.** Opens Accessibility so you can turn the service on or off.
   - **Edge.** Left or Right.
@@ -226,14 +226,14 @@ The home screen has six rows; each opens one screen (‹ goes back) and says wha
   - **Apps kept.** 9, 18 or 27.
   - **Newest app.** Bottom (the default) or Top of the list.
   - **Clear recent apps.** Starts the list again.
-  - Page 2: **Strip width** (6 to 40 dp), **Show strip**, **Screen & light strip** (KompaktOS, the other edge's strip), **Edge Back**, and **Keeping the panel on** (see below).
+  - **Advanced ›**: **Strip width** (6 to 40 dp), **Show strip**, **Screen & light strip** (KompaktOS, the other edge's strip), **Edge Back**, and **Keeping the panel on** (see below).
 - **Power off** (KompaktOS): the power-off picture and auto power-off.
 - **Buttons & reading:** the [touch button](#touch-button) (KompaktOS: a short touch is Home; **Hold** is Nothing or Full refresh), and your reader app, NeoReader, KOReader or None (you're asked once, the first time you open InkPalm+).
 - **About:** the version, and what InkPalm+ can see.
 
 ## Keeping the panel on
 
-On the home screen, tap **Side panel**; the switches are on its second page. Both are optional, and both need Shizuku or a one-time adb command.
+On the home screen, tap **Side panel**, then **Advanced**. Both are optional, and both need Shizuku or a one-time adb command.
 
 - **Survives Clear Memory.** Moaan's Clear Memory force-stops every app that isn't on its whitelist, and Android then switches the panel off. This adds InkPalm+ to the whitelist. The screen shows the exact `adb shell "settings put system ..."` command if Shizuku isn't running.
 - **Turns itself back on.** If the panel gets switched off by mistake, InkPalm+ switches it back on, when it opens and after a restart. This needs the `WRITE_SECURE_SETTINGS` permission, which the touch button settings also use. Tap the switch with Shizuku running, or run this once from a computer (it survives restarts and updates):

@@ -12,15 +12,20 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
 
 ## Code (`app/src/main/java/com/inkpalmplus/`)
 - `EinkDb`: the model (`Profile`, `Refresh`), reading/writing Moaan's table (directly, Shizuku fallback), `setAppDpiToMap`.
-- `MainActivity`: settings (mockup docs/mockups/settings-reorg/): home = six rows with summaries (Sleep screen, Screen &
-  light, Side panel, Power off, Buttons & reading, About), each opening a screen; at most two levels (Sleep screen ›
-  Weather/Countdowns/Trash day). Screens are built as groups (`group()`: a setting with its notes) and **paged, not
-  scrolled**: `show()` measures the groups at runtime and `Paging.split`s them (`SettingsPages.kt`, pure, tested with
-  `Summaries`); ‹ › and "1 / 2" at the bottom; `newPage` forces a break, `title` gives the breadcrumb, `anchor` a deep
-  link's page. A page scrolls only when one group is taller than it. Rows ≥ 56 dp, explanations as `note()`s.
-  `SectionActivity` (exported in debug; `--es section sleep|weather|countdowns|trash|screen|panel|power|buttons|about|eink`;
-  old names still work: `aod` → sleep, `light` → screen p.2, `keep_on` → panel p.2, `touch`/`reading` → buttons):
-  `eink` is the stock firmware's Screen & light (e-ink settings, "Search apps", the per-app list; still scrolls).
+- `MainActivity`: settings (mockups docs/mockups/settings-reorg/ and settings-tabs/): home = six rows with summaries
+  (Sleep screen, Screen & light, Side panel, Power off, Buttons & reading, About), each opening a screen; at most two
+  levels (Sleep screen › Weather/Countdowns/Trash day; Screen & light › Advanced; Side panel › Advanced). **Named tabs,
+  no pager**: `tabs(Tabs.sleep(..))` under the title (segmented, current filled black, 52 dp, no animation; a tap
+  re-renders), Sleep screen = Face · Updates · Home face (only with the Home face), Screen & light = Screen · Light;
+  rarely used settings behind an "Advanced ›" row `pin()`ned at the bottom. The last tab per screen is remembered for
+  the process (`lastTab`). Screens are built as groups (`group()`: a setting with its notes); `show()` lays them out,
+  two columns in landscape (`Columns.split`); a tab that still doesn't fit scrolls and logs "settings: <screen>/<tab>/
+  <orientation> doesn't fit". Pure parts in `SettingsTabs.kt` (`Sections.resolve`, `Tabs`, `Columns`, `Summaries`;
+  tested). Rows ≥ 56 dp, explanations as `note()`s. `SectionActivity` (exported in debug; `--es section
+  sleep|weather|countdowns|trash|screen|screen_advanced|panel|panel_advanced|power|buttons|about|eink`, optional
+  `--es tab face|updates|home|screen|light`; older/extra names: `aod` → sleep Face, `updates`/`home_face` → sleep's
+  tab, `light` → screen Light, `keep_on` → panel_advanced, `touch`/`reading` → buttons): `eink` is the stock
+  firmware's Screen & light (e-ink settings, "Search apps", the per-app list; scrolls).
 - `FacePicker` (pure: the picker's pages from `Aod.Face` × styles, the one in use, "All" groups, setup lines) and
   `FacePickerActivity` (exported in debug): the sleep-screen picker, one face and style a page, true-shape previews
   (`FacePreview`), "Use this" (`Aod.choose`), "All" grid; landscape = preview left, controls right (mockup
@@ -74,7 +79,7 @@ SuperBoox (`~/Github Repos/superboox`), which it borrows its UI helpers, test ha
 
 ## Permissions
 - INTERNET (and ACCESS_NETWORK_STATE) exist **only for the Home face's weather** (`Weather`: Open-Meteo forecast for
-  the user's city coordinates, and its geocoding search; and the IP city estimate when the user taps it). Fetch as "Weather updates" says (`Home.weatherGap`: Every refresh = each Live update, 4 min floor asleep, 5 min awake; or 15/30/60 min), only when a network is already
+  the user's city coordinates, and its geocoding search; and the IP city estimate when the user taps it). Fetch as "Weather updates" says (`Home.weatherGap`: Each update = each Live update, 4 min floor asleep, 5 min awake; or 15/30/60 min), only when a network is already
   up, ~8 s limit, no retries; never turn radios on. Don't add other network use without the user asking: the app's
   privacy promise is "nothing else leaves the phone" (README, About).
 - ACCESS_COARSE_LOCATION + ACCESS_FINE_LOCATION (asked together; the user may give either) only for Weather location

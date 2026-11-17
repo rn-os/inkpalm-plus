@@ -21,15 +21,17 @@ import android.widget.TextView
 import rikka.shizuku.Shizuku
 
 /**
- * Settings (docs/mockups/settings-reorg/): a home menu of six rows, each with a one-line summary, opening one screen
- * ([SectionActivity]): Sleep screen, Screen & light, Side panel, Power off, Buttons & reading, About. Nothing is more
- * than two levels deep (Sleep screen › Weather, Countdowns, Trash day).
+ * Settings (docs/mockups/settings-reorg/, tabs from docs/mockups/settings-tabs/): a home menu of six rows, each with a
+ * one-line summary, opening one screen ([SectionActivity]): Sleep screen, Screen & light, Side panel, Power off,
+ * Buttons & reading, About. Nothing is more than two levels deep (Sleep screen › Weather, Countdowns, Trash day;
+ * Screen & light › Advanced; Side panel › Advanced).
  *
- * A screen is built as groups (a setting with its notes); groups never split, and a screen taller than the display is
- * paged with ‹ › and "1 / 2" at the bottom instead of scrolling ([Paging], measured at runtime, so orientation and
- * font scale are handled). A page scrolls only when a single group is taller than it.
+ * A screen with more than fits has named tabs under its title ([Tabs]: Sleep screen = Face · Updates · Home face,
+ * Screen & light = Screen · Light) and rarely used settings behind an "Advanced ›" row pinned at the bottom. A screen is
+ * built as groups (a setting with its notes); in landscape they're laid out in two columns, like a book ([Columns]).
+ * A tab that still doesn't fit (large font scale, a long list) scrolls rather than clipping, and says so in the log.
  *
- * Stock firmware's "Screen & light" is the per-app e-ink screen (search and the app list), which still scrolls.
+ * Stock firmware's "Screen & light" is the per-app e-ink screen (search and the app list), which scrolls.
  */
 open class MainActivity : Activity() {
     // Stock firmware's E-ink screen (a scrolling list).
@@ -41,26 +43,30 @@ open class MainActivity : Activity() {
     private var apps: List<AppEntry> = emptyList()
     private var profiles: Map<String, EinkDb.Profile> = emptyMap()
 
-    // Paged screens.
+    // Tabbed screens.
     private lateinit var titleView: TextView
-    /** Below the header: the page and the pager. Its size is what a page gets. */
+    /** Below the header: the tab row, the tab's content (scrolls only when it can't fit) and the pinned row. */
     private lateinit var area: LinearLayout
-    private lateinit var pageScroll: ScrollView
-    private lateinit var pageBox: LinearLayout
-    private lateinit var pager: LinearLayout
+    private lateinit var tabBar: LinearLayout
+    private lateinit var scroll: ScrollView
+    private lateinit var contentBox: LinearLayout
+    private lateinit var pinBox: LinearLayout
 
-    /** A setting with its notes: kept on one page. [newPage]: always starts a page; [title]: the page's breadcrumb
-     *  (for it and the pages after it); [anchor]: a deep link's target. */
-    private class Group(val box: LinearLayout, val newPage: Boolean, val title: String?, val anchor: String?)
+    /** A setting with its notes, kept in one column; [anchor]: a link's target, scrolled to. */
+    private class Group(val box: LinearLayout, val anchor: String?)
     private val groups = ArrayList<Group>()
-    private var pages: List<IntRange> = listOf(IntRange.EMPTY)
-    /** The page shown (a screenful: [cols] columns of [pages]). */
-    private var page = 0
+    private var tabs: List<Tab> = emptyList()
+    /** The tab shown ([Tabs] key); null on a screen without tabs. */
+    private var tab: String? = null
+    /** The row pinned under the content ("Advanced ›"). */
+    private var pinned: View? = null
     private var cols = 1
-    /** After a rotation: show the page holding this group. */
-    private var restoreGroup = -1
-    /** A deep link's group ([Group.anchor]), shown on the first layout. */
+    /** The next [show] starts at the top (a new tab), instead of keeping the scroll position (a setting changed). */
+    private var scrollTop = true
+    /** A link's group ([Group.anchor]), scrolled to on the next [show]. */
     private var anchorPending: String? = null
+    /** Logged once a visit for each tab that doesn't fit. */
+    private val overflowLogged = HashSet<String>()
 
     /** Icon loaded with the list, off the main thread: ~100 icons are slow to decode. */
     data class AppEntry(val pkg: String, val label: String, val icon: android.graphics.drawable.Drawable?)
@@ -68,17 +74,12 @@ open class MainActivity : Activity() {
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { _, _ -> reload() }
     private val binderListener = Shizuku.OnBinderReceivedListener { Shell.main.post { reload() } }
 
-    private val asked: String? by lazy { intent.getStringExtra(EXTRA_SECTION) }
-    /** Which screen this is: null for home, else one of the SECTION_ names (older names mapped to their new home). */
-    private val section: String? by lazy {
-        when (val s = asked) {
-            SECTION_AOD -> SECTION_SLEEP
-            SECTION_LIGHT -> SECTION_SCREEN
-            SECTION_KEEP_ON -> SECTION_PANEL
-            SECTION_TOUCH, SECTION_READING -> SECTION_BUTTONS
-            else -> s
-        }.let { if (it == SECTION_SCREEN && !Eink.isKompakt) SECTION_EINK else it }
+    /** Where this screen's link opens ([Sections.resolve]: older names open the screen and tab they moved to). */
+    private val target: Sections.Target by lazy {
+        Sections.resolve(intent.getStringExtra(EXTRA_SECTION), Eink.isKompakt, intent.getStringExtra(EXTRA_TAB))
     }
+    /** Which screen this is: null for home, else one of the SECTION_ names. */
+    private val section: String? by lazy { target.section }
 
     /** The first-start question's pick so far: a reader, or null for No reader ([askPicked] says whether one was tapped). */
     private var askPick: Readers.App? = null
@@ -88,13 +89,8 @@ open class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        restoreGroup = savedInstanceState?.getInt(STATE_GROUP, -1) ?: -1
-        if (savedInstanceState == null) anchorPending = when (asked) {
-            SECTION_LIGHT -> ANCHOR_LIGHT
-            SECTION_KEEP_ON -> ANCHOR_KEEP_ON
-            SECTION_READING -> ANCHOR_READING
-            else -> null
-        }
+        tab = savedInstanceState?.getString(STATE_TAB) ?: target.tab
+        if (savedInstanceState == null) anchorPending = target.anchor
         val root = vbox().apply { setBackgroundColor(Ink.PAPER) }
         root.addView(hbox().apply {
             setPadding(g, dp(12), g, dp(8))
@@ -128,14 +124,16 @@ open class MainActivity : Activity() {
             root.addView(appsBox)
             setContentView(ScrollView(this).apply { isFillViewport = true; addView(root) })
         } else {
-            // The keyboard pans the page instead of resizing it (a resize would page again and drop the field's focus).
+            // The keyboard pans the screen instead of resizing it (a resize would lay it out again and drop the field's focus).
             window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
-            pageBox = hbox().apply { gravity = Gravity.TOP; setPadding(0, 0, 0, dp(PAGE_BOTTOM)) }
-            pageScroll = ScrollView(this).apply { isVerticalScrollBarEnabled = true; addView(pageBox, lp(MATCH, WRAP)) }
-            pager = hbox().apply { setPadding(g, dp(4), g, dp(8)); visibility = View.GONE }
+            tabBar = hbox().apply { setPadding(g, dp(10), g, dp(6)); visibility = View.GONE }
+            contentBox = hbox().apply { gravity = Gravity.TOP; setPadding(0, 0, 0, dp(CONTENT_BOTTOM)) }
+            scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = true; addView(contentBox, lp(MATCH, WRAP)) }
+            pinBox = vbox().apply { visibility = View.GONE }
             area = vbox()
-            area.addView(pageScroll, lp(MATCH, 0, 1f))
-            area.addView(pager, lp(MATCH, dp(PAGER)))
+            area.addView(tabBar, lp(MATCH, WRAP))
+            area.addView(scroll, lp(MATCH, 0, 1f))
+            area.addView(pinBox, lp(MATCH, WRAP))
             area.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
                 if (r - l != or - ol || b - t != ob - ot) area.post { show() }
             }
@@ -148,7 +146,7 @@ open class MainActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        pages.getOrNull(page * cols)?.takeIf { !it.isEmpty() }?.let { outState.putInt(STATE_GROUP, it.first) }
+        tab?.let { outState.putString(STATE_TAB, it) }
     }
 
     override fun onDestroy() {
@@ -186,7 +184,9 @@ open class MainActivity : Activity() {
             SECTION_COUNTDOWNS -> renderCountdowns()
             SECTION_TRASH -> renderTrash()
             SECTION_SCREEN -> renderScreen()
+            SECTION_SCREEN_ADVANCED -> renderScreenAdvanced()
             SECTION_PANEL -> renderPanel()
+            SECTION_PANEL_ADVANCED -> renderPanelAdvanced()
             SECTION_POWER -> renderPower()
             SECTION_BUTTONS -> renderButtons()
             SECTION_ABOUT -> renderAbout()
@@ -200,60 +200,108 @@ open class MainActivity : Activity() {
         SECTION_COUNTDOWNS -> "Sleep screen › Countdowns"
         SECTION_TRASH -> "Sleep screen › Trash day"
         SECTION_SCREEN, SECTION_EINK -> "Screen & light"
+        SECTION_SCREEN_ADVANCED -> "Screen & light › Advanced"
         SECTION_PANEL -> "Side panel"
+        SECTION_PANEL_ADVANCED -> "Side panel › Advanced"
         SECTION_POWER -> "Power off"
         SECTION_BUTTONS -> "Buttons & reading"
         SECTION_ABOUT -> "About"
         else -> getString(R.string.app_name)
     }
 
-    // ---- Pages ------------------------------------------------------------------------------------
+    // ---- Tabs ------------------------------------------------------------------------------------------
 
-    private fun begin() = groups.clear()
+    private fun begin() { groups.clear(); tabs = emptyList(); pinned = null }
 
     /** Starts a group; what's added next goes into it. */
-    private fun group(newPage: Boolean = false, title: String? = null, anchor: String? = null): LinearLayout =
-        vbox().also { groups += Group(it, newPage, title, anchor) }
+    private fun group(anchor: String? = null): LinearLayout = vbox().also { groups += Group(it, anchor) }
 
-    /** Measures the groups at a column's width, splits them into columns no taller than the page (one column a
-     *  page; two side by side in landscape, like a book) and shows the current page. */
+    /** This screen's tabs; picks the one to show (this visit's, else the session's last, else the first) and remembers it. */
+    private fun tabs(list: List<Tab>): String? {
+        tabs = list
+        tab = Tabs.pick(list, tab, lastTab[section])
+        tab?.let { t -> section?.let { lastTab[it] = t } }
+        return tab
+    }
+
+    private fun selectTab(key: String) {
+        if (key == tab) return
+        tab = key; scrollTop = true
+        section?.let { lastTab[it] = key }
+        render()
+    }
+
+    /** A row pinned under the content, always visible ("Advanced ›"). */
+    private fun pin(row: View) { pinned = row }
+
+    /** Segmented tabs: the current one filled black, the others outlined; one tap swaps the content, no animation. */
+    private fun renderTabBar(width: Int) {
+        tabBar.removeAllViews()
+        if (tabs.size < 2) { tabBar.visibility = View.GONE; return }
+        tabBar.visibility = View.VISIBLE
+        val bar = hbox().apply { background = outline(2, Radius.SMALL); setPadding(dp(2), dp(2), dp(2), dp(2)) }
+        tabs.forEachIndexed { i, t ->
+            val on = t.key == tab
+            if (i > 0) bar.addView(View(this).apply { setBackgroundColor(Ink.INK) }, lp(dp(2), MATCH))
+            bar.addView(text(t.title, Type.L, bold = true, color = if (on) Ink.PAPER else Ink.INK).apply {
+                gravity = Gravity.CENTER
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+                minHeight = dp(TAB_HEIGHT)
+                setPadding(dp(6), 0, dp(6), 0)
+                if (on) setBackgroundColor(Ink.INK) else pressable()
+                isSelected = on
+                contentDescription = "${t.title} tab" + if (on) ", selected" else ""
+                setOnClickListener { selectTab(t.key) }
+            }, lp(0, MATCH, 1f))
+        }
+        // Landscape: the tabs span the left column, as in the mockup.
+        tabBar.addView(bar, lp(if (width > 0 && cols == 2) width / 2 - g * 2 else MATCH, dp(TAB_HEIGHT + 4)))
+    }
+
+    /** Lays out the tab's groups (two columns side by side in landscape), the tab row and the pinned row. The content
+     *  scrolls only when it can't fit; that's logged. */
     private fun show() {
         if (section == SECTION_EINK || isDestroyed) return
-        val w = area.width; val h = area.height
-        if (w == 0 || h == 0) return   // the layout listener calls again once there's a size
+        val w = area.width
+        if (w == 0) return   // the layout listener calls again once there's a size
+        val y = if (scrollTop) 0 else scroll.scrollY
+        scrollTop = false
         for (gr in groups) (gr.box.parent as? ViewGroup)?.removeView(gr.box)
-        cols = if (w > h && w >= dp(TWO_COLUMNS)) 2 else 1
-        val ws = View.MeasureSpec.makeMeasureSpec(w / cols, View.MeasureSpec.EXACTLY)
-        val hs = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-        val heights = groups.map { it.box.measure(ws, hs); it.box.measuredHeight }
-        val breaks = groups.indices.filter { groups[it].newPage }.toSet()
-        val bottom = dp(PAGE_BOTTOM)
-        pages = Paging.split(heights, h - bottom, breaks)
-        val paged = Paging.screens(pages.size, cols) > 1
-        if (paged) pages = Paging.split(heights, h - dp(PAGER) - bottom, breaks)
-        val screens = Paging.screens(pages.size, cols)
-        anchorPending?.let { a ->
-            groups.indexOfFirst { it.anchor == a }.takeIf { it >= 0 }?.let { page = Paging.pageOf(pages, it) / cols }
-            anchorPending = null
+        cols = if (w > area.height && w >= dp(TWO_COLUMNS)) 2 else 1
+        val split = if (cols == 2) {
+            val ws = View.MeasureSpec.makeMeasureSpec(w / 2, View.MeasureSpec.EXACTLY)
+            val hs = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            Columns.split(groups.map { it.box.measure(ws, hs); it.box.measuredHeight })
+        } else groups.size
+        contentBox.removeAllViews()
+        val columns = if (cols == 2) listOf(0 until split, split until groups.size) else listOf(groups.indices)
+        columns.forEachIndexed { c, range ->
+            if (c > 0) contentBox.addView(View(this).apply { setBackgroundColor(Ink.INK) }, lp(dp(1), MATCH).apply { topMargin = dp(8) })
+            contentBox.addView(vbox().apply { for (i in range) addView(groups[i].box, lp(MATCH, WRAP)) }, lp(0, WRAP, 1f))
         }
-        if (restoreGroup >= 0) { page = Paging.pageOf(pages, restoreGroup) / cols; restoreGroup = -1 }
-        page = page.coerceIn(0, screens - 1)
-        pageBox.removeAllViews()
-        for (c in 0 until cols) pageBox.addView(vbox().apply {
-            pages.getOrNull(page * cols + c)?.forEach { addView(groups[it].box, lp(MATCH, WRAP)) }
-        }, lp(0, WRAP, 1f))
-        pageScroll.scrollTo(0, 0)
-        val first = pages[page * cols].let { if (it.isEmpty()) -1 else it.first }
-        val sub = (first downTo 0).firstNotNullOfOrNull { groups[it].title }
-        titleView.text = if (sub != null) "${baseTitle()} › $sub" else baseTitle()
-        pager.removeAllViews()
-        pager.visibility = if (paged) View.VISIBLE else View.GONE
-        if (!paged) return
-        pager.addView(inkIconButton(R.drawable.ic_back, "Previous page", 48, enabled = page > 0) { page--; show() }, lp(dp(88), dp(48)))
-        pager.addView(text(Paging.label(page, screens), Type.L, bold = true).apply { gravity = Gravity.CENTER }, lp(0, WRAP, 1f))
-        pager.addView(inkIconButton(R.drawable.ic_back, "Next page", 48, enabled = page < screens - 1) { page++; show() }.apply {
-            (this as ViewGroup).getChildAt(0).scaleX = -1f
-        }, lp(dp(88), dp(48)))
+        renderTabBar(w)
+        pinBox.removeAllViews()
+        pinned?.let { pinBox.addView(divider()); pinBox.addView(it) }
+        pinBox.visibility = if (pinned != null) View.VISIBLE else View.GONE
+        titleView.text = baseTitle()
+        val anchor = anchorPending?.let { a -> groups.firstOrNull { it.anchor == a }?.box }
+        anchorPending = null
+        // Once laid out: back to where it was (or the link's group), and log a tab that doesn't fit.
+        scroll.viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                if (scroll.viewTreeObserver.isAlive) scroll.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                if (isDestroyed) return
+                if (anchor != null && anchor.parent != null) {
+                    val r = android.graphics.Rect(); anchor.getDrawingRect(r); contentBox.offsetDescendantRectToMyCoords(anchor, r)
+                    scroll.scrollTo(0, r.top)
+                } else scroll.scrollTo(0, y)
+                val key = "$section/${tab ?: "-"}/${if (cols == 2) "landscape" else "portrait"}"
+                if (Columns.overflows(contentBox.height, scroll.height) && overflowLogged.add(key))
+                    android.util.Log.i(TAG, "settings: $key doesn't fit (${contentBox.height} > ${scroll.height} px at font scale " +
+                        "${resources.configuration.fontScale}), it scrolls")
+            }
+        })
     }
 
     private fun openSection(name: String) = startActivity(Intent(this, SectionActivity::class.java).putExtra(EXTRA_SECTION, name))
@@ -479,10 +527,21 @@ open class MainActivity : Activity() {
         addView(inkButton("Allow") { askCalendar(fromSettings = true, ASK_CALENDAR) }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
     }
 
+    /** Sleep screen: Face · Updates · Home face (only while the Home face is in use). */
     private fun renderSleep() {
         begin()
         if (!Aod.supported()) { group().addView(note("Needs KompaktOS's bridge.")); show(); return }
         val face = Aod.face(this)
+        when (tabs(Tabs.sleep(face == Aod.Face.HOME))) {
+            Tabs.UPDATES -> renderSleepUpdates(face)
+            Tabs.HOME -> renderHomeRows()
+            else -> renderSleepFace(face)
+        }
+        show()
+    }
+
+    /** The face in use (opens the picker), its picture and photo style, calendar access. */
+    private fun renderSleepFace(face: Aod.Face) {
         group().apply { addView(faceRow(faceLabel())); addView(divider()) }
         if ((face == Aod.Face.AGENDA || face == Aod.Face.HOME) && Aod.needsCalendar(this)) group().addView(calendarBox(face), boxLp())
         if (face == Aod.Face.PHOTO || face == Aod.Face.PICTURE) group().apply {
@@ -502,9 +561,16 @@ open class MainActivity : Activity() {
             }
             addView(divider())
         }
+        group().apply {
+            if (!face.drawn) addView(note("Updates apply to the drawn faces, not to Default or Picture."))
+            addView(note("In landscape the face is drawn sideways to match. It's redrawn every minute while the screen is on, so it's ready when you press the power button."))
+        }
+    }
+
+    /** How often the face is redrawn asleep, what it costs, and the "Updated 10:34" line. */
+    private fun renderSleepUpdates(face: Aod.Face) {
         val minutes = Aod.interval(this)
         group().apply {
-            addView(sectionTitle("Update"))
             val ints = Aod.INTERVALS
             addView(choicesBlock("", "", ints.map { if (it == 0) "Frozen" else "$it min" }, ints.indexOf(minutes).coerceAtLeast(0)) { i ->
                 Aod.setInterval(this@MainActivity, ints[i]); renderSleep()
@@ -520,25 +586,29 @@ open class MainActivity : Activity() {
             addView(toggleRow("Show update time", "The small \"Updated 10:34\" line at the bottom", stamp) {
                 Aod.setShowStamp(this@MainActivity, !stamp); renderSleep()
             })
+            addView(divider())
             addView(note("Seconds are never shown: a panel refresh every second would drain the battery."))
             addView(note("The front light stays off during updates, so nothing glows in your pocket."))
         }
-        group().apply {
-            addView(note("In landscape the face is drawn sideways to match. It's redrawn every minute while the screen is on, so it's ready when you press the power button."))
-            if (face == Aod.Face.HOME) addView(note("Home face options on the next page ›"))
-        }
-        if (face == Aod.Face.HOME) renderHomeRows()
-        show()
     }
 
-    /** The Home face's options: always on a page of their own ("Sleep screen › Home face"). */
+    /** The Home face's options (its tab): weather location and updates, units, countdowns, trash day. */
     private fun renderHomeRows() {
-        group(newPage = true, title = "Home face").apply {
-            addView(sectionTitle("Home face"))
-            val city = Weather.city(this@MainActivity)
-            if (city != null && Weather.blocked(this@MainActivity)) addView(netBlockedBox(), boxLp())
+        val city = Weather.city(this)
+        if (city != null && Weather.blocked(this)) group().addView(netBlockedBox(), boxLp())
+        group().apply {
             addView(navRow("Weather location", city?.name ?: "Not set · search for your city", SECTION_WEATHER))
             addView(divider())
+        }
+        // Finding the city by location needs microG's Wi-Fi location: offer the fix here too while there's no city.
+        if (city == null) microgGroup()
+        group().apply {
+            val every = Weather.every(this@MainActivity)
+            addView(choicesBlock("Weather updates", "How often the forecast is fetched", Home.WEATHER_EVERY.map { Home.weatherEveryLabel(it) },
+                Home.WEATHER_EVERY.indexOf(every)) { i -> Weather.setEvery(this@MainActivity, Home.WEATHER_EVERY[i]); renderSleep() })
+            addView(divider())
+        }
+        group().apply {
             val units = Home.Units.entries
             val auto = if (Home.fahrenheit(Home.Units.AUTO)) "°F" else "°C"
             addView(choicesBlock("Units", "Auto follows your region (now $auto)", units.map { it.title }, units.indexOf(Weather.units(this@MainActivity))) { i ->
@@ -546,23 +616,20 @@ open class MainActivity : Activity() {
             })
             addView(divider())
         }
-        group(title = "Home face").apply {
+        group().apply {
             val pins = Aod.pinned(this@MainActivity).size; val hides = Aod.hidden(this@MainActivity).size
             addView(navRow("Countdowns", "From your calendar" + (if (pins > 0) " · $pins pinned" else "") + (if (hides > 0) " · $hides hidden" else ""), SECTION_COUNTDOWNS))
             addView(divider())
             addView(navRow("Trash day", trashLabel(), SECTION_TRASH))
             addView(divider())
         }
-        group(title = "Home face").apply {
+        group().apply {
             val every = Weather.every(this@MainActivity)
-            addView(choicesBlock("Weather updates", "How often the forecast is fetched", Home.WEATHER_EVERY.map { Home.weatherEveryLabel(it) },
-                Home.WEATHER_EVERY.indexOf(every)) { i -> Weather.setEvery(this@MainActivity, Home.WEATHER_EVERY[i]); renderSleep() })
-            addView(note("Open-Meteo updates current conditions about every 15 minutes. Each fetch is one small request over Wi\u2011Fi (about ${Home.WEATHER_KB} KB)."))
             val minutes = Aod.interval(this@MainActivity)
-            addView(note(Home.weatherPerDay(every, minutes)?.let { n -> "With updates every $minutes min: about $n requests a day (~${n * Home.WEATHER_KB / 100 / 10.0} MB), each 1–2 s more awake." }
-                ?: "Frozen: one fetch when the screen goes off (if the last was ${if (every > 0) "$every" else "4"}+ min ago)."))
-            addView(note("Only when Wi\u2011Fi is already on (never turned on); while the screen is on, at most every 5 min."))
-            addView(note("The Home face shows your events and countdowns, so it needs calendar access."))
+            addView(note("Each fetch is one small request (about ${Home.WEATHER_KB} KB), only when Wi\u2011Fi is already on, and at most every 5 min while the screen is on. " +
+                (Home.weatherPerDay(every, minutes)?.let { n -> "With updates every $minutes min: about $n requests a day (~${n * Home.WEATHER_KB / 100 / 10.0} MB), each 1–2 s more awake." }
+                    ?: "Frozen: one fetch when the screen goes off (if the last was ${if (every > 0) "$every" else "4"}+ min ago).")))
+            addView(note("Open-Meteo updates current conditions about every 15 minutes."))
         }
     }
 
@@ -682,7 +749,7 @@ open class MainActivity : Activity() {
         }, lp(0, WRAP, 1f))
         setOnClickListener {
             Weather.setCity(this@MainActivity, p)
-            places = null; placesNote = null; cityQuery = ""; page = 0
+            places = null; placesNote = null; cityQuery = ""; scrollTop = true
             toast("Weather for ${p.name}")
             renderWeather()
             Shell.background({ Weather.fetchIfDue(this@MainActivity) }) { Aod.homeChanged(this@MainActivity); if (!isDestroyed) renderWeather() }
@@ -733,7 +800,7 @@ open class MainActivity : Activity() {
         if (!needed && microgNote == null) return
         group().apply {
             if (needed && !microgConfirm) addView(buttonRow("microG can't use Wi\u2011Fi location", "It needs precise location, allowed all the time", "Fix\u2026") {
-                microgConfirm = true; microgNote = null; renderWeather()
+                microgConfirm = true; microgNote = null; render()
             })
             if (microgConfirm) addView(vbox().apply {
                 background = outline(3)
@@ -742,7 +809,7 @@ open class MainActivity : Activity() {
                 addView(text(Home.MICROG_CONFIRM, Type.S, color = Ink.MUTED).apply { setPadding(0, dp(4), 0, 0) })
                 addView(hbox().apply {
                     addView(inkButton(if (microgBusy) "Granting\u2026" else "Grant") { if (!microgBusy) fixMicrog() })
-                    addView(inkButton("Cancel") { microgConfirm = false; renderWeather() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
+                    addView(inkButton("Cancel") { microgConfirm = false; render() }, lp(WRAP, WRAP).apply { marginStart = dp(8) })
                 }, lp(WRAP, WRAP).apply { topMargin = dp(8) })
             }, boxLp())
             microgNote?.let { addView(text(it, Type.S, bold = true).apply { setPadding(g, dp(2), g, dp(6)) }) }
@@ -750,13 +817,13 @@ open class MainActivity : Activity() {
     }
 
     private fun fixMicrog() {
-        microgBusy = true; renderWeather()
+        microgBusy = true; render()
         Shell.background({ Weather.fixMicrog(this) }) { ok ->
             microgBusy = false; microgConfirm = false
             microgNote = if (ok) Home.MICROG_DONE else Home.MICROG_BY_HAND
             if (ok) locateFail = null
             else if (runCatching { startActivity(Weather.microgAppSettings()) }.isFailure) toast("Couldn't open microG's app settings")
-            if (!isDestroyed) renderWeather()
+            if (!isDestroyed) render()
         }
     }
 
@@ -827,7 +894,7 @@ open class MainActivity : Activity() {
                 is Weather.Located.Found -> {
                     Weather.setCity(this, r.place)
                     toast("Weather for ${r.place.name}")
-                    page = 0
+                    scrollTop = true
                     Shell.background({ Weather.fetchIfDue(this) }) { Aod.homeChanged(this); if (!isDestroyed) renderWeather() }
                 }
                 is Weather.Located.Failed -> locateFail = r
@@ -936,8 +1003,22 @@ open class MainActivity : Activity() {
 
     // ---- Screen & light (KompaktOS; from InkControl) ----------------------------------------------------
 
+    /** Screen & light: Screen · Light (when there's front light control), and Advanced pinned at the bottom. */
     private fun renderScreen() {
         begin()
+        if (tabs(Tabs.screen(Light.supported())) == Tabs.LIGHT) group().apply {
+            addView(toggleRow("Follows Android's brightness", "The brightness slider and adaptive brightness dim the light too", Light.followSystem(this@MainActivity)) {
+                Light.setFollowSystem(this@MainActivity, !Light.followSystem(this@MainActivity)); renderScreen()
+            })
+            addView(divider())
+            addView(note("Brightness, warmth and Auto live in the screen panel: swipe along the ${otherEdge()} edge. The light goes off with the screen and comes back with it, and stays off while the sleep screen updates."))
+        } else renderScreenModes()
+        pin(navRow("Advanced", "Per-app modes · Real refresh", SECTION_SCREEN_ADVANCED))
+        show()
+    }
+
+    /** The Screen tab: the mode everywhere, a full refresh, contrast. */
+    private fun renderScreenModes() {
         // The e-ink status only when something's wrong (no bridge, or InkControl still installed).
         val bridge = Eink.bridgeAvailable()
         val inkControl = Light.inkControlInstalled(this)
@@ -974,25 +1055,20 @@ open class MainActivity : Activity() {
                 onPlus = { ScreenModes.setContrast(this@MainActivity, level + ScreenModes.CONTRAST_STEP); renderScreen() }))
             addView(divider())
         }
-        var next = true
-        if (Light.supported()) {
-            group(newPage = true, anchor = ANCHOR_LIGHT).apply {
-                addView(sectionTitle("Front light"))
-                addView(toggleRow("Follows Android's brightness", "The brightness slider and adaptive brightness dim the light too", Light.followSystem(this@MainActivity)) {
-                    Light.setFollowSystem(this@MainActivity, !Light.followSystem(this@MainActivity)); renderScreen()
-                })
-                addView(note("Brightness, warmth and Auto live in the screen panel: swipe along the ${otherEdge()} edge. The light goes off with the screen and comes back with it, and stays off while the sleep screen updates."))
-            }
-            next = false
-        }
-        group(newPage = next).apply {
+    }
+
+    /** Screen & light › Advanced: how InkPalm+ goes along with KompaktOS's own screen settings. */
+    private fun renderScreenAdvanced() {
+        begin()
+        group().apply {
             addView(sectionTitle("KompaktOS"))
             if (KompaktSync.get(filesDir) != null) addView(toggleRow("KompaktOS per-app modes", "Apps you set in KompaktOS's settings use that mode, unless you pick one here", ScreenModes.followKompakt(this@MainActivity)) {
-                ScreenModes.setFollowKompakt(this@MainActivity, !ScreenModes.followKompakt(this@MainActivity)); renderScreen()
+                ScreenModes.setFollowKompakt(this@MainActivity, !ScreenModes.followKompakt(this@MainActivity)); renderScreenAdvanced()
             })
             addView(toggleRow("Real refresh on Refresh", "Its own refresh tile only flashes black here; this adds a full refresh", ScreenModes.flashOnKompaktRefresh(this@MainActivity)) {
-                ScreenModes.setFlashOnKompaktRefresh(this@MainActivity, !ScreenModes.flashOnKompaktRefresh(this@MainActivity)); renderScreen()
+                ScreenModes.setFlashOnKompaktRefresh(this@MainActivity, !ScreenModes.flashOnKompaktRefresh(this@MainActivity)); renderScreenAdvanced()
             })
+            addView(divider())
         }
         show()
     }
@@ -1029,25 +1105,34 @@ open class MainActivity : Activity() {
             sendBroadcast(Intent(QuickPanelService.ACTION_CLEAR_RECENTS).setPackage(packageName))
             toast("Recent apps cleared")
         })
-        group(newPage = true).apply {
+        pin(navRow("Advanced", "Strip, Edge Back, keeping it on", SECTION_PANEL_ADVANCED))
+        show()
+    }
+
+    /** Side panel › Advanced: the strip, Edge Back, and keeping the panel on. */
+    private fun renderPanelAdvanced() {
+        begin()
+        val prefs = Prefs(this)
+        fun previewStrip() = sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName).putExtra(QuickPanelService.EXTRA_PREVIEW, true))
+        group().apply {
             addView(sectionTitle("Strip"))
             val w = prefs.stripWidthDp
             addView(stepperRow("Strip width", "How wide the swipe area is", "$w dp", w > Prefs.STRIP_MIN, w < Prefs.STRIP_MAX,
-                onMinus = { prefs.stripWidthDp = w - 2; previewStrip(); renderPanel() },
-                onPlus = { prefs.stripWidthDp = w + 2; previewStrip(); renderPanel() }))
+                onMinus = { prefs.stripWidthDp = w - 2; previewStrip(); renderPanelAdvanced() },
+                onPlus = { prefs.stripWidthDp = w + 2; previewStrip(); renderPanelAdvanced() }))
             addView(toggleRow("Show strip", "A thin black line where you swipe", prefs.showStrip) {
                 prefs.showStrip = !prefs.showStrip
                 sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName))
-                renderPanel()
+                renderPanelAdvanced()
             })
         }
         group().apply {
             if (Eink.isKompakt) addView(toggleRow("Screen & light strip", "Swipe along the ${otherEdge()} edge for screen modes and the front light", prefs.screenPanel) {
-                prefs.screenPanel = !prefs.screenPanel; previewStrip(); renderPanel()
+                prefs.screenPanel = !prefs.screenPanel; previewStrip(); renderPanelAdvanced()
             })
             addView(toggleRow("Edge Back", if (Eink.isKompakt) "Swipe in from either edge to go back (KompaktOS has no back gesture)"
                 else "Swipe in from either edge to go back. Android's own back gesture already does this here", prefs.edgeBack) {
-                prefs.edgeBack = !prefs.edgeBack; previewStrip(); renderPanel()
+                prefs.edgeBack = !prefs.edgeBack; previewStrip(); renderPanelAdvanced()
             })
         }
         // Keeping the panel on: Clear Memory whitelist and turning the service back on.
@@ -1059,7 +1144,7 @@ open class MainActivity : Activity() {
                 if (listed) "InkPalm+ is on Moaan's Clear Memory whitelist"
                 else if (Shell.allowed()) "Tap to add InkPalm+ to Moaan's whitelist; Clear Memory would switch the panel off"
                 else "Clear Memory would switch the panel off. Start Shizuku, or run: ${Survival.whitelistAdbCommand(this@MainActivity)}", listed) {
-                if (!listed) Shell.background({ Survival.addToWhitelist(this@MainActivity) }) { ok -> if (!ok) toast("Needs Shizuku"); renderPanel() }
+                if (!listed) Shell.background({ Survival.addToWhitelist(this@MainActivity) }) { ok -> if (!ok) toast("Needs Shizuku"); renderPanelAdvanced() }
             })
         }
         group().apply {
@@ -1068,7 +1153,7 @@ open class MainActivity : Activity() {
                 if (repair) "If the panel is ever switched off by mistake, InkPalm+ turns it back on"
                 else if (Shell.allowed()) "Tap to let InkPalm+ turn the panel back on if it's ever switched off"
                 else "Start Shizuku, or run: ${Survival.grantAdbCommand(this@MainActivity)}", repair) {
-                if (!repair) Shell.background({ Survival.grantRepair(this@MainActivity) }) { ok -> if (!ok) toast("Needs Shizuku"); renderPanel() }
+                if (!repair) Shell.background({ Survival.grantRepair(this@MainActivity) }) { ok -> if (!ok) toast("Needs Shizuku"); renderPanelAdvanced() }
             })
         }
         show()
@@ -1155,8 +1240,8 @@ open class MainActivity : Activity() {
             addView(sectionTitle("Touch button"))
             addView(note("The button below the screen. These are the actions built into the device; changes apply on the next touch."))
             if (!TouchButton.canChange(this@MainActivity)) {
-                addView(note(if (Shell.allowed()) "Allow it first: Side panel › Keeping the panel on › Turns itself back on."
-                    else "Needs the same permission as Side panel › Turns itself back on. Start Shizuku, or run: ${Survival.grantAdbCommand(this@MainActivity)}"))
+                addView(note(if (Shell.allowed()) "Allow it first: Side panel › Advanced › Turns itself back on."
+                    else "Needs the same permission as Side panel › Advanced › Turns itself back on. Start Shizuku, or run: ${Survival.grantAdbCommand(this@MainActivity)}"))
                 return
             }
             val on = TouchButton.on(this@MainActivity)
@@ -1369,35 +1454,43 @@ open class MainActivity : Activity() {
 
     companion object {
         const val EXTRA_SECTION = "section"
-        // The screens.
-        const val SECTION_SLEEP = "sleep"
-        const val SECTION_WEATHER = "weather"
-        const val SECTION_COUNTDOWNS = "countdowns"
-        const val SECTION_TRASH = "trash"
+        /** Optional: the tab to open ([Tabs] key: face, updates, home, screen, light). */
+        const val EXTRA_TAB = "tab"
+        // The screens ([Sections]).
+        const val SECTION_SLEEP = Sections.SLEEP
+        const val SECTION_WEATHER = Sections.WEATHER
+        const val SECTION_COUNTDOWNS = Sections.COUNTDOWNS
+        const val SECTION_TRASH = Sections.TRASH
         /** KompaktOS's Screen & light; stock firmware opens [SECTION_EINK] instead. */
-        const val SECTION_SCREEN = "screen"
-        const val SECTION_EINK = "eink"
-        const val SECTION_PANEL = "panel"
-        const val SECTION_POWER = "power"
-        const val SECTION_BUTTONS = "buttons"
-        const val SECTION_ABOUT = "about"
-        // Older names, kept for links: each opens the screen it moved to, at its page.
-        const val SECTION_AOD = "aod"
-        const val SECTION_LIGHT = "light"
-        const val SECTION_KEEP_ON = "keep_on"
-        const val SECTION_TOUCH = "touch"
-        const val SECTION_READING = "reading"
+        const val SECTION_SCREEN = Sections.SCREEN
+        const val SECTION_SCREEN_ADVANCED = Sections.SCREEN_ADVANCED
+        const val SECTION_EINK = Sections.EINK
+        const val SECTION_PANEL = Sections.PANEL
+        const val SECTION_PANEL_ADVANCED = Sections.PANEL_ADVANCED
+        const val SECTION_POWER = Sections.POWER
+        const val SECTION_BUTTONS = Sections.BUTTONS
+        const val SECTION_ABOUT = Sections.ABOUT
+        // Older names, kept for links: each opens the screen (and tab) it moved to.
+        const val SECTION_AOD = Sections.AOD
+        const val SECTION_LIGHT = Sections.LIGHT
+        const val SECTION_KEEP_ON = Sections.KEEP_ON
+        const val SECTION_TOUCH = Sections.TOUCH
+        const val SECTION_READING = Sections.READING
 
-        private const val ANCHOR_LIGHT = "light"
-        private const val ANCHOR_KEEP_ON = "keep_on"
-        private const val ANCHOR_READING = "reading"
+        private const val ANCHOR_KEEP_ON = Sections.KEEP_ON
+        private const val ANCHOR_READING = Sections.READING
         private const val ANCHOR_RESULTS = "results"
-        private const val STATE_GROUP = "page_group"
-        /** The pager's height, and room left under a page's last group (dp). */
-        private const val PAGER = 60
-        /** Landscape at least this wide (dp) shows two columns a page. */
+        private const val STATE_TAB = "tab"
+        private const val TAG = "InkPalmPlus"
+        /** Tab height (dp; at least 48 to tap). */
+        private const val TAB_HEIGHT = 52
+        /** Landscape at least this wide (dp) shows two columns. */
         private const val TWO_COLUMNS = 560
-        private const val PAGE_BOTTOM = 8
+        /** Room under a tab's last group (dp). */
+        private const val CONTENT_BOTTOM = 8
+
+        /** Each screen's last tab, for this session (the app's process). */
+        private val lastTab = HashMap<String, String>()
 
         private const val PICK_SLEEP = 51
         private const val PICK_POWEROFF = 52

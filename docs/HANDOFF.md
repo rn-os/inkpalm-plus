@@ -409,8 +409,28 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
   access" (App info) on Weather location and the Home face page; the face says "Weather: no network access for
   InkPalm+" when it has no data (old data keeps "as of"). The user has since allowed it, so on the device the box is
   hidden; the blocked path is untested there.
-- "Weather updates" (asked; separate commit): Sleep screen › Home face: Every refresh (default) / 15 / 30 / 60 min
+- "Weather updates" (asked; separate commit): Sleep screen › Home face: Each update (was "Every refresh"; default) / 15 / 30 / 60 min
   (pref `home_weather_every`). `Home.weatherGap`: Every refresh = 4 min floor asleep (so each Live update at 5 min+
   fetches) and 5 min awake (minute ticks); else the chosen minutes. Frozen: one fetch at the screen-off render when
   the gap allows. Notes: Open-Meteo's ~15 min current conditions, ~4 KB a fetch, requests a day (`weatherPerDay`:
   288 at 5 min). Still only with a network up, 8 s deadline, no retries, never wakes the phone itself.
+
+## Settings tabs (branch `settings-reorg`, 2026-11-16)
+- Approved mockup: docs/mockups/settings-tabs/ (tabs-sheet.png, frames 1–9; build.py reuses ../settings-reorg/build.py
+  and ../aod/face-picker/build.py). Replaces the ‹ › "1 / 2" pager: `Paging` and its tests are gone
+  (SettingsPages.kt → SettingsTabs.kt: `Sections.resolve`, `Tabs`, `Columns`, `Summaries`; SettingsTabsTest).
+- Named tabs under the title: Sleep screen = Face · Updates · Home face (Home face only while that face is in use;
+  Photo/Picture options on Face); Screen & light = Screen · Light (no tab row without front light control). Segmented,
+  current filled black, 52 dp, no animation; a tap re-renders the screen. Last tab per screen remembered for the
+  process (`lastTab`), and across a rotation (saved state).
+- "Advanced ›" pinned at the bottom (`pin()`): Screen & light › Advanced (KompaktOS per-app modes, Real refresh on
+  Refresh); Side panel › Advanced (Strip width, Show strip, Screen & light strip, Edge Back, Survives Clear Memory,
+  Turns itself back on). Side panel, Power off, Buttons & reading, About: no tabs.
+- Home face tab: Weather location ›, Weather updates (first chip now "Each update"), Units, Countdowns ›, Trash day ›,
+  one cost note; the NetCheck box when blocked; the microG fix row while no city is set and microG needs it.
+- Links: `aod` → Sleep/Face, `updates`/`home_face` → Sleep's tab, `light` → Screen & light/Light, `keep_on` → Side
+  panel › Advanced (scrolled to Keeping the panel on), `touch`/`reading` → Buttons & reading; `--es tab` picks a tab.
+  `screen`/`screen_advanced`/`light` on stock firmware → `eink`.
+- Fallback: a tab that doesn't fit (font scale, landscape, long lists like city results or countdowns) scrolls and
+  logs once per visit `settings: <screen>/<tab>/<orientation> doesn't fit (…px > …px at font scale …), it scrolls`.
+  Landscape keeps two columns (`Columns.split` balances them); the tab row spans the left column there.

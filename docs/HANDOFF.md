@@ -434,3 +434,7 @@ commands live in `CLAUDE.md`; everything learned about the firmware lives in `do
 - Fallback: a tab that doesn't fit (font scale, landscape, long lists like city results or countdowns) scrolls and
   logs once per visit `settings: <screen>/<tab>/<orientation> doesn't fit (…px > …px at font scale …), it scrolls`.
   Landscape keeps two columns (`Columns.split` balances them); the tab row spans the left column there.
+- Sizes, to fit portrait at font scale 1.0 (measured on the device: Screen tab was 241 px over, Side panel 178, Home
+  face 23): header 8/6 dp padding, tab row 48 dp, chip blocks 6/4 dp, toggle/button/stepper rows 56 dp (4 dp padding
+  around 48 dp controls), the six screen modes 48 dp (compact `optionRow`), Advanced row 56 dp; the Side panel's
+  intro note is its switch's subtitle now. Chips get width by label length (`l.length / 7`, at least 1).

@@ -93,7 +93,7 @@ open class MainActivity : Activity() {
         if (savedInstanceState == null) anchorPending = target.anchor
         val root = vbox().apply { setBackgroundColor(Ink.PAPER) }
         root.addView(hbox().apply {
-            setPadding(g, dp(12), g, dp(8))
+            setPadding(g, dp(8), g, dp(6))
             addView(inkIconButton(R.drawable.ic_back, "Back", 48) { finish() }, lp(dp(48), dp(48)).apply { marginEnd = dp(12) })
             titleView = text(baseTitle(), Type.XL, bold = true).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
             addView(titleView, lp(0, WRAP, 1f))
@@ -126,7 +126,7 @@ open class MainActivity : Activity() {
         } else {
             // The keyboard pans the screen instead of resizing it (a resize would lay it out again and drop the field's focus).
             window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
-            tabBar = hbox().apply { setPadding(g, dp(10), g, dp(6)); visibility = View.GONE }
+            tabBar = hbox().apply { setPadding(g, dp(8), g, dp(4)); visibility = View.GONE }
             contentBox = hbox().apply { gravity = Gravity.TOP; setPadding(0, 0, 0, dp(CONTENT_BOTTOM)) }
             scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = true; addView(contentBox, lp(MATCH, WRAP)) }
             pinBox = vbox().apply { visibility = View.GONE }
@@ -324,6 +324,20 @@ open class MainActivity : Activity() {
 
     private fun navRow(title: String, detail: String, name: String): View = navRow(title, detail) { openSection(name) }
 
+    /** The "Advanced ›" row pinned at the bottom: a [navRow], a little shorter (56 dp). */
+    private fun advancedRow(detail: String, name: String): View = hbox().apply {
+        setPadding(g, dp(6), g, dp(6))
+        minimumHeight = dp(56)
+        pressable()
+        addView(vbox().apply {
+            addView(text("Advanced", Type.L, medium = true))
+            addView(text(detail, Type.S, color = Ink.MUTED))
+        }, lp(0, WRAP, 1f).apply { marginEnd = dp(12) })
+        addView(chevron())
+        contentDescription = "Advanced. $detail"
+        setOnClickListener { openSection(name) }
+    }
+
     // ---- Home -------------------------------------------------------------------------------------
 
     private fun renderHome() {
@@ -407,22 +421,23 @@ open class MainActivity : Activity() {
 
     // ---- Rows shared by the screens -----------------------------------------------------------------
 
-    /** Label above, chips sharing the width below. */
+    /** Label above, chips sharing the width below (a longer label gets a wider chip, so "Each update" isn't cut). */
     private fun choicesBlock(title: String, detail: String, labels: List<String>, current: Int, pick: (Int) -> Unit): View = vbox().apply {
-        setPadding(g, dp(10), g, dp(10))
+        setPadding(g, dp(6), g, dp(4))
         if (title.isNotEmpty()) addView(text(title, Type.L, medium = true))
         if (detail.isNotEmpty()) addView(text(detail, Type.S, color = Ink.MUTED))
         addView(hbox().apply {
-            setPadding(0, dp(6), 0, 0)
+            setPadding(0, dp(4), 0, 0)
             labels.forEachIndexed { i, l -> addView(chip(l, i == current) { pick(i) }.apply { maxLines = 1; minWidth = 0; setPadding(dp(4), dp(8), dp(4), dp(8)) },
-                lp(0, WRAP, 1f).apply { if (i > 0) marginStart = dp(6) }) }
+                lp(0, WRAP, maxOf(1f, l.length / 7f)).apply { if (i > 0) marginStart = dp(6) }) }
         })
     }
 
     /** One choice of a list (screen modes, power-off pictures): filled black with ✓ when it's the one in use. */
-    private fun optionRow(title: String, detail: String, on: Boolean, more: Boolean = false, click: () -> Unit): View = hbox().apply {
-        setPadding(dp(12), dp(6), dp(12), dp(6))
-        minimumHeight = dp(56)
+    private fun optionRow(title: String, detail: String, on: Boolean, more: Boolean = false, compact: Boolean = false, click: () -> Unit): View = hbox().apply {
+        // Compact (the six screen modes, so the Screen tab fits): 48 dp, still a full tap target.
+        setPadding(dp(12), dp(if (compact) 2 else 6), dp(12), dp(if (compact) 2 else 6))
+        minimumHeight = dp(if (compact) 48 else 56)
         if (on) background = outline(2, Radius.SMALL, Ink.INK) else pressable()
         val fg = if (on) Ink.PAPER else Ink.INK
         addView(vbox().apply {
@@ -435,7 +450,7 @@ open class MainActivity : Activity() {
         setOnClickListener { click() }
     }
 
-    private fun optionLp() = lp(MATCH, WRAP).apply { setMargins(g, dp(2), g, dp(2)) }
+    private fun optionLp(compact: Boolean = false) = lp(MATCH, WRAP).apply { setMargins(g, dp(if (compact) 1 else 2), g, dp(if (compact) 1 else 2)) }
 
     /** Small grey text under the setting it explains. */
     private fun note(s: String): View = text(s, Type.S, color = Ink.MUTED).apply { setPadding(g, dp(2), g, dp(6)) }
@@ -443,7 +458,7 @@ open class MainActivity : Activity() {
     private fun boxLp() = lp(MATCH, WRAP).apply { setMargins(g, dp(8), g, dp(8)) }
 
     private fun toggleRow(title: String, detail: String, on: Boolean, onChange: (Boolean) -> Unit): View = hbox().apply {
-        setPadding(g, dp(8), g, dp(8))
+        setPadding(g, dp(4), g, dp(4))
         minimumHeight = dp(56)
         pressable()
         addView(vbox().apply {
@@ -456,7 +471,7 @@ open class MainActivity : Activity() {
     }
 
     private fun stepperRow(title: String, detail: String, value: String, minus: Boolean, plus: Boolean, onMinus: () -> Unit, onPlus: () -> Unit): View = hbox().apply {
-        setPadding(g, dp(8), g, dp(8))
+        setPadding(g, dp(4), g, dp(4))
         minimumHeight = dp(56)
         addView(vbox().apply {
             addView(text(title, Type.L, medium = true))
@@ -469,7 +484,7 @@ open class MainActivity : Activity() {
 
     /** A title with a button on the right (Clear recent apps, Full refresh). */
     private fun buttonRow(title: String, detail: String, button: String, click: () -> Unit): View = hbox().apply {
-        setPadding(g, dp(8), g, dp(8))
+        setPadding(g, dp(4), g, dp(4))
         minimumHeight = dp(56)
         addView(vbox().apply {
             addView(text(title, Type.L, medium = true))
@@ -626,10 +641,9 @@ open class MainActivity : Activity() {
         group().apply {
             val every = Weather.every(this@MainActivity)
             val minutes = Aod.interval(this@MainActivity)
-            addView(note("Each fetch is one small request (about ${Home.WEATHER_KB} KB), only when Wi\u2011Fi is already on, and at most every 5 min while the screen is on. " +
-                (Home.weatherPerDay(every, minutes)?.let { n -> "With updates every $minutes min: about $n requests a day (~${n * Home.WEATHER_KB / 100 / 10.0} MB), each 1–2 s more awake." }
+            addView(note("Each fetch is one small request (about ${Home.WEATHER_KB} KB), only when Wi\u2011Fi is already on; Open-Meteo updates about every 15 min. " +
+                (Home.weatherPerDay(every, minutes)?.let { n -> "With updates every $minutes min: about $n a day (~${n * Home.WEATHER_KB / 100 / 10.0} MB), each 1–2 s more awake." }
                     ?: "Frozen: one fetch when the screen goes off (if the last was ${if (every > 0) "$every" else "4"}+ min ago).")))
-            addView(note("Open-Meteo updates current conditions about every 15 minutes."))
         }
     }
 
@@ -1013,7 +1027,7 @@ open class MainActivity : Activity() {
             addView(divider())
             addView(note("Brightness, warmth and Auto live in the screen panel: swipe along the ${otherEdge()} edge. The light goes off with the screen and comes back with it, and stays off while the sleep screen updates."))
         } else renderScreenModes()
-        pin(navRow("Advanced", "Per-app modes · Real refresh", SECTION_SCREEN_ADVANCED))
+        pin(advancedRow(if (KompaktSync.get(filesDir) != null) "Per-app modes · Real refresh" else "Real refresh on Refresh", SECTION_SCREEN_ADVANCED))
         show()
     }
 
@@ -1036,12 +1050,12 @@ open class MainActivity : Activity() {
             }
         }, boxLp())
         group().apply {
-            addView(sectionTitle("Screen mode, everywhere"))
+            addView(sectionTitle("Screen mode, everywhere", 0.8f))
             val now = ScreenModes.global(this@MainActivity)
-            for (m in ScreenMode.entries) addView(optionRow(m.title, m.detail, m == now) {
+            for (m in ScreenMode.entries) addView(optionRow(m.title, m.detail, m == now, compact = true) {
                 ScreenModes.choose(this@MainActivity, m, null, packageName); renderScreen()
-            }, optionLp())
-            addView(note("A mode can also be set for one app, from the screen panel: swipe along the ${otherEdge()} edge."))
+            }, optionLp(compact = true))
+            addView(note("One app's own mode: the screen panel (swipe along the ${otherEdge()} edge)."))
         }
         group().apply {
             addView(divider())
@@ -1080,9 +1094,8 @@ open class MainActivity : Activity() {
         val prefs = Prefs(this)
         fun previewStrip() = sendBroadcast(Intent(QuickPanelService.ACTION_STRIP).setPackage(packageName).putExtra(QuickPanelService.EXTRA_PREVIEW, true))
         group().apply {
-            addView(note("Swipe up or down along the screen edge in any app for your recent apps."))
             val on = QuickPanelService.enabled(this@MainActivity)
-            addView(toggleRow("Side panel", if (on) "On" else "Turn on InkPalm+ in Accessibility", on) {
+            addView(toggleRow("Side panel", if (on) "Swipe up or down along the edge in any app for your recent apps" else "Turn on InkPalm+ in Accessibility", on) {
                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             })
         }
@@ -1105,7 +1118,7 @@ open class MainActivity : Activity() {
             sendBroadcast(Intent(QuickPanelService.ACTION_CLEAR_RECENTS).setPackage(packageName))
             toast("Recent apps cleared")
         })
-        pin(navRow("Advanced", "Strip, Edge Back, keeping it on", SECTION_PANEL_ADVANCED))
+        pin(advancedRow("Strip, Edge Back, keeping it on", SECTION_PANEL_ADVANCED))
         show()
     }
 
@@ -1483,11 +1496,11 @@ open class MainActivity : Activity() {
         private const val STATE_TAB = "tab"
         private const val TAG = "InkPalmPlus"
         /** Tab height (dp; at least 48 to tap). */
-        private const val TAB_HEIGHT = 52
+        private const val TAB_HEIGHT = 48
         /** Landscape at least this wide (dp) shows two columns. */
         private const val TWO_COLUMNS = 560
         /** Room under a tab's last group (dp). */
-        private const val CONTENT_BOTTOM = 8
+        private const val CONTENT_BOTTOM = 4
 
         /** Each screen's last tab, for this session (the app's process). */
         private val lastTab = HashMap<String, String>()
